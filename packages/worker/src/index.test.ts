@@ -34,6 +34,7 @@ class FakeD1 {
   inserts: unknown[][] = [];
   promoted: string[] = [];
   listQuery = '';
+  listBinds: unknown[] = [];
   private readonly ideas = new Map<string, Record<string, unknown>>();
 
   constructor() {
@@ -74,9 +75,12 @@ class FakeD1 {
     if (sql.includes('WITH recent AS')) {
       this.listQuery = sql;
       return new FakeStatement({
-        all: () => ({
-          results: Array.from(this.ideas.values()).map(({ body_md, body_key, render_key, ...idea }) => idea),
-        }),
+        all: (binds) => {
+          this.listBinds = binds;
+          return {
+            results: Array.from(this.ideas.values()).map(({ body_md, body_key, render_key, ...idea }) => idea),
+          };
+        },
       });
     }
     if (sql.includes('FROM ideas i') && sql.includes('WHERE i.id = ?')) {
@@ -157,11 +161,12 @@ function env(db = new FakeD1()) {
 describe('FreeIdeaStore worker', () => {
   it('returns a lightweight idea list without body storage fields', async () => {
     const testEnv = env();
-    const response = await worker.fetch(new Request('https://fis.test/api/ideas?limit=1'), testEnv);
+    const response = await worker.fetch(new Request('https://fis.test/api/ideas'), testEnv);
     const data = (await response.json()) as { ideas: Array<Record<string, unknown>> };
 
     expect(response.status).toBe(200);
     expect(testEnv.DB.listQuery).not.toContain('body_md');
+    expect(testEnv.DB.listBinds).toEqual(['all', 'all', 60]);
     expect(data.ideas[0]).toMatchObject({ id: 'asx-filings-analyst', title: 'ASX Filings Analyst' });
     expect(data.ideas[0]).not.toHaveProperty('body_md');
     expect(data.ideas[0]).not.toHaveProperty('body_key');

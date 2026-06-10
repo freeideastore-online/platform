@@ -16,11 +16,13 @@
     "mcp:dev": "pnpm --filter @fis/mcp dev",
     "mcp:deploy": "pnpm --filter @fis/mcp deploy",
     "test": "pnpm --filter @fis/worker test",
+    "test:e2e": "playwright test",
     "typecheck": "pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
     "db:migrate:local": "pnpm --filter @fis/worker db:migrate:local",
     "db:migrate:prod": "pnpm --filter @fis/worker db:migrate:prod"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "typescript": "^5.7.3",
     "vitest": "^4.1.8"
   }
