@@ -1,0 +1,22 @@
+name = "freeideastore-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+GITHUB_ORG = "freeideastore-online"
+PLATFORM_REPO = "platform"
+PUBLIC_BASE = "https://freeideastore.serge-the-dev.workers.dev"
+
+# Secrets:
+#   GITHUB_TOKEN - PAT with repo/workflow access to freeideastore-online/platform
+
+[durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "FisMcp" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FisMcp"]

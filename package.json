@@ -10,9 +10,12 @@
   },
   "scripts": {
     "docs:build": "node scripts/build-idea-docs.mjs",
+    "idea:new": "node scripts/scaffold-idea-book.mjs",
     "dev": "pnpm --filter @fis/worker dev",
     "deploy": "pnpm --filter @fis/worker run deploy",
-    "typecheck": "pnpm --filter @fis/worker typecheck",
+    "mcp:dev": "pnpm --filter @fis/mcp dev",
+    "mcp:deploy": "pnpm --filter @fis/mcp deploy",
+    "typecheck": "pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
     "db:migrate:local": "pnpm --filter @fis/worker db:migrate:local",
     "db:migrate:prod": "pnpm --filter @fis/worker db:migrate:prod"
   },

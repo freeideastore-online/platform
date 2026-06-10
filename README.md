@@ -37,6 +37,20 @@ The common chapter spine makes ideas comparable across the store. Idea-specific 
 
 The current build uses `pnpm docs:build` so the Worker can host books immediately. Each idea has its own `zensical.toml`, matching the intended future flow: idea source -> Zensical build -> hosted book artifact.
 
+Create a new idea book without AI generation:
+
+```bash
+pnpm idea:new -- --title "New Idea" --summary "One sentence summary" --category platform --stage raw
+pnpm docs:build
+```
+
+MCP provisioning uses the same deterministic template through `packages/mcp`:
+
+- `idea_book_template` returns the standard chapter spine.
+- `scaffold_idea_book` returns or writes the full `idea-books/:slug/` project and registry entry.
+
+`scaffold_idea_book` runs in dry-run mode unless `apply: true` is passed. Applying writes to GitHub through the platform repo and requires `GITHUB_TOKEN` on the MCP Worker.
+
 ## API
 
 - `GET /api/health`
