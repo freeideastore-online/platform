@@ -3,7 +3,9 @@
   const currentStage = document.body.dataset.stage;
   if (!currentStage) return;
 
-  fetch('/registry.json')
+  const registryUrl = new URL('registry.json', document.currentScript ? document.currentScript.src : window.location.href);
+
+  fetch(registryUrl)
     .then((response) => response.json())
     .then((data) => {
       const ideas = data.ideas || [];
@@ -19,10 +21,9 @@
           #related-ideas a{border:1px solid #dbe3ef;border-radius:8px;color:#111827;padding:.42rem .65rem;text-decoration:none;white-space:nowrap;font-size:.78rem;font-weight:800}
         </style>
         <strong>Related</strong>
-        ${related.map((idea) => `<a href="/ideas/${idea.id}/">${idea.name}</a>`).join('')}
+        ${related.map((idea) => `<a href="ideas/${idea.id}/">${idea.name}</a>`).join('')}
       `;
       document.body.appendChild(bar);
     })
     .catch(() => {});
 })();
-
