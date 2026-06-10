@@ -1,0 +1,73 @@
+{
+  "ideas": [
+    {
+      "id": "asx-filings-analyst",
+      "name": "ASX Filings Analyst",
+      "stage": "researched",
+      "category": "finance",
+      "signal": "Public reports, valuation screens, source-backed weekly watchlist.",
+      "nextStep": "Validate with 10 Australian retail investors using a manual weekly report.",
+      "contributors": 3,
+      "support": 18,
+      "risk": "Market data licensing and accidental financial advice."
+    },
+    {
+      "id": "parent-volleyball-community",
+      "name": "Parent Volleyball Community",
+      "stage": "prototype",
+      "category": "community",
+      "signal": "A focused parent/community coordination product has clearer demand than broad social features.",
+      "nextStep": "Run a local team pilot and measure repeat weekly use.",
+      "contributors": 4,
+      "support": 21,
+      "risk": "Distribution depends on clubs and parent group adoption."
+    },
+    {
+      "id": "school-transport-options",
+      "name": "School Transport Options",
+      "stage": "critique",
+      "category": "local-services",
+      "signal": "Parents need safer, clearer transport options for ages 5-10.",
+      "nextStep": "Interview 15 parents and 5 school administrators about trust and logistics.",
+      "contributors": 2,
+      "support": 12,
+      "risk": "Trust, liability, regulation, and operations are hard."
+    },
+    {
+      "id": "slowdown-personal-reset",
+      "name": "Slowdown Personal Reset",
+      "stage": "built",
+      "category": "wellbeing",
+      "signal": "A lightweight app already exists; next question is retention and use frequency.",
+      "nextStep": "Track 7-day return use and collect qualitative feedback.",
+      "contributors": 1,
+      "support": 9,
+      "risk": "Wellbeing apps are crowded and hard to monetize."
+    },
+    {
+      "id": "idea-reputation-system",
+      "name": "Idea Reputation System",
+      "stage": "raw",
+      "category": "platform",
+      "signal": "People can earn recognition by improving ideas, not just building apps.",
+      "nextStep": "Define badges and contribution events that cannot be gamed easily.",
+      "contributors": 1,
+      "support": 16,
+      "risk": "Low-quality AI-generated comments could flood the system."
+    },
+    {
+      "id": "proidea-dossier-builder",
+      "name": "ProIdea Dossier Builder",
+      "stage": "pivot",
+      "category": "platform",
+      "signal": "The valuable artifact may be a complete opportunity packet, not the idea itself.",
+      "nextStep": "Create one dossier manually and see if builders or investors ask for more.",
+      "contributors": 2,
+      "support": 19,
+      "risk": "Research quality must be high enough to justify curation."
+    }
+  ],
+  "stages": ["raw", "critique", "researched", "pivot", "prototype", "built"],
+  "categories": ["finance", "community", "local-services", "wellbeing", "platform"]
+}
+
