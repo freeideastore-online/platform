@@ -38,6 +38,20 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.2rem,6vw,5.1rem);line-height:.94
 .metric{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem}
 .metric strong{display:block;font-size:1.4rem}
 .metric span{color:var(--muted);font-size:.75rem;font-weight:700}
+.forge{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,.8fr);gap:1rem;max-width:1180px;margin:0 auto;padding:0 1.25rem 1.5rem}
+.workbench,.scouts{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 12px 28px rgba(15,23,42,.05)}
+.workbench h2,.scouts h2{font-family:Fraunces,serif;font-size:1.45rem;margin-bottom:.45rem}
+.workbench p,.scouts p{color:var(--muted);font-size:.84rem}
+.lanes{display:grid;grid-template-columns:repeat(5,1fr);gap:.55rem;margin-top:1rem}
+.lane{min-height:160px;border:1px solid var(--line);border-radius:8px;background:linear-gradient(180deg,#fff,#f8fafc);padding:.65rem}
+.lane strong{display:block;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:.55rem}
+.ticket{border:1px solid var(--line);border-radius:7px;background:#fff;padding:.55rem;margin-bottom:.45rem;font-size:.76rem;font-weight:800}
+.ticket span{display:block;color:var(--muted);font-size:.66rem;font-weight:700;margin-top:.2rem}
+.scout-list{display:grid;gap:.55rem;margin-top:1rem}
+.scout{display:grid;grid-template-columns:38px 1fr auto;gap:.65rem;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:.58rem}
+.avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:8px;background:var(--ink);color:white;font-weight:900}
+.scout strong{display:block;font-size:.78rem}.scout span{display:block;color:var(--muted);font-size:.68rem}
+.points{color:var(--accent-dark);font-size:.8rem;font-weight:900}
 .toolbar{display:flex;flex-wrap:wrap;gap:.45rem;max-width:1180px;margin:0 auto;padding:1rem 1.25rem}
 .filter{border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);cursor:pointer;font:700 .75rem Manrope,system-ui,sans-serif;padding:.44rem .75rem}
 .filter.active{background:var(--ink);border-color:var(--ink);color:white}
@@ -61,7 +75,9 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.2rem,6vw,5.1rem);line-height:.94
 .panel ul{display:grid;gap:.45rem;color:var(--muted);font-size:.88rem;list-style:none}
 .panel li:before{content:"";display:inline-block;width:7px;height:7px;background:var(--accent);border-radius:99px;margin-right:.45rem}
 footer{border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:.75rem;padding:1rem;text-align:center}
+@media(max-width:920px){.forge{grid-template-columns:1fr}.lanes{grid-template-columns:1fr 1fr}}
 @media(max-width:820px){header{align-items:flex-start}.hero{grid-template-columns:1fr;padding-top:2rem}.metrics{grid-template-columns:repeat(2,1fr)}.section-inner{grid-template-columns:1fr}nav{display:none}}
+@media(max-width:560px){.lanes{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -103,6 +119,29 @@ footer{border-top:1px solid var(--line);background:var(--panel);color:var(--mute
     <div class="metric"><strong>13</strong><span>contribution types</span></div>
     <div class="metric"><strong>5</strong><span>maturity stages</span></div>
     <div class="metric"><strong>1</strong><span>pro path</span></div>
+  </section>
+
+  <section class="forge" aria-label="Idea refinement workbench">
+    <div class="workbench">
+      <h2>The refinery board</h2>
+      <p>Ideas move when people add useful pressure: sharper customer, better evidence, a cleaner pivot, or an honest reason to stop.</p>
+      <div class="lanes">
+        <div class="lane"><strong>Raw</strong><div class="ticket">Idea Reputation System<span>needs anti-spam rules</span></div></div>
+        <div class="lane"><strong>Critique</strong><div class="ticket">School Transport<span>trust and liability review</span></div></div>
+        <div class="lane"><strong>Research</strong><div class="ticket">ASX Analyst<span>competitor map done</span></div></div>
+        <div class="lane"><strong>Prototype</strong><div class="ticket">Volleyball Parents<span>local club pilot next</span></div></div>
+        <div class="lane"><strong>Graduate</strong><div class="ticket">ProIdea Dossier<span>ready for pro curation</span></div></div>
+      </div>
+    </div>
+    <aside class="scouts">
+      <h2>Visible judgment</h2>
+      <p>Profiles should make hidden product taste visible before someone is hired, funded, or invited to build.</p>
+      <div class="scout-list">
+        <div class="scout"><div class="avatar">R</div><div><strong>Risk Finder</strong><span>finds why ideas break</span></div><div class="points">184</div></div>
+        <div class="scout"><div class="avatar">P</div><div><strong>Pivot Maker</strong><span>sharpens the wedge</span></div><div class="points">156</div></div>
+        <div class="scout"><div class="avatar">E</div><div><strong>Evidence Hunter</strong><span>brings sources, not vibes</span></div><div class="points">143</div></div>
+      </div>
+    </aside>
   </section>
 
   <div class="toolbar" id="ideas">
@@ -181,7 +220,7 @@ buttons.forEach((button) => {
   });
 });
 
-fetch('/registry.json')
+fetch('registry.json')
   .then((response) => response.json())
   .then((data) => {
     ideas = data.ideas || [];
@@ -193,4 +232,3 @@ fetch('/registry.json')
 </script>
 </body>
 </html>
-
