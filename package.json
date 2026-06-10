@@ -1,0 +1,21 @@
+{
+  "name": "@fis/platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @fis/worker dev",
+    "deploy": "pnpm --filter @fis/worker run deploy",
+    "typecheck": "pnpm --filter @fis/worker typecheck",
+    "db:migrate:local": "pnpm --filter @fis/worker db:migrate:local",
+    "db:migrate:prod": "pnpm --filter @fis/worker db:migrate:prod"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

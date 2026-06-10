@@ -1,0 +1,13 @@
+name = "freeideastore"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "freeideastore"
+database_id = "6c8cefe4-f170-45fd-9979-ebef9068e1aa"
+
+[assets]
+directory = "../../store"
+binding = "ASSETS"

@@ -6,15 +6,34 @@ It is where raw ideas are submitted, critiqued, researched, supported, pivoted, 
 
 ## Current Scope
 
-- Static storefront in `store/`.
-- Registry-backed idea cards in `store/registry.json`.
-- No backend yet.
+- Cloudflare Worker in `packages/worker`.
+- Worker Assets serving the UI from `store/`.
+- D1-backed collaboration API for ideas, profiles, contributions, and reactions.
+- Seed data in `packages/worker/migrations/0001_collaboration.sql`.
 
 ## Local Preview
 
-Open `store/index.html` in a browser, or serve the folder with any static file server.
+```bash
+pnpm install
+pnpm db:migrate:local
+pnpm dev
+```
+
+Live Worker:
+
+https://freeideastore.serge-the-dev.workers.dev
 
 ## Product Principle
 
 Ideas are not the product. The contributors are the product: their critiques, evidence, pivots, prototypes, and judgment create visible reputation.
+
+## API
+
+- `GET /api/health`
+- `GET /api/ideas`
+- `POST /api/ideas`
+- `GET /api/ideas/:id/contributions`
+- `POST /api/ideas/:id/contributions`
+- `POST /api/ideas/:id/reactions`
+- `GET /api/profiles`
 

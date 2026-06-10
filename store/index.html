@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>FreeIdeaStore - Ideas Earn Builders</title>
 <meta name="description" content="FreeIdeaStore is a public idea lab where ideas are critiqued, researched, supported, pivoted, parked, or matured into ProIdeaStore opportunities.">
-<link rel="canonical" href="https://freeideastore-online.github.io/platform/">
+<link rel="canonical" href="https://freeideastore.serge-the-dev.workers.dev/">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -86,7 +86,7 @@ footer{border-top:1px solid var(--line);background:var(--panel);color:var(--mute
   <nav>
     <a href="#ideas">Ideas</a>
     <a href="#reputation">Reputation</a>
-    <a href="https://proideastore-online.github.io/platform/">ProIdeaStore</a>
+    <a href="https://proideastore.serge-the-dev.workers.dev">ProIdeaStore</a>
     <a href="https://openfrontier.pages.dev">Open Frontier</a>
   </nav>
 </header>
@@ -197,15 +197,15 @@ function render(stage = 'all') {
           <span class="stage">${idea.stage}</span>
           <span class="category">${idea.category}</span>
         </div>
-        <h3>${idea.name}</h3>
-        <p>${idea.signal}</p>
+        <h3>${idea.title || idea.name}</h3>
+        <p>${idea.summary || idea.signal}</p>
         <div class="detail">
-          <div><strong>Next step</strong><span>${idea.nextStep}</span></div>
+          <div><strong>Next step</strong><span>${idea.next_step || idea.nextStep || 'Needs a next validation step.'}</span></div>
           <div><strong>Risk</strong><span>${idea.risk}</span></div>
         </div>
         <div class="card-footer">
-          <span>${idea.contributors} contributors</span>
-          <span>${idea.support} support</span>
+          <span>${idea.contribution_count ?? idea.contributors ?? 0} contributions</span>
+          <span>${idea.support ?? 0} support</span>
         </div>
       </article>
     `)
@@ -220,14 +220,18 @@ buttons.forEach((button) => {
   });
 });
 
-fetch('registry.json')
-  .then((response) => response.json())
+fetch('/api/ideas')
+  .then((response) => {
+    if (!response.ok) throw new Error('api unavailable');
+    return response.json();
+  })
+  .catch(() => fetch('registry.json').then((response) => response.json()))
   .then((data) => {
     ideas = data.ideas || [];
     render();
   })
   .catch(() => {
-    grid.innerHTML = '<article class="card"><h3>Registry unavailable</h3><p>Idea data could not be loaded.</p></article>';
+    grid.innerHTML = '<article class="card"><h3>Ideas unavailable</h3><p>The collaboration API could not be loaded.</p></article>';
   });
 </script>
 </body>

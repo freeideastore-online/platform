@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://freeideastore-online.github.io/platform/sitemap.xml
+Sitemap: https://freeideastore.serge-the-dev.workers.dev/sitemap.xml
