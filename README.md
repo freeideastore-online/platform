@@ -9,12 +9,14 @@ It is where raw ideas are submitted, critiqued, researched, supported, pivoted, 
 - Cloudflare Worker in `packages/worker`.
 - Worker Assets serving the UI from `store/`.
 - D1-backed collaboration API for ideas, profiles, contributions, and reactions.
+- Project docs source in `docs/`, configured by `zensical.toml`, with built pages served from `store/ideas/`.
 - Seed data in `packages/worker/migrations/0001_collaboration.sql`.
 
 ## Local Preview
 
 ```bash
 pnpm install
+pnpm docs:build
 pnpm db:migrate:local
 pnpm dev
 ```
@@ -27,6 +29,12 @@ https://freeideastore.serge-the-dev.workers.dev
 
 Ideas are not the product. The contributors are the product: their critiques, evidence, pivots, prototypes, and judgment create visible reputation.
 
+## Project Docs
+
+The storefront shows snippet previews. Each idea links to a hosted project-docs page under `/ideas/:slug/` with brainstorming, research, design notes, prototype plans, validation steps, and contribution prompts.
+
+The current build uses `pnpm docs:build` so the new Worker can host docs immediately. The repo also includes `zensical.toml` so this can move to the shared Zensical plus docs-host pipeline used by the other stores.
+
 ## API
 
 - `GET /api/health`
@@ -36,4 +44,3 @@ Ideas are not the product. The contributors are the product: their critiques, ev
 - `POST /api/ideas/:id/contributions`
 - `POST /api/ideas/:id/reactions`
 - `GET /api/profiles`
-

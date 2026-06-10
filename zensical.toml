@@ -1,0 +1,14 @@
+[project]
+site_name = "FreeIdeaStore Project Docs"
+site_url = "https://freeideastore.serge-the-dev.workers.dev/ideas"
+site_description = "Knowledge bases for FreeIdeaStore ideas: brainstorming, research, design, prototype notes, validation plans, and contribution prompts."
+docs_dir = "docs"
+site_dir = "store/ideas"
+copyright = "FreeIdeaStore"
+
+[project.extra]
+homepage = "https://freeideastore.serge-the-dev.workers.dev"
+pro_store = "https://proideastore.serge-the-dev.workers.dev"
+
+[project.theme]
+variant = "modern"
