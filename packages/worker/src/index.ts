@@ -37,11 +37,16 @@ const JSON_HEADERS = {
 };
 
 const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
+
+const IDEA_STAGES = new Set(['raw', 'critique', 'researched', 'pivot', 'prototype', 'built']);
+const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
 
 function json(data: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(data), {
@@ -66,6 +71,15 @@ function slug(input: string) {
     .slice(0, 64);
 }
 
+function pathId(input: string) {
+  try {
+    const decoded = decodeURIComponent(input);
+    return /^[a-z0-9][a-z0-9-]{0,80}$/.test(decoded) ? decoded : '';
+  } catch {
+    return '';
+  }
+}
+
 function escapeHtml(value: unknown) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -80,6 +94,11 @@ function clampInt(value: string | null, fallback: number, min: number, max: numb
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function enumValue(value: unknown, allowed: Set<string>, fallback: string) {
+  const normalized = slug(String(value || ''));
+  return allowed.has(normalized) ? normalized : fallback;
 }
 
 async function bodyJson(request: Request) {
@@ -382,8 +401,8 @@ async function handleApi(request: Request, env: Env, url: URL) {
         env.IDEA_BUCKET && body ? bodyKey : '',
         env.IDEA_BUCKET && body ? renderKey : '',
         String(input.sourceUrl || input.source_url || '').slice(0, 500),
-        String(input.visibility || 'public').slice(0, 40),
-        String(input.stage || 'raw').slice(0, 40),
+        enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
+        enumValue(input.stage, IDEA_STAGES, 'raw'),
         String(input.category || 'uncategorized').slice(0, 60),
         String(input.nextStep || '').slice(0, 500),
         String(input.risk || '').slice(0, 500),
@@ -395,14 +414,18 @@ async function handleApi(request: Request, env: Env, url: URL) {
 
   const ideaMatch = url.pathname.match(/^\/api\/ideas\/([^/]+)$/);
   if (ideaMatch && request.method === 'GET') {
-    const idea = await ideaById(env, ideaMatch[1]);
+    const ideaId = pathId(ideaMatch[1]);
+    if (!ideaId) return bad('invalid idea id', 400);
+    const idea = await ideaById(env, ideaId);
     if (!idea) return bad('idea not found', 404);
     return json({ idea, body: await ideaBody(env, idea), url: `/ideas/${idea.id}/` });
   }
 
   const promoteMatch = url.pathname.match(/^\/api\/ideas\/([^/]+)\/promote$/);
   if (promoteMatch && request.method === 'POST') {
-    const idea = await ideaById(env, promoteMatch[1]);
+    const ideaId = pathId(promoteMatch[1]);
+    if (!ideaId) return bad('invalid idea id', 400);
+    const idea = await ideaById(env, ideaId);
     if (!idea) return bad('idea not found', 404);
     await env.DB.prepare(
       `UPDATE ideas
@@ -428,18 +451,23 @@ async function handleApi(request: Request, env: Env, url: URL) {
 
   const contributionMatch = url.pathname.match(/^\/api\/ideas\/([^/]+)\/contributions$/);
   if (contributionMatch && request.method === 'GET') {
+    const ideaId = pathId(contributionMatch[1]);
+    if (!ideaId) return bad('invalid idea id', 400);
     const rows = await env.DB.prepare(
       `SELECT c.id, c.kind, c.body, c.created_at, p.handle, p.display_name
        FROM contributions c JOIN profiles p ON p.id = c.profile_id
        WHERE c.idea_id = ?
        ORDER BY c.created_at DESC`,
     )
-      .bind(contributionMatch[1])
+      .bind(ideaId)
       .all();
     return json({ contributions: rows.results || [] });
   }
 
   if (contributionMatch && request.method === 'POST') {
+    const ideaId = pathId(contributionMatch[1]);
+    if (!ideaId) return bad('invalid idea id', 400);
+    if (!(await ideaById(env, ideaId))) return bad('idea not found', 404);
     const input = await bodyJson(request);
     const body = String(input.body || '').trim();
     const kind = String(input.kind || 'comment').trim();
@@ -448,22 +476,25 @@ async function handleApi(request: Request, env: Env, url: URL) {
     await env.DB.prepare(
       'INSERT INTO contributions (id, idea_id, profile_id, kind, body) VALUES (?, ?, ?, ?, ?)',
     )
-      .bind(id('contribution'), contributionMatch[1], profileId, kind.slice(0, 40), body.slice(0, 2000))
+      .bind(id('contribution'), ideaId, profileId, kind.slice(0, 40), body.slice(0, 2000))
       .run();
     await env.DB.prepare('UPDATE ideas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(contributionMatch[1])
+      .bind(ideaId)
       .run();
     return json({ ok: true }, { status: 201 });
   }
 
   const reactionMatch = url.pathname.match(/^\/api\/ideas\/([^/]+)\/reactions$/);
   if (reactionMatch && request.method === 'POST') {
+    const ideaId = pathId(reactionMatch[1]);
+    if (!ideaId) return bad('invalid idea id', 400);
+    if (!(await ideaById(env, ideaId))) return bad('idea not found', 404);
     const input = await bodyJson(request);
     const type = String(input.type || '').trim();
     if (!['support', 'trash', 'pivot'].includes(type)) return bad('reaction type must be support, trash, or pivot');
     const profileId = await profileFor(request, env);
     await env.DB.prepare('INSERT OR IGNORE INTO reactions (id, idea_id, profile_id, type) VALUES (?, ?, ?, ?)')
-      .bind(id('reaction'), reactionMatch[1], profileId, type)
+      .bind(id('reaction'), ideaId, profileId, type)
       .run();
     return json({ ok: true }, { status: 201 });
   }
@@ -499,7 +530,9 @@ export default {
     const ideaPageMatch = url.pathname.match(/^\/ideas\/([^/]+)\/?$/);
     if (ideaPageMatch) {
       try {
-        return await renderIdeaPage(env, request, ideaPageMatch[1]);
+        const ideaId = pathId(ideaPageMatch[1]);
+        if (!ideaId) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
+        return await renderIdeaPage(env, request, ideaId);
       } catch (error) {
         return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
       }

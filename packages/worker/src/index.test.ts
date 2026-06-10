@@ -179,6 +179,7 @@ describe('FreeIdeaStore worker', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
     expect(html).toContain('Cheap public idea page');
     expect(html).toContain('ASX Filings Analyst');
     expect(html).toContain('Public reports and filings.');
@@ -211,5 +212,22 @@ describe('FreeIdeaStore worker', () => {
     expect(promote.status).toBe(200);
     expect(promoted.ok).toBe(true);
     expect(promoted.proDossierDraft.sourceIdeaId).toBe('cheap-storage-test');
+  });
+
+  it('rejects invalid ids and writes to missing ideas', async () => {
+    const invalid = await worker.fetch(new Request('https://fis.test/api/ideas/not%2Fvalid'), env());
+    const missingReaction = await worker.fetch(
+      new Request('https://fis.test/api/ideas/missing-idea/reactions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'support' }),
+      }),
+      env(),
+    );
+
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ error: 'invalid idea id' });
+    expect(missingReaction.status).toBe(404);
+    expect(await missingReaction.json()).toEqual({ error: 'idea not found' });
   });
 });
