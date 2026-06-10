@@ -3,28 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>FreeIdeaStore Project Docs - FreeIdeaStore Project Docs</title>
-<meta name="description" content="Hosted knowledge bases for ideas being brainstormed, researched, designed, prototyped, challenged, supported, and matured.">
-<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>FreeIdeaStore Idea Books - FreeIdeaStore Idea Books</title>
+<meta name="description" content="Catalog of independently published FreeIdeaStore idea books.">
+<link rel="canonical" href="https://freeideastore.serge-the-dev.workers.dev/ideas/">
+<link rel="icon" type="image/svg+xml" href="../../favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--paper:#f7f8fb;--panel:#fff;--ink:#101827;--muted:#5f6b7a;--line:#dce3ed;--accent:#0ea5e9;--accent-dark:#075985;--mark:#ecfeff}
 body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.62}
 a{color:inherit;text-decoration:none}
-.shell{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:100vh}
+.shell{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:100vh}
 aside{border-right:1px solid var(--line);background:#fff;padding:1rem;position:sticky;top:0;height:100vh;overflow:auto}
 .brand{display:flex;align-items:center;gap:.65rem;margin-bottom:1rem;font-weight:900}
 .logo{display:grid;width:34px;height:34px;place-items:center;border-radius:8px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff}
-.store-link{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;color:var(--accent-dark);font-size:.78rem;font-weight:900;margin-bottom:1rem}
-.nav-title{color:var(--muted);font-size:.7rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.4rem 0}
-.doc-list{display:grid;gap:.4rem}
-.doc-link{display:grid;gap:.15rem;border:1px solid transparent;border-radius:8px;padding:.58rem .62rem}
-.doc-link:hover,.doc-link.active{background:var(--mark);border-color:#bae6fd}
-.doc-link span{font-size:.82rem;font-weight:900}
-.doc-link small{color:var(--muted);font-size:.68rem;text-transform:uppercase;font-weight:800}
+.store-link{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;color:var(--accent-dark);font-size:.78rem;font-weight:900;margin:0 .45rem .75rem 0}
+.nav-title{color:var(--muted);font-size:.7rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.55rem 0 .35rem}
+.chapter-list{display:grid;gap:.4rem}
+.chapter-link{display:grid;gap:.15rem;border:1px solid transparent;border-radius:8px;padding:.58rem .62rem}
+.chapter-link:hover,.chapter-link.active{background:var(--mark);border-color:#bae6fd}
+.chapter-link span{font-size:.82rem;font-weight:900}
+.chapter-link small{color:var(--muted);font-size:.68rem;text-transform:uppercase;font-weight:800}
 main{padding:2rem 1.25rem 4rem}
-.article{max-width:850px;margin:0 auto}
+.article{max-width:900px;margin:0 auto}
 .crumb{color:var(--accent-dark);font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem}
 h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.4rem);line-height:.96;letter-spacing:0;margin-bottom:1rem}
 h2{font-family:Fraunces,serif;font-size:1.65rem;margin:2rem 0 .55rem;padding-top:.4rem;border-top:1px solid var(--line)}
@@ -35,47 +36,58 @@ li::marker{color:var(--accent-dark);font-weight:900}
 .summary{border-left:4px solid var(--accent);background:#fff;padding:.9rem 1rem;border-radius:0 8px 8px 0;color:var(--muted);font-weight:700;margin-bottom:1.2rem}
 .meta{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:1.2rem}
 .pill{border:1px solid var(--line);border-radius:999px;background:#fff;padding:.32rem .62rem;color:var(--muted);font-size:.72rem;font-weight:900;text-transform:uppercase}
-footer{max-width:850px;margin:2rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
-@media(max-width:860px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding-top:1.35rem}.doc-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}
+.chapter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.75rem;margin-top:1rem}
+.chapter-card{display:grid;gap:.45rem;border:1px solid var(--line);border-radius:8px;background:#fff;padding:.85rem;min-height:145px}
+.chapter-card small{color:var(--accent-dark);font-size:.68rem;font-weight:900;text-transform:uppercase}
+.chapter-card strong{font-size:.98rem}
+.chapter-card span{color:var(--muted);font-size:.78rem}
+.chapter-nav{display:flex;justify-content:space-between;gap:.75rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem}
+.chapter-nav a{border:1px solid var(--line);border-radius:8px;background:#fff;padding:.62rem .75rem;color:var(--accent-dark);font-size:.78rem;font-weight:900}
+footer{max-width:900px;margin:2rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
+@media(max-width:860px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding-top:1.35rem}.chapter-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}
 </style>
 </head>
 <body>
 <div class="shell">
   <aside>
-    <a class="brand" href="./"><span class="logo">I</span><span>FreeIdeaStore Docs</span></a>
-    <a class="store-link" href="../">Back to store</a>
-    <div class="nav-title">Idea docs</div>
-    <nav class="doc-list"><a class="doc-link" href="asx-filings-analyst/"><span>ASX Filings Analyst</span><small>researched</small></a><a class="doc-link" href="idea-reputation-system/"><span>Idea Reputation System</span><small>raw</small></a><a class="doc-link" href="parent-volleyball-community/"><span>Parent Volleyball Community</span><small>prototype</small></a><a class="doc-link" href="proidea-dossier-builder/"><span>ProIdea Dossier Builder</span><small>pivot</small></a><a class="doc-link" href="school-transport-options/"><span>School Transport Options</span><small>critique</small></a><a class="doc-link" href="slowdown-personal-reset/"><span>Slowdown Personal Reset</span><small>built</small></a></nav>
+    <a class="brand" href="./"><span class="logo">I</span><span>Idea Books</span></a>
+    <a class="store-link" href="../../">Back to store</a>
+    <a class="store-link" href="./">Book home</a>
+    <div class="nav-title">This book</div>
+    <nav class="chapter-list"></nav>
   </aside>
   <main>
     <article class="article">
-      <div class="crumb">Project docs</div>
-      <h1>FreeIdeaStore Project Docs</h1>
-<p>FreeIdeaStore hosts public idea pages and deeper project docs. The store is the browsing surface: each card shows the signal, maturity stage, risk, and a short preview. The project docs are where the real work accumulates.</p>
-<h2>What Lives Here</h2>
-<ul>
-<li>Brainstorming notes that explain why the idea exists.</li>
-<li>Design sketches and workflow decisions.</li>
-<li>Research notes, competitor questions, and evidence requests.</li>
-<li>Prototype plans that can be built by contributors.</li>
-<li>Validation steps that decide whether to support, pivot, park, or trash the idea.</li>
-<li>Contribution prompts so people know how to improve the project.</li>
-</ul>
-<h2>How It Should Feel</h2>
-<p>The store should feel like a public idea market. The docs should feel like a working room. A visitor can skim the storefront, open a promising idea, and see enough structured thinking to decide how to help.</p>
-<h2>Graduation Path</h2>
-<p>An idea graduates when the problem is clear, the evidence is credible, the prototype path is scoped, and contributors have produced enough judgment to justify ProIdeaStore review.</p>
-<h2>Idea Index</h2>
-<ul>
-<li><a href="asx-filings-analyst/"><strong>ASX Filings Analyst</strong></a> - A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention.</li>
-<li><a href="idea-reputation-system/"><strong>Idea Reputation System</strong></a> - A reputation layer where people earn recognition by improving ideas before they ever build a product.</li>
-<li><a href="parent-volleyball-community/"><strong>Parent Volleyball Community</strong></a> - A practical coordination product for volleyball parents, teams, clubs, and recurring local events.</li>
-<li><a href="proidea-dossier-builder/"><strong>ProIdea Dossier Builder</strong></a> - A structured path that turns strong free ideas into investor-ready ProIdeaStore dossiers.</li>
-<li><a href="school-transport-options/"><strong>School Transport Options</strong></a> - A safer, clearer way for parents to compare and coordinate school transport choices.</li>
-<li><a href="slowdown-personal-reset/"><strong>Slowdown Personal Reset</strong></a> - A lightweight wellbeing app concept focused on slowing down, reflection, and daily reset behavior.</li>
-</ul>
+      <div class="crumb">Independent Zensical idea book</div>
+      <h1>FreeIdeaStore Idea Books</h1>
+<p>Each card links to a separate idea book publication with its own Zensical config and source folder.</p>
+<div class="chapter-grid"><a class="chapter-card" href="asx-filings-analyst/">
+  <small>researched / 9 chapters</small>
+  <strong>ASX Filings Analyst</strong>
+  <span>A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention.</span>
+</a><a class="chapter-card" href="idea-reputation-system/">
+  <small>raw / 9 chapters</small>
+  <strong>Idea Reputation System</strong>
+  <span>A reputation layer where people earn recognition by improving ideas before they ever build a product.</span>
+</a><a class="chapter-card" href="parent-volleyball-community/">
+  <small>prototype / 9 chapters</small>
+  <strong>Parent Volleyball Community</strong>
+  <span>A practical coordination product for volleyball parents, teams, clubs, and recurring local events.</span>
+</a><a class="chapter-card" href="proidea-dossier-builder/">
+  <small>pivot / 9 chapters</small>
+  <strong>ProIdea Dossier Builder</strong>
+  <span>A structured path that turns strong free ideas into investor-ready ProIdeaStore dossiers.</span>
+</a><a class="chapter-card" href="school-transport-options/">
+  <small>critique / 9 chapters</small>
+  <strong>School Transport Options</strong>
+  <span>A safer, clearer way for parents to compare and coordinate school transport choices.</span>
+</a><a class="chapter-card" href="slowdown-personal-reset/">
+  <small>built / 9 chapters</small>
+  <strong>Slowdown Personal Reset</strong>
+  <span>A lightweight wellbeing app concept focused on slowing down, reflection, and daily reset behavior.</span>
+</a></div>
     </article>
-    <footer>FreeIdeaStore project docs are working documents. Strong ideas can graduate into ProIdeaStore dossiers.</footer>
+    <footer>This is a standalone FreeIdeaStore idea book publication.</footer>
   </main>
 </div>
 </body>

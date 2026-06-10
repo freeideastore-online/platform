@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>School Transport Options: Prototype Plan - School Transport Options</title>
+<meta name="description" content="A safer, clearer way for parents to compare and coordinate school transport choices.">
+<link rel="canonical" href="https://freeideastore.serge-the-dev.workers.dev/ideas/school-transport-options/prototype-plan/">
+<link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--paper:#f7f8fb;--panel:#fff;--ink:#101827;--muted:#5f6b7a;--line:#dce3ed;--accent:#0ea5e9;--accent-dark:#075985;--mark:#ecfeff}
+body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.62}
+a{color:inherit;text-decoration:none}
+.shell{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:100vh}
+aside{border-right:1px solid var(--line);background:#fff;padding:1rem;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:.65rem;margin-bottom:1rem;font-weight:900}
+.logo{display:grid;width:34px;height:34px;place-items:center;border-radius:8px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff}
+.store-link{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;color:var(--accent-dark);font-size:.78rem;font-weight:900;margin:0 .45rem .75rem 0}
+.nav-title{color:var(--muted);font-size:.7rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.55rem 0 .35rem}
+.chapter-list{display:grid;gap:.4rem}
+.chapter-link{display:grid;gap:.15rem;border:1px solid transparent;border-radius:8px;padding:.58rem .62rem}
+.chapter-link:hover,.chapter-link.active{background:var(--mark);border-color:#bae6fd}
+.chapter-link span{font-size:.82rem;font-weight:900}
+.chapter-link small{color:var(--muted);font-size:.68rem;text-transform:uppercase;font-weight:800}
+main{padding:2rem 1.25rem 4rem}
+.article{max-width:900px;margin:0 auto}
+.crumb{color:var(--accent-dark);font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem}
+h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.4rem);line-height:.96;letter-spacing:0;margin-bottom:1rem}
+h2{font-family:Fraunces,serif;font-size:1.65rem;margin:2rem 0 .55rem;padding-top:.4rem;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.4rem 0 .35rem}
+p{color:#253244;margin:.75rem 0}
+ul,ol{display:grid;gap:.42rem;margin:.7rem 0 .95rem 1.25rem;color:#253244}
+li::marker{color:var(--accent-dark);font-weight:900}
+.summary{border-left:4px solid var(--accent);background:#fff;padding:.9rem 1rem;border-radius:0 8px 8px 0;color:var(--muted);font-weight:700;margin-bottom:1.2rem}
+.meta{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:1.2rem}
+.pill{border:1px solid var(--line);border-radius:999px;background:#fff;padding:.32rem .62rem;color:var(--muted);font-size:.72rem;font-weight:900;text-transform:uppercase}
+.chapter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.75rem;margin-top:1rem}
+.chapter-card{display:grid;gap:.45rem;border:1px solid var(--line);border-radius:8px;background:#fff;padding:.85rem;min-height:145px}
+.chapter-card small{color:var(--accent-dark);font-size:.68rem;font-weight:900;text-transform:uppercase}
+.chapter-card strong{font-size:.98rem}
+.chapter-card span{color:var(--muted);font-size:.78rem}
+.chapter-nav{display:flex;justify-content:space-between;gap:.75rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem}
+.chapter-nav a{border:1px solid var(--line);border-radius:8px;background:#fff;padding:.62rem .75rem;color:var(--accent-dark);font-size:.78rem;font-weight:900}
+footer{max-width:900px;margin:2rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
+@media(max-width:860px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding-top:1.35rem}.chapter-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <a class="brand" href="../"><span class="logo">I</span><span>School Transport Options</span></a>
+    <a class="store-link" href="../../../">Back to store</a>
+    <a class="store-link" href="../">Book home</a>
+    <div class="nav-title">This book</div>
+    <nav class="chapter-list"><a class="chapter-link" href="../snapshot/"><span>Snapshot</span><small>Chapter 1</small></a><a class="chapter-link" href="../brainstorming-log/"><span>Brainstorming Log</span><small>Chapter 2</small></a><a class="chapter-link" href="../problem-and-customer/"><span>Problem And Customer</span><small>Chapter 3</small></a><a class="chapter-link" href="../research-notes/"><span>Research Notes</span><small>Chapter 4</small></a><a class="chapter-link" href="../design-sketch/"><span>Design Sketch</span><small>Chapter 5</small></a><a class="chapter-link active" href="../prototype-plan/"><span>Prototype Plan</span><small>Chapter 6</small></a><a class="chapter-link" href="../validation-plan/"><span>Validation Plan</span><small>Chapter 7</small></a><a class="chapter-link" href="../open-questions/"><span>Open Questions</span><small>Chapter 8</small></a><a class="chapter-link" href="../contribution-prompts/"><span>Contribution Prompts</span><small>Chapter 9</small></a></nav>
+  </aside>
+  <main>
+    <article class="article">
+      <div class="crumb">Independent Zensical idea book</div>
+      <div class="meta"><span class="pill">School Transport Options</span><span class="pill">Chapter 6</span></div>
+<h1>Prototype Plan</h1>
+<ul>
+<li>Pick one suburb and one school catchment.</li>
+<li>Create a manually researched transport options page.</li>
+<li>Interview 15 parents and 5 administrators.</li>
+<li>Test whether parents ask for coordination features.</li>
+</ul>
+<nav class="chapter-nav">
+  <a href="../design-sketch/">Previous: Design Sketch</a>
+  <a href="../validation-plan/">Next: Validation Plan</a>
+</nav>
+    </article>
+    <footer>This is a standalone FreeIdeaStore idea book publication.</footer>
+  </main>
+</div>
+</body>
+</html>

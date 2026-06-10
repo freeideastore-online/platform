@@ -5,6 +5,10 @@ on:
     paths:
       - "packages/worker/**"
       - "store/**"
+      - "idea-books/**"
+      - "scripts/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
 
@@ -28,6 +32,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Build idea books
+        run: pnpm docs:build
       - name: Apply D1 migrations
         working-directory: packages/worker
         run: pnpm exec wrangler d1 migrations apply freeideastore --remote

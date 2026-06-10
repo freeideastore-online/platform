@@ -9,7 +9,7 @@ It is where raw ideas are submitted, critiqued, researched, supported, pivoted, 
 - Cloudflare Worker in `packages/worker`.
 - Worker Assets serving the UI from `store/`.
 - D1-backed collaboration API for ideas, profiles, contributions, and reactions.
-- Project docs source in `docs/`, configured by `zensical.toml`, with built pages served from `store/ideas/`.
+- Independent idea book source in `idea-books/:slug/`, with a separate `zensical.toml` and `docs/` folder per idea. Built book websites are served from `store/ideas/:slug/`.
 - Seed data in `packages/worker/migrations/0001_collaboration.sql`.
 
 ## Local Preview
@@ -29,11 +29,13 @@ https://freeideastore.serge-the-dev.workers.dev
 
 Ideas are not the product. The contributors are the product: their critiques, evidence, pivots, prototypes, and judgment create visible reputation.
 
-## Project Docs
+## Idea Books
 
-The storefront shows snippet previews. Each idea links to a hosted project-docs page under `/ideas/:slug/` with brainstorming, research, design notes, prototype plans, validation steps, and contribution prompts.
+The storefront shows snippet previews. Each idea links to a hosted book website under `/ideas/:slug/`. The book home contains a table of contents, and each chapter has its own URL for brainstorming, research, design notes, prototype plans, validation steps, risks, and contribution prompts.
 
-The current build uses `pnpm docs:build` so the new Worker can host docs immediately. The repo also includes `zensical.toml` so this can move to the shared Zensical plus docs-host pipeline used by the other stores.
+The common chapter spine makes ideas comparable across the store. Idea-specific appendix chapters can be added when a project needs extra depth, such as compliance, valuation models, trust and safety, or prototype architecture.
+
+The current build uses `pnpm docs:build` so the Worker can host books immediately. Each idea has its own `zensical.toml`, matching the intended future flow: idea source -> Zensical build -> hosted book artifact.
 
 ## API
 

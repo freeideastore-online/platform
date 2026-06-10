@@ -1,0 +1,16 @@
+[project]
+site_name = "School Transport Options"
+site_url = "https://freeideastore.serge-the-dev.workers.dev/ideas/school-transport-options"
+site_description = "A safer, clearer way for parents to compare and coordinate school transport choices."
+docs_dir = "docs"
+site_dir = "../../store/ideas/school-transport-options"
+copyright = "FreeIdeaStore"
+
+[project.extra]
+idea_slug = "school-transport-options"
+stage = "critique"
+category = "local-services"
+homepage = "https://freeideastore.serge-the-dev.workers.dev"
+
+[project.theme]
+variant = "modern"

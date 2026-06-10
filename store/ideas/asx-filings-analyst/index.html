@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>ASX Filings Analyst - FreeIdeaStore Project Docs</title>
+<title>ASX Filings Analyst - ASX Filings Analyst</title>
 <meta name="description" content="A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention.">
+<link rel="canonical" href="https://freeideastore.serge-the-dev.workers.dev/ideas/asx-filings-analyst/">
 <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -12,19 +13,19 @@
 :root{--paper:#f7f8fb;--panel:#fff;--ink:#101827;--muted:#5f6b7a;--line:#dce3ed;--accent:#0ea5e9;--accent-dark:#075985;--mark:#ecfeff}
 body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.62}
 a{color:inherit;text-decoration:none}
-.shell{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:100vh}
+.shell{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:100vh}
 aside{border-right:1px solid var(--line);background:#fff;padding:1rem;position:sticky;top:0;height:100vh;overflow:auto}
 .brand{display:flex;align-items:center;gap:.65rem;margin-bottom:1rem;font-weight:900}
 .logo{display:grid;width:34px;height:34px;place-items:center;border-radius:8px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff}
-.store-link{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;color:var(--accent-dark);font-size:.78rem;font-weight:900;margin-bottom:1rem}
-.nav-title{color:var(--muted);font-size:.7rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.4rem 0}
-.doc-list{display:grid;gap:.4rem}
-.doc-link{display:grid;gap:.15rem;border:1px solid transparent;border-radius:8px;padding:.58rem .62rem}
-.doc-link:hover,.doc-link.active{background:var(--mark);border-color:#bae6fd}
-.doc-link span{font-size:.82rem;font-weight:900}
-.doc-link small{color:var(--muted);font-size:.68rem;text-transform:uppercase;font-weight:800}
+.store-link{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;color:var(--accent-dark);font-size:.78rem;font-weight:900;margin:0 .45rem .75rem 0}
+.nav-title{color:var(--muted);font-size:.7rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.55rem 0 .35rem}
+.chapter-list{display:grid;gap:.4rem}
+.chapter-link{display:grid;gap:.15rem;border:1px solid transparent;border-radius:8px;padding:.58rem .62rem}
+.chapter-link:hover,.chapter-link.active{background:var(--mark);border-color:#bae6fd}
+.chapter-link span{font-size:.82rem;font-weight:900}
+.chapter-link small{color:var(--muted);font-size:.68rem;text-transform:uppercase;font-weight:800}
 main{padding:2rem 1.25rem 4rem}
-.article{max-width:850px;margin:0 auto}
+.article{max-width:900px;margin:0 auto}
 .crumb{color:var(--accent-dark);font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem}
 h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.4rem);line-height:.96;letter-spacing:0;margin-bottom:1rem}
 h2{font-family:Fraunces,serif;font-size:1.65rem;margin:2rem 0 .55rem;padding-top:.4rem;border-top:1px solid var(--line)}
@@ -35,77 +36,74 @@ li::marker{color:var(--accent-dark);font-weight:900}
 .summary{border-left:4px solid var(--accent);background:#fff;padding:.9rem 1rem;border-radius:0 8px 8px 0;color:var(--muted);font-weight:700;margin-bottom:1.2rem}
 .meta{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:1.2rem}
 .pill{border:1px solid var(--line);border-radius:999px;background:#fff;padding:.32rem .62rem;color:var(--muted);font-size:.72rem;font-weight:900;text-transform:uppercase}
-footer{max-width:850px;margin:2rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
-@media(max-width:860px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding-top:1.35rem}.doc-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}
+.chapter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.75rem;margin-top:1rem}
+.chapter-card{display:grid;gap:.45rem;border:1px solid var(--line);border-radius:8px;background:#fff;padding:.85rem;min-height:145px}
+.chapter-card small{color:var(--accent-dark);font-size:.68rem;font-weight:900;text-transform:uppercase}
+.chapter-card strong{font-size:.98rem}
+.chapter-card span{color:var(--muted);font-size:.78rem}
+.chapter-nav{display:flex;justify-content:space-between;gap:.75rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem}
+.chapter-nav a{border:1px solid var(--line);border-radius:8px;background:#fff;padding:.62rem .75rem;color:var(--accent-dark);font-size:.78rem;font-weight:900}
+footer{max-width:900px;margin:2rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
+@media(max-width:860px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding-top:1.35rem}.chapter-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}
 </style>
 </head>
 <body>
 <div class="shell">
   <aside>
-    <a class="brand" href="../"><span class="logo">I</span><span>FreeIdeaStore Docs</span></a>
+    <a class="brand" href="./"><span class="logo">I</span><span>ASX Filings Analyst</span></a>
     <a class="store-link" href="../../">Back to store</a>
-    <div class="nav-title">Idea docs</div>
-    <nav class="doc-list"><a class="doc-link active" href="../asx-filings-analyst/"><span>ASX Filings Analyst</span><small>researched</small></a><a class="doc-link" href="../idea-reputation-system/"><span>Idea Reputation System</span><small>raw</small></a><a class="doc-link" href="../parent-volleyball-community/"><span>Parent Volleyball Community</span><small>prototype</small></a><a class="doc-link" href="../proidea-dossier-builder/"><span>ProIdea Dossier Builder</span><small>pivot</small></a><a class="doc-link" href="../school-transport-options/"><span>School Transport Options</span><small>critique</small></a><a class="doc-link" href="../slowdown-personal-reset/"><span>Slowdown Personal Reset</span><small>built</small></a></nav>
+    <a class="store-link" href="./">Book home</a>
+    <div class="nav-title">This book</div>
+    <nav class="chapter-list"><a class="chapter-link" href="snapshot/"><span>Snapshot</span><small>Chapter 1</small></a><a class="chapter-link" href="brainstorming-log/"><span>Brainstorming Log</span><small>Chapter 2</small></a><a class="chapter-link" href="problem-and-customer/"><span>Problem And Customer</span><small>Chapter 3</small></a><a class="chapter-link" href="research-notes/"><span>Research Notes</span><small>Chapter 4</small></a><a class="chapter-link" href="design-sketch/"><span>Design Sketch</span><small>Chapter 5</small></a><a class="chapter-link" href="prototype-plan/"><span>Prototype Plan</span><small>Chapter 6</small></a><a class="chapter-link" href="validation-plan/"><span>Validation Plan</span><small>Chapter 7</small></a><a class="chapter-link" href="open-questions/"><span>Open Questions</span><small>Chapter 8</small></a><a class="chapter-link" href="contribution-prompts/"><span>Contribution Prompts</span><small>Chapter 9</small></a></nav>
   </aside>
   <main>
     <article class="article">
-      <div class="crumb">Project docs</div>
+      <div class="crumb">Independent Zensical idea book</div>
       <div class="summary">A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention.</div>
-<div class="meta"><span class="pill">researched</span><span class="pill">finance</span></div>
+<div class="meta"><span class="pill">researched</span><span class="pill">finance</span><span class="pill">9 chapters</span></div>
 <h1>ASX Filings Analyst</h1>
-<h2>Snapshot</h2>
-<p>A research screener for Australian public companies. It reads public ASX announcements, annual reports, half-year reports, investor presentations, and company updates, then produces a weekly watchlist of stocks that may be undervalued.</p>
-<p>This is not financial advice and should not tell people to buy. The useful product is source-backed attention: what changed, why it matters, what looks cheap, and what must be checked by a human.</p>
-<h2>Brainstorming Log</h2>
-<ul>
-<li>The original question was whether an app could analyze public Australian market information and suggest undervalued stocks each week.</li>
-<li>The strongest version is not a magic stock picker. It is a disciplined evidence collector.</li>
-<li>A good weekly output should explain the valuation signal, the business quality signal, the risk signal, and the exact public source used.</li>
-</ul>
-<h2>Problem And Customer</h2>
-<p>Retail investors do not have time to read every ASX announcement. They want a small set of companies worth investigating, with links back to filings and a clear explanation of uncertainty.</p>
-<p>The first customer is a careful DIY investor who already reads reports but wants help narrowing the field.</p>
-<h2>Research Notes</h2>
-<ul>
-<li>Public sources include ASX announcements, company annual reports, quarterly activity reports, investor presentations, and governance disclosures.</li>
-<li>Inputs should be traceable and timestamped.</li>
-<li>The app must separate factual extraction from interpretation.</li>
-<li>Market data licensing, delayed pricing, and financial advice rules are the main risk areas.</li>
-</ul>
-<h2>Design Sketch</h2>
-<p>The first workflow is simple:</p>
-<ol>
-<li>Ingest public filings and reports.</li>
-<li>Extract revenue, margins, debt, cash flow, management commentary, and guidance changes.</li>
-<li>Compare valuation ranges against sector peers.</li>
-<li>Generate a weekly watchlist with citations.</li>
-<li>Let human reviewers mark useful, weak, or risky signals.</li>
-</ol>
-<h2>Prototype Plan</h2>
-<ul>
-<li>Start with a manual weekly report covering 20 ASX companies.</li>
-<li>Use public filings only.</li>
-<li>Score each company on valuation, balance sheet, growth, quality, and uncertainty.</li>
-<li>Publish a source-linked watchlist page.</li>
-<li>Ask 10 Australian retail investors whether it saves research time.</li>
-</ul>
-<h2>Validation Plan</h2>
-<p>Success is not &quot;did it pick winners.&quot; Success is whether users return weekly, trust the citations, and find companies they would not have noticed otherwise.</p>
-<h2>Open Questions</h2>
-<ul>
-<li>Which public market data can be used without licensing problems?</li>
-<li>Should this be a consumer product, a research newsletter, or a tool for investment clubs?</li>
-<li>How should disclaimers, suitability, and advice boundaries be handled?</li>
-</ul>
-<h2>Contribution Prompts</h2>
-<ul>
-<li>Add examples of excellent ASX company reports.</li>
-<li>Map competitors and newsletters already serving Australian retail investors.</li>
-<li>Define a valuation score that is transparent and conservative.</li>
-<li>Find legal guidance on financial advice boundaries in Australia.</li>
-</ul>
+<p>A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention.</p>
+<p>This is the independent FreeIdeaStore idea book for ASX Filings Analyst. Each chapter is a working document for improving, challenging, validating, or graduating the idea.</p>
+<h2>Book Chapters</h2>
+<div class="chapter-grid"><a class="chapter-card" href="snapshot/">
+  <small>Chapter 1</small>
+  <strong>Snapshot</strong>
+  <span>A research screener for Australian public companies. It reads public ASX announcements, annual reports, half-year reports, investor presentations, and company updates, then produce</span>
+</a><a class="chapter-card" href="brainstorming-log/">
+  <small>Chapter 2</small>
+  <strong>Brainstorming Log</strong>
+  <span>- The original question was whether an app could analyze public Australian market information and suggest undervalued stocks each week. - The strongest version is not a magic stock</span>
+</a><a class="chapter-card" href="problem-and-customer/">
+  <small>Chapter 3</small>
+  <strong>Problem And Customer</strong>
+  <span>Retail investors do not have time to read every ASX announcement. They want a small set of companies worth investigating, with links back to filings and a clear explanation of unce</span>
+</a><a class="chapter-card" href="research-notes/">
+  <small>Chapter 4</small>
+  <strong>Research Notes</strong>
+  <span>- Public sources include ASX announcements, company annual reports, quarterly activity reports, investor presentations, and governance disclosures. - Inputs should be traceable and</span>
+</a><a class="chapter-card" href="design-sketch/">
+  <small>Chapter 5</small>
+  <strong>Design Sketch</strong>
+  <span>The first workflow is simple: 1. Ingest public filings and reports. 2. Extract revenue, margins, debt, cash flow, management commentary, and guidance changes. 3. Compare valuation </span>
+</a><a class="chapter-card" href="prototype-plan/">
+  <small>Chapter 6</small>
+  <strong>Prototype Plan</strong>
+  <span>- Start with a manual weekly report covering 20 ASX companies. - Use public filings only. - Score each company on valuation, balance sheet, growth, quality, and uncertainty. - Publ</span>
+</a><a class="chapter-card" href="validation-plan/">
+  <small>Chapter 7</small>
+  <strong>Validation Plan</strong>
+  <span>Success is not &quot;did it pick winners.&quot; Success is whether users return weekly, trust the citations, and find companies they would not have noticed otherwise.</span>
+</a><a class="chapter-card" href="open-questions/">
+  <small>Chapter 8</small>
+  <strong>Open Questions</strong>
+  <span>- Which public market data can be used without licensing problems? - Should this be a consumer product, a research newsletter, or a tool for investment clubs? - How should disclaim</span>
+</a><a class="chapter-card" href="contribution-prompts/">
+  <small>Chapter 9</small>
+  <strong>Contribution Prompts</strong>
+  <span>- Add examples of excellent ASX company reports. - Map competitors and newsletters already serving Australian retail investors. - Define a valuation score that is transparent and c</span>
+</a></div>
     </article>
-    <footer>FreeIdeaStore project docs are working documents. Strong ideas can graduate into ProIdeaStore dossiers.</footer>
+    <footer>This is a standalone FreeIdeaStore idea book publication.</footer>
   </main>
 </div>
 </body>
