@@ -7,6 +7,7 @@ interface Env {
   GITHUB_ORG?: string;
   PLATFORM_REPO?: string;
   PUBLIC_BASE?: string;
+  FIS_API_BASE?: string;
   MCP_OBJECT: DurableObjectNamespace;
 }
 
@@ -14,6 +15,14 @@ type TextResult = { content: { type: "text"; text: string }[] };
 const text = (value: string): TextResult => ({ content: [{ type: "text", text: value }] });
 
 const STAGES = ["raw", "critique", "researched", "pivot", "prototype", "built"] as const;
+
+const FREE_IDEA_SECTIONS = [
+  ["snapshot", "Snapshot", "One paragraph describing the idea, user, and current maturity."],
+  ["signal", "Current Signal", "Why it may be worth attention now."],
+  ["next_step", "Next Step", "The cheapest useful validation step."],
+  ["risk", "Risk", "The main reason this may fail or should be trashed."],
+  ["help", "How To Help", "Prompts for evidence, critique, pivot, and prototype contributions."],
+] as const;
 
 const CHAPTERS = [
   ["snapshot", "Snapshot", "What is the idea, who is it for, and what is the current maturity signal?"],
@@ -167,85 +176,150 @@ async function putRepoFile(env: Env, org: string, repo: string, filePath: string
   return `${existing.sha ? "Updated" : "Created"} ${filePath}`;
 }
 
+async function fisApi<T>(env: Env, path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; data: T | { error: string } }> {
+  const base = env.FIS_API_BASE || env.PUBLIC_BASE || "https://freeideastore.serge-the-dev.workers.dev";
+  const res = await fetch(`${base}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      "x-idea-handle": "fis-mcp",
+      ...init?.headers,
+    },
+  });
+  const raw = await res.text();
+  let data: T | { error: string };
+  try {
+    data = raw ? JSON.parse(raw) : ({} as T);
+  } catch {
+    data = { error: raw || `HTTP ${res.status}` };
+  }
+  return { ok: res.ok, status: res.status, data };
+}
+
 export class FisMcp extends McpAgent<Env> {
   server = new McpServer({ name: "FreeIdeaStore", version: "0.1.0" });
 
   async init() {
     this.server.tool(
-      "idea_book_template",
-      "Return the standard FreeIdeaStore idea-book chapter spine.",
+      "free_idea_template",
+      "Return the cheap FreeIdeaStore one-page idea template. This is the default for raw free ideas.",
       {},
-      async () => text(CHAPTERS.map(([file, title]) => `- ${file}.md — ${title}`).join("\n")),
+      async () => text(FREE_IDEA_SECTIONS.map(([key, title, note]) => `- ${key}: ${title} — ${note}`).join("\n")),
     );
 
     this.server.tool(
-      "scaffold_idea_book",
-      "Provision a new independent FreeIdeaStore idea book in the platform repo. With apply=false, returns the files without writing.",
+      "create_free_idea",
+      "Create a cheap FreeIdeaStore idea page through the Worker API. This writes one D1 row and, when configured, one R2 body object.",
       {
         title: z.string().min(2),
-        summary: z.string().min(5),
-        slug: z.string().optional(),
+        summary: z.string().min(10),
         stage: z.enum(STAGES).optional(),
         category: z.string().optional(),
         signal: z.string().optional(),
         preview: z.string().optional(),
         next_step: z.string().optional(),
         risk: z.string().optional(),
-        docs_sections: z.array(z.string()).optional(),
-        apply: z.boolean().optional().describe("Write to GitHub. Defaults to false."),
+        body: z.string().optional().describe("Optional markdown body for the idea page."),
+        source_url: z.string().optional(),
       },
       async (input) => {
-        const org = this.env.GITHUB_ORG || "freeideastore-online";
-        const repo = this.env.PLATFORM_REPO || "platform";
+        const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.serge-the-dev.workers.dev";
+        const body = input.body || [
+          "## Snapshot",
+          input.summary,
+          "",
+          "## Current signal",
+          input.signal || input.preview || "No signal has been added yet.",
+          "",
+          "## Next step",
+          input.next_step || "Define the cheapest useful validation step.",
+          "",
+          "## Risk",
+          input.risk || "Main risk not yet identified.",
+          "",
+          "## How to help",
+          "- Add evidence from public sources.",
+          "- Name a risk or reason to trash it.",
+          "- Suggest a sharper customer, wedge, or pivot.",
+        ].join("\n");
+        const res = await fisApi<{ idea: string; url: string }>(this.env, "/api/ideas", {
+          method: "POST",
+          body: JSON.stringify({
+            title: input.title,
+            summary: input.summary,
+            stage: input.stage || "raw",
+            category: input.category || "uncategorized",
+            signal: input.signal || "",
+            preview: input.preview || input.summary,
+            nextStep: input.next_step || "",
+            risk: input.risk || "",
+            body,
+            source_url: input.source_url || "",
+          }),
+        });
+        if (!res.ok || "error" in res.data) {
+          return text(`Error creating free idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        }
+        return text(JSON.stringify({
+          idea: res.data.idea,
+          url: `${publicBase}${res.data.url}`,
+          storage: "D1 metadata plus optional R2 body/render cache",
+          proPath: "Call promote_to_pro_candidate when this deserves a curated ProIdeaStore dossier.",
+        }, null, 2));
+      },
+    );
+
+    this.server.tool(
+      "promote_to_pro_candidate",
+      "Mark a FreeIdeaStore idea as a ProIdeaStore candidate and return a dossier draft payload.",
+      {
+        idea_id: z.string().min(2),
+      },
+      async (input) => {
+        const res = await fisApi<Record<string, unknown>>(this.env, `/api/ideas/${encodeURIComponent(input.idea_id)}/promote`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        if (!res.ok || "error" in res.data) {
+          return text(`Error promoting idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        }
+        return text(JSON.stringify(res.data, null, 2));
+      },
+    );
+
+    this.server.tool(
+      "proidea_book_template",
+      "Return the full ProIdeaStore/Zensical book spine used only after an idea graduates from the free store.",
+      {},
+      async () => text(CHAPTERS.map(([file, title]) => `- ${file}.md — ${title}`).join("\n")),
+    );
+
+    this.server.tool(
+      "dry_run_proidea_book_export",
+      "Dry-run a full Zensical-style book export for a promoted idea. This does not write GitHub files.",
+      {
+        title: z.string().min(2),
+        summary: z.string().min(10),
+        slug: z.string().optional(),
+        stage: z.enum(STAGES).optional(),
+        category: z.string().optional(),
+      },
+      async (input) => {
         const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.serge-the-dev.workers.dev";
         const slug = slugify(input.slug || input.title);
-        const stage = input.stage || "raw";
-        const category = input.category || "uncategorized";
-        const files = ideaFiles({ slug, title: input.title, summary: input.summary, stage, category, publicBase });
-        const registryIdea = {
-          id: slug,
-          name: input.title,
-          stage,
-          category,
-          signal: input.signal || input.summary,
-          preview: input.preview || input.summary,
-          docsUrl: `/ideas/${slug}/`,
-          docsSections: (input.docs_sections?.length ? input.docs_sections : ["brainstorming", "research", "prototype"]).slice(0, 5),
-          nextStep: input.next_step || "Define the first validation step.",
-          contributors: 0,
-          support: 0,
-          risk: input.risk || "Main risk not yet identified.",
-        };
-
-        if (!input.apply) {
-          return text(JSON.stringify({ slug, files: Object.fromEntries(files), registryIdea }, null, 2));
-        }
-
-        const existing = await getRepoFile(this.env, org, repo, `idea-books/${slug}/zensical.toml`);
-        if (existing.status === 200) return text(`Error: idea book already exists: ${slug}`);
-
-        const registryFile = await getRepoFile(this.env, org, repo, "store/registry.json");
-        if (!registryFile.content) return text(`Error reading registry: ${registryFile.error || registryFile.status}`);
-        const registry = JSON.parse(registryFile.content) as { ideas: Array<{ id: string }>; stages: string[]; categories: string[] };
-        if (registry.ideas.some((idea) => idea.id === slug)) return text(`Error: registry already contains idea: ${slug}`);
-        registry.ideas.push(registryIdea);
-        if (!registry.stages.includes(stage)) registry.stages.push(stage);
-        if (!registry.categories.includes(category)) registry.categories.push(category);
-        files.set("store/registry.json", `${JSON.stringify(registry, null, 2)}\n`);
-
-        const results: string[] = [];
-        for (const [filePath, content] of files) {
-          results.push(await putRepoFile(this.env, org, repo, filePath, content, `Scaffold idea book: ${slug}`));
-        }
-        return text([
-          `Scaffolded ${slug} in ${org}/${repo}.`,
-          `Book source: idea-books/${slug}/`,
-          `Book URL after deploy: ${publicBase}/ideas/${slug}/`,
-          "",
-          results.join("\n"),
-          "",
-          "GitHub Actions will build/deploy if CF_DEPLOY_ENABLED and Cloudflare secrets are configured.",
-        ].join("\n"));
+        const files = ideaFiles({
+          slug,
+          title: input.title,
+          summary: input.summary,
+          stage: input.stage || "researched",
+          category: input.category || "uncategorized",
+          publicBase,
+        });
+        return text(JSON.stringify({
+          slug,
+          intent: "promotion/export only; do not use this for ordinary free ideas",
+          files: Object.fromEntries(files),
+        }, null, 2));
       },
     );
   }
@@ -255,7 +329,7 @@ export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
-      return Response.json({ ok: true, service: "freeideastore-mcp", tools: 2 });
+      return Response.json({ ok: true, service: "freeideastore-mcp", tools: 4 });
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
       return FisMcp.serve("/mcp").fetch(request, env, ctx);

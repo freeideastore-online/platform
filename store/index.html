@@ -101,7 +101,7 @@ footer{border-top:1px solid var(--line);background:var(--panel);color:var(--mute
     <div>
       <div class="eyebrow">Public idea lab</div>
       <h1>Ideas earn builders.</h1>
-      <p>Post raw ideas, critique them, find evidence, suggest pivots, support the promising ones, trash the weak ones, and build a visible reputation for judgment before anything becomes a company.</p>
+      <p>Post raw ideas, critique them, find evidence, suggest pivots, support the promising ones, trash the weak ones, and build visible reputation. Free ideas stay as cheap public pages until they earn a ProIdeaStore dossier.</p>
       <div class="actions">
         <a class="button" href="#ideas">Browse ideas</a>
         <a class="button secondary" href="#reputation">See contributor path</a>
@@ -123,7 +123,7 @@ footer{border-top:1px solid var(--line);background:var(--panel);color:var(--mute
     <div class="metric"><strong>6</strong><span>seed ideas</span></div>
     <div class="metric"><strong>13</strong><span>contribution types</span></div>
     <div class="metric"><strong>5</strong><span>maturity stages</span></div>
-    <div class="metric"><strong>1</strong><span>pro path</span></div>
+    <div class="metric"><strong>1</strong><span>cheap page path</span></div>
   </section>
 
   <section class="forge" aria-label="Idea refinement workbench">
@@ -233,7 +233,7 @@ function render(stage = 'all') {
         </div>
         <div class="card-footer">
           <span>${escapeHtml(idea.contribution_count ?? idea.contributors ?? 0)} contributions / ${escapeHtml(idea.support ?? 0)} support</span>
-          <a class="docs-link" href="${escapeHtml(docsUrl)}">Open book</a>
+          <a class="docs-link" href="${escapeHtml(docsUrl)}">Open page</a>
         </div>
       </article>
     `;

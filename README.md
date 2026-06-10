@@ -9,7 +9,7 @@ It is where raw ideas are submitted, critiqued, researched, supported, pivoted, 
 - Cloudflare Worker in `packages/worker`.
 - Worker Assets serving the UI from `store/`.
 - D1-backed collaboration API for ideas, profiles, contributions, and reactions.
-- Independent idea book source in `idea-books/:slug/`, with a separate `zensical.toml` and `docs/` folder per idea. Built book websites are served from `store/ideas/:slug/`.
+- Cheap dynamic idea pages at `/ideas/:id/`, backed by D1 metadata and optional R2 idea bodies/render cache.
 - Seed data in `packages/worker/migrations/0001_collaboration.sql`.
 
 ## Local Preview
@@ -29,33 +29,50 @@ https://freeideastore.serge-the-dev.workers.dev
 
 Ideas are not the product. The contributors are the product: their critiques, evidence, pivots, prototypes, and judgment create visible reputation.
 
-## Idea Books
+## Cheap Free Ideas
 
-The storefront shows snippet previews. Each idea links to a hosted book website under `/ideas/:slug/`. The book home contains a table of contents, and each chapter has its own URL for brainstorming, research, design notes, prototype plans, validation steps, risks, and contribution prompts.
+FreeIdeaStore is optimized for very large idea volume. It should not create a repository, Zensical project, or generated file tree for every raw idea.
 
-The common chapter spine makes ideas comparable across the store. Idea-specific appendix chapters can be added when a project needs extra depth, such as compliance, valuation models, trust and safety, or prototype architecture.
+Default storage:
 
-The current build uses `pnpm docs:build` so the Worker can host books immediately. Each idea has its own `zensical.toml`, matching the intended future flow: idea source -> Zensical build -> hosted book artifact.
+- D1 stores the searchable/indexed fields: title, summary, stage, category, signal, next step, risk, contributor and reaction counts.
+- R2 can store longer idea markdown bodies and rendered HTML cache objects.
+- The Worker renders `/ideas/:id/` pages and only fetches bounded result sets for the homepage.
+- Pro graduation marks an idea as a candidate and produces a dossier draft payload.
 
-Create a new idea book without AI generation:
+This keeps ordinary free ideas cheap and prevents the repo from filling with millions of generated files.
+
+## Pro Graduation
+
+Promising ideas move to ProIdeaStore when they deserve diligence. The Pro path is where full books, research packets, prototype notes, pitch decks, and investment/build readiness work belong.
+
+The old `idea-books/:slug/` source tree remains as a reference/export shape for promoted ideas only. It is not the default creation path for FreeIdeaStore.
+
+Create a cheap free idea through the API:
 
 ```bash
-pnpm idea:new -- --title "New Idea" --summary "One sentence summary" --category platform --stage raw
-pnpm docs:build
+curl -X POST https://freeideastore.serge-the-dev.workers.dev/api/ideas \
+  -H 'content-type: application/json' \
+  -H 'x-idea-handle: serge' \
+  -d '{"title":"New Idea","summary":"One sentence summary with enough context.","category":"platform","stage":"raw"}'
 ```
 
-MCP provisioning uses the same deterministic template through `packages/mcp`:
+MCP provisioning follows the same cheap path through `packages/mcp`:
 
-- `idea_book_template` returns the standard chapter spine.
-- `scaffold_idea_book` returns or writes the full `idea-books/:slug/` project and registry entry.
+- `free_idea_template` returns the one-page free idea template.
+- `create_free_idea` creates a D1/R2-backed idea page.
+- `promote_to_pro_candidate` marks an idea for ProIdeaStore review and returns a dossier draft.
+- `proidea_book_template` and `dry_run_proidea_book_export` are for promoted ideas only.
 
-`scaffold_idea_book` runs in dry-run mode unless `apply: true` is passed. Applying writes to GitHub through the platform repo and requires `GITHUB_TOKEN` on the MCP Worker.
+The MCP Worker does not need a GitHub token for ordinary free idea creation.
 
 ## API
 
 - `GET /api/health`
-- `GET /api/ideas`
+- `GET /api/ideas?stage=all&limit=60`
 - `POST /api/ideas`
+- `GET /api/ideas/:id`
+- `POST /api/ideas/:id/promote`
 - `GET /api/ideas/:id/contributions`
 - `POST /api/ideas/:id/contributions`
 - `POST /api/ideas/:id/reactions`
