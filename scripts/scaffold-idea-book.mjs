@@ -19,7 +19,7 @@ const chapters = [
 
 function usage() {
   return `Usage:
-  pnpm idea:new -- --title "Idea Name" --summary "One sentence" [options]
+  pnpm idea:book:new -- --title "Idea Name" --summary "One sentence" [options]
 
 Options:
   --slug <slug>          Defaults from title
@@ -195,4 +195,4 @@ if (!registry.categories.includes(category)) registry.categories.push(category);
 await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
 
 console.log(`Created idea book: idea-books/${slug}`);
-console.log(`Next: pnpm docs:build`);
+console.log(`Next: pnpm idea:book:build`);

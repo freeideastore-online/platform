@@ -16,7 +16,6 @@ It is where raw ideas are submitted, critiqued, researched, supported, pivoted, 
 
 ```bash
 pnpm install
-pnpm docs:build
 pnpm db:migrate:local
 pnpm dev
 ```

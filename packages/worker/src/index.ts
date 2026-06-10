@@ -114,7 +114,23 @@ async function listIdeas(env: Env, options: { stage?: string; limit?: number }) 
   const limit = options.limit || 60;
   const result = await env.DB.prepare(
     `WITH recent AS (
-       SELECT *
+       SELECT
+         id,
+         title,
+         summary,
+         preview,
+         signal,
+         source_url,
+         visibility,
+         stage,
+         category,
+         next_step,
+         risk,
+         created_by,
+         status,
+         pro_candidate,
+         created_at,
+         updated_at
        FROM ideas
        WHERE status != 'removed'
          AND (? = 'all' OR stage = ?)

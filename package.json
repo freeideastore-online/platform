@@ -9,7 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "docs:build": "node scripts/build-idea-docs.mjs",
+    "idea:book:build": "node scripts/build-idea-docs.mjs",
     "idea:book:new": "node scripts/scaffold-idea-book.mjs",
     "dev": "pnpm --filter @fis/worker dev",
     "deploy": "pnpm --filter @fis/worker run deploy",
