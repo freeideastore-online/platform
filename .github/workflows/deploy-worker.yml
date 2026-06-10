@@ -30,6 +30,10 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Test
+        run: pnpm test
+      - name: Typecheck
+        run: pnpm typecheck
       - name: Apply D1 migrations
         working-directory: packages/worker
         run: pnpm exec wrangler d1 migrations apply freeideastore --remote

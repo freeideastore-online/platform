@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply freeideastore --local",
     "db:migrate:prod": "wrangler d1 migrations apply freeideastore --remote"
@@ -15,4 +16,3 @@
     "wrangler": "^4.0.0"
   }
 }
-
