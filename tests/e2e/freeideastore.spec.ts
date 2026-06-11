@@ -25,6 +25,11 @@ test('contributors and console pages are available', async ({ page }) => {
   await expect(page.getByText('Contributor reputation.')).toBeVisible();
   await expect(page.getByText('Risk Finder')).toBeVisible();
 
+  await page.getByRole('link', { name: 'Risk Finder' }).click();
+  await expect(page).toHaveURL(/\/contributors\/risk-finder\/$/);
+  await expect(page.getByText('Profile strength')).toBeVisible();
+  await expect(page.getByText('Contribution mix')).toBeVisible();
+
   await page.goto('/console/');
 
   await expect(page.getByRole('heading', { name: 'Put an idea into the refinery.' })).toBeVisible();

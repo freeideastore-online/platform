@@ -102,6 +102,24 @@ class FakeD1 {
         }),
       });
     }
+    if (sql.includes('FROM profiles p') && sql.includes('WHERE p.handle')) {
+      return new FakeStatement({
+        first: ([handle]) =>
+          handle === 'risk-finder'
+            ? {
+                id: 'profile-risk-finder',
+                handle: 'risk-finder',
+                display_name: 'Risk Finder',
+                bio: '',
+                reputation: 184,
+                badges_json: '["risk-mapper"]',
+                idea_count: 0,
+                contribution_count: 3,
+                reaction_count: 2,
+              }
+            : null,
+      });
+    }
     if (sql.includes('FROM ideas i') && sql.includes('WHERE i.id = ?')) {
       return new FakeStatement({ first: ([id]) => this.ideas.get(String(id)) ?? null });
     }
@@ -228,6 +246,17 @@ describe('FreeIdeaStore worker', () => {
     expect(consolePage.status).toBe(200);
     expect(consoleHtml).toContain('Create idea');
     expect(consoleHtml).toContain('Sign in with GitHub');
+  });
+
+  it('renders rich user profile pages with public work sections', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/users/risk-finder/'), env());
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Risk Finder');
+    expect(html).toContain('Profile strength');
+    expect(html).toContain('Contribution mix');
+    expect(html).toContain('Best fit');
   });
 
   it('starts OAuth through the FreeAppStore auth API with a nonce cookie', async () => {
