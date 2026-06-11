@@ -53,10 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_contributions_idea ON contributions(idea_id, crea
 CREATE INDEX IF NOT EXISTS idx_reactions_idea ON reactions(idea_id, type);
 
 INSERT OR IGNORE INTO profiles (id, handle, display_name, reputation, badges_json) VALUES
-  ('profile-system', 'system', 'Idea Store Seeder', 0, '["seed"]'),
-  ('profile-risk-finder', 'risk-finder', 'Risk Finder', 184, '["kill-signal-finder","risk-mapper"]'),
-  ('profile-pivot-maker', 'pivot-maker', 'Pivot Maker', 156, '["pivot-maker"]'),
-  ('profile-evidence-hunter', 'evidence-hunter', 'Evidence Hunter', 143, '["evidence-hunter"]');
+  ('profile-system', 'system', 'Idea Store Seeder', 0, '["seed"]');
 
 INSERT OR IGNORE INTO ideas (id, title, summary, stage, category, next_step, risk, created_by, pro_candidate) VALUES
   ('asx-filings-analyst', 'ASX Filings Analyst', 'Public reports, valuation screens, source-backed weekly watchlist.', 'researched', 'finance', 'Validate with 10 Australian retail investors using a manual weekly report.', 'Market data licensing and accidental financial advice.', 'profile-system', 1),
@@ -65,14 +62,4 @@ INSERT OR IGNORE INTO ideas (id, title, summary, stage, category, next_step, ris
   ('slowdown-personal-reset', 'Slowdown Personal Reset', 'A lightweight app already exists; next question is retention and use frequency.', 'built', 'wellbeing', 'Track 7-day return use and collect qualitative feedback.', 'Wellbeing apps are crowded and hard to monetize.', 'profile-system', 0),
   ('idea-reputation-system', 'Idea Reputation System', 'People can earn recognition by improving ideas, not just building apps.', 'raw', 'platform', 'Define badges and contribution events that cannot be gamed easily.', 'Low-quality AI-generated comments could flood the system.', 'profile-system', 1),
   ('proidea-dossier-builder', 'ProIdea Dossier Builder', 'The valuable artifact may be a complete opportunity packet, not the idea itself.', 'pivot', 'platform', 'Create one dossier manually and see if builders or investors ask for more.', 'Research quality must be high enough to justify curation.', 'profile-system', 1);
-
-INSERT OR IGNORE INTO contributions (id, idea_id, profile_id, kind, body) VALUES
-  ('c-asx-risk', 'asx-filings-analyst', 'profile-risk-finder', 'risk', 'Keep this positioned as research workflow and cite every source. Avoid personalized buy advice.'),
-  ('c-asx-evidence', 'asx-filings-analyst', 'profile-evidence-hunter', 'evidence', 'Competitors exist, but the citation-first ASX filings workflow is the wedge.'),
-  ('c-volley-pivot', 'parent-volleyball-community', 'profile-pivot-maker', 'pivot', 'Start with one local club and one repeated weekly workflow before adding broad community features.');
-
-INSERT OR IGNORE INTO reactions (id, idea_id, profile_id, type) VALUES
-  ('r-asx-support-risk', 'asx-filings-analyst', 'profile-risk-finder', 'support'),
-  ('r-asx-support-evidence', 'asx-filings-analyst', 'profile-evidence-hunter', 'support'),
-  ('r-volley-support-pivot', 'parent-volleyball-community', 'profile-pivot-maker', 'support');
 

@@ -83,17 +83,17 @@ class FakeD1 {
         },
       });
     }
-    if (sql.includes('FROM profiles p') && sql.includes('LEFT JOIN ideas i') && !sql.includes('WHERE p.handle')) {
+    if (sql.includes('FROM profiles p') && sql.includes('LEFT JOIN ideas i') && !sql.includes('p.handle = ?')) {
       return new FakeStatement({
         all: () => ({
           results: [
             {
-              id: 'profile-risk-finder',
-              handle: 'risk-finder',
-              display_name: 'Risk Finder',
+              id: 'profile-serge-the-dev',
+              handle: 'serge-the-dev',
+              display_name: 'Serge The Dev',
               bio: '',
-              reputation: 184,
-              badges_json: '["risk-mapper"]',
+              reputation: 20,
+              badges_json: '[]',
               idea_count: 0,
               contribution_count: 3,
               reaction_count: 2,
@@ -106,18 +106,20 @@ class FakeD1 {
       return new FakeStatement({
         first: ([handle]) =>
           handle === 'risk-finder'
-            ? {
-                id: 'profile-risk-finder',
-                handle: 'risk-finder',
-                display_name: 'Risk Finder',
-                bio: '',
-                reputation: 184,
-                badges_json: '["risk-mapper"]',
-                idea_count: 0,
-                contribution_count: 3,
-                reaction_count: 2,
-              }
-            : null,
+            ? null
+            : handle === 'serge-the-dev'
+              ? {
+                  id: 'profile-serge-the-dev',
+                  handle: 'serge-the-dev',
+                  display_name: 'Serge The Dev',
+                  bio: '',
+                  reputation: 20,
+                  badges_json: '[]',
+                  idea_count: 0,
+                  contribution_count: 3,
+                  reaction_count: 2,
+                }
+              : null,
       });
     }
     if (sql.includes('FROM ideas i') && sql.includes('WHERE i.id = ?')) {
@@ -242,21 +244,39 @@ describe('FreeIdeaStore worker', () => {
 
     expect(contributors.status).toBe(200);
     expect(contributorHtml).toContain('Contributor reputation.');
-    expect(contributorHtml).toContain('Risk Finder');
+    expect(contributorHtml).toContain('Serge The Dev');
+    expect(contributorHtml).not.toContain('Risk Finder');
     expect(consolePage.status).toBe(200);
     expect(consoleHtml).toContain('Create idea');
+    expect(consoleHtml).toContain('id="account-slot"');
     expect(consoleHtml).toContain('Sign in with GitHub');
   });
 
-  it('renders rich user profile pages with public work sections', async () => {
-    const response = await worker.fetch(new Request('https://fis.test/users/risk-finder/'), env());
+  it('renders signed-out account profile controls', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/profile/'), env());
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('Risk Finder');
+    expect(html).toContain('Sign in to view your profile.');
+    expect(html).toContain('Sign in with GitHub');
+    expect(html).toContain('Sign in with Google');
+  });
+
+  it('renders rich user profile pages with public work sections', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/users/serge-the-dev/'), env());
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Serge The Dev');
     expect(html).toContain('Profile strength');
     expect(html).toContain('Contribution mix');
     expect(html).toContain('Best fit');
+  });
+
+  it('does not expose removed seed contributor profiles', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/users/risk-finder/'), env());
+
+    expect(response.status).toBe(404);
   });
 
   it('starts OAuth through the FreeAppStore auth API with a nonce cookie', async () => {
