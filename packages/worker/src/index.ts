@@ -277,7 +277,7 @@ async function handleAuth(request: Request, url: URL) {
     const nonce = url.searchParams.get('nonce');
     const storedNonce = readCookie(request.headers.get('Cookie'), NONCE_COOKIE_NAME);
     if (!nonce || nonce !== storedNonce) return redirect(`${url.origin}${returnPath}#auth_error=invalid_state`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
-    const session = url.searchParams.get('session');
+    const session = url.searchParams.get('session') || url.searchParams.get('fas_session');
     if (!session) return redirect(`${url.origin}${returnPath}#auth_error=missing_session`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
     const { response } = await fetchAuthPayload(session);
     if (!response.ok) return redirect(`${url.origin}${returnPath}#auth_error=invalid_session`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
