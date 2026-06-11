@@ -44,7 +44,7 @@ class FakeD1 {
       summary: 'Public reports, valuation screens, source-backed weekly watchlist.',
       preview: 'Weekly public-data research assistant.',
       signal: 'Validate with 10 Australian retail investors.',
-      body_md: '## Snapshot\nPublic reports and filings.\n\n## Risk\nAccidental financial advice.',
+      body_md: '# Snapshot\nPublic reports and filings.\n\n## Design Sketch\n1. Review filings.\n2. Cite sources.\n\n## Risk\nAccidental financial advice.',
       body_key: '',
       render_key: '',
       source_url: '',
@@ -183,7 +183,18 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('Cheap public idea page');
     expect(html).toContain('ASX Filings Analyst');
     expect(html).toContain('Public reports and filings.');
+    expect(html).toContain('href="#design-sketch"');
+    expect(html).toContain('<h2 id="design-sketch">Design Sketch</h2>');
+    expect(html).toContain('<ol>');
+    expect(html).toContain('<li>Review filings.</li>');
     expect(html).toContain('2 supports / 0 trash / 0 pivots');
+  });
+
+  it('redirects old chapter URLs to dynamic page section anchors', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/research-notes/'), env());
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('https://fis.test/ideas/asx-filings-analyst/#research-notes');
   });
 
   it('creates a D1-backed free idea and promotes it to a pro candidate', async () => {

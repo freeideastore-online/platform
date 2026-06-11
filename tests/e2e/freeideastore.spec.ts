@@ -21,6 +21,7 @@ test('idea detail page is readable on mobile', async ({ page, isMobile }) => {
   await page.goto('/ideas/asx-filings-analyst/');
 
   await expect(page.getByRole('heading', { name: 'ASX Filings Analyst' })).toBeVisible();
-  await expect(page.getByText('Current signal')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Research Notes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Prototype Plan' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Back to store' })).toBeVisible();
 });

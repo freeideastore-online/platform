@@ -196,44 +196,61 @@ async function ideaById(env: Env, ideaId: string) {
 function markdownToHtml(markdown: string) {
   const lines = markdown.split(/\r?\n/);
   const html: string[] = [];
-  let inList = false;
+  let listType: 'ul' | 'ol' | null = null;
+
+  const closeList = () => {
+    if (listType) {
+      html.push(`</${listType}>`);
+      listType = null;
+    }
+  };
 
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) {
-      if (inList) {
-        html.push('</ul>');
-        inList = false;
-      }
+      closeList();
       continue;
     }
-    const heading = trimmed.match(/^(#{2,3})\s+(.+)$/);
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
-      if (inList) {
-        html.push('</ul>');
-        inList = false;
-      }
-      const tag = heading[1].length === 2 ? 'h2' : 'h3';
-      html.push(`<${tag}>${escapeHtml(heading[2])}</${tag}>`);
+      closeList();
+      const tag = heading[1].length <= 2 ? 'h2' : 'h3';
+      html.push(`<${tag} id="${escapeHtml(slug(heading[2]) || 'section')}">${escapeHtml(heading[2])}</${tag}>`);
       continue;
     }
     const listItem = trimmed.match(/^[-*]\s+(.+)$/);
     if (listItem) {
-      if (!inList) {
+      if (listType !== 'ul') {
+        closeList();
         html.push('<ul>');
-        inList = true;
+        listType = 'ul';
       }
       html.push(`<li>${escapeHtml(listItem[1])}</li>`);
       continue;
     }
-    if (inList) {
-      html.push('</ul>');
-      inList = false;
+    const orderedItem = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (orderedItem) {
+      if (listType !== 'ol') {
+        closeList();
+        html.push('<ol>');
+        listType = 'ol';
+      }
+      html.push(`<li>${escapeHtml(orderedItem[1])}</li>`);
+      continue;
     }
+    closeList();
     html.push(`<p>${escapeHtml(trimmed)}</p>`);
   }
-  if (inList) html.push('</ul>');
+  closeList();
   return html.join('\n');
+}
+
+function markdownHeadings(markdown: string) {
+  return markdown
+    .split(/\r?\n/)
+    .map((line) => line.trim().match(/^#{1,3}\s+(.+)$/)?.[1])
+    .filter((title): title is string => Boolean(title))
+    .map((title) => ({ title, id: slug(title) || 'section' }));
 }
 
 function defaultIdeaBody(idea: IdeaRow) {
@@ -280,6 +297,7 @@ async function renderIdeaPage(env: Env, request: Request, ideaId: string) {
   }
 
   const body = await ideaBody(env, idea);
+  const headings = markdownHeadings(body);
   const page = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -306,7 +324,7 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5.8vw,4.5rem);line-height:.
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:1rem;align-items:start}
 .doc,.side{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 10px 24px rgba(15,23,42,.04)}
 .doc h2{font-family:Fraunces,serif;font-size:1.45rem;margin:1rem 0 .35rem}.doc h2:first-child{margin-top:0}.doc h3{font-size:1rem;margin:.9rem 0 .3rem}.doc p,.doc li{color:#334155;font-size:.92rem}.doc ul{padding-left:1.2rem;display:grid;gap:.25rem;margin:.35rem 0}
-.side{display:grid;gap:.85rem}.side h2{font-size:.82rem;text-transform:uppercase;color:var(--muted);letter-spacing:.1em}.side div{border-left:3px solid var(--line);padding-left:.65rem}.side strong{display:block;font-size:.74rem;text-transform:uppercase}.side span{display:block;color:var(--muted);font-size:.82rem}.actions{display:flex;gap:.5rem;flex-wrap:wrap}.button{border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.58rem .75rem;font-size:.78rem;font-weight:900}.button.secondary{background:white;color:var(--accent-dark)}
+.side{display:grid;gap:.85rem}.side h2{font-size:.82rem;text-transform:uppercase;color:var(--muted);letter-spacing:.1em}.side div{border-left:3px solid var(--line);padding-left:.65rem}.side strong{display:block;font-size:.74rem;text-transform:uppercase}.side span{display:block;color:var(--muted);font-size:.82rem}.toc{display:grid;gap:.28rem}.toc a{color:var(--accent-dark);font-size:.78rem;font-weight:800}.actions{display:flex;gap:.5rem;flex-wrap:wrap}.button{border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.58rem .75rem;font-size:.78rem;font-weight:900}.button.secondary{background:white;color:var(--accent-dark)}
 @media(max-width:820px){nav{display:none}.layout{grid-template-columns:1fr}}
 </style>
 </head>
@@ -325,6 +343,7 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5.8vw,4.5rem);line-height:.
     <article class="doc">${markdownToHtml(body)}</article>
     <aside class="side">
       <h2>Store signals</h2>
+      ${headings.length ? `<div><strong>Sections</strong><span class="toc">${headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('')}</span></div>` : ''}
       <div><strong>Support</strong><span>${escapeHtml(idea.support)} supports / ${escapeHtml(idea.trash)} trash / ${escapeHtml(idea.pivot)} pivots</span></div>
       <div><strong>Contributions</strong><span>${escapeHtml(idea.contribution_count)} notes, critiques, risks, or evidence links</span></div>
       <div><strong>Next step</strong><span>${escapeHtml(idea.next_step || 'Needs a next validation step.')}</span></div>
@@ -525,6 +544,14 @@ export default {
       } catch (error) {
         return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
       }
+    }
+
+    const ideaSectionMatch = url.pathname.match(/^\/ideas\/([^/]+)\/([^/]+)\/?$/);
+    if (ideaSectionMatch) {
+      const ideaId = pathId(ideaSectionMatch[1]);
+      const sectionId = pathId(ideaSectionMatch[2]);
+      if (!ideaId || !sectionId) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
+      return Response.redirect(`${url.origin}/ideas/${ideaId}/#${sectionId}`, 302);
     }
 
     const ideaPageMatch = url.pathname.match(/^\/ideas\/([^/]+)\/?$/);
