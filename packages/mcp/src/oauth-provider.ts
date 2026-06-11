@@ -1,10 +1,14 @@
 /**
  * OAuth 2.1 provider for MCP servers.
  * Uses the shared FreeAppStore auth backend and stores OAuth access-token to
- * FAS session mappings in Workers KV.
+ * FAS session mappings in the MCP Durable Object store.
  */
 
 import { verifySession } from "./session.js";
+
+const AUTH_IN_FLIGHT_COOKIE = "fis_mcp_oauth_inflight";
+const AUTH_PROVIDERS = ["github", "google"] as const;
+type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
 export interface OAuthConfig {
   issuer: string;
@@ -41,6 +45,7 @@ export async function handleOAuthRoute(request: Request, config: OAuthConfig): P
       path.startsWith("/.well-known/") ||
       path === "/register" ||
       path === "/authorize" ||
+      path === "/authorize/continue" ||
       path === "/oauth/callback" ||
       path === "/token"
     ) {
@@ -76,6 +81,7 @@ export async function handleOAuthRoute(request: Request, config: OAuthConfig): P
 
   if (path === "/register" && request.method === "POST") return register(request, config);
   if (path === "/authorize" && request.method === "GET") return authorize(request, config);
+  if (path === "/authorize/continue" && request.method === "GET") return continueAuthorize(request, config);
   if (path === "/oauth/callback" && request.method === "GET") return oauthCallback(request, config);
   if (path === "/token" && request.method === "POST") return tokenExchange(request, config);
   return null;
@@ -93,6 +99,102 @@ function json(data: unknown, status = 200): Response {
       "Access-Control-Allow-Origin": "*",
     },
   });
+}
+
+function cookieValue(request: Request, name: string): string | null {
+  const raw = request.headers.get("Cookie") ?? "";
+  for (const part of raw.split(";")) {
+    const [key, ...value] = part.trim().split("=");
+    if (key === name) return value.join("=") || "";
+  }
+  return null;
+}
+
+function authAlreadyInProgress(): Response {
+  return new Response(
+    "<!doctype html><title>FreeIdeaStore sign-in</title><p>FreeIdeaStore MCP sign-in is already in progress in another tab. Complete that sign-in, then return to your MCP client.</p>",
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+      },
+    },
+  );
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[ch]!);
+}
+
+function authProvider(raw: string | null): AuthProvider | null {
+  return AUTH_PROVIDERS.includes(raw as AuthProvider) ? (raw as AuthProvider) : null;
+}
+
+function fasAuthStartUrl(config: OAuthConfig, nonce: string, provider: AuthProvider): string {
+  const fasUrl = new URL(config.fasAuthStart);
+  if (provider !== "github") {
+    fasUrl.pathname = fasUrl.pathname.replace("/auth/github/", `/auth/${provider}/`);
+  }
+  fasUrl.searchParams.set("response_mode", "query");
+  fasUrl.searchParams.set("app_id", "mcp");
+  const callbackUrl = new URL("/oauth/callback", config.issuer);
+  callbackUrl.searchParams.set("nonce", nonce);
+  fasUrl.searchParams.set("return_to", callbackUrl.toString());
+  return fasUrl.toString();
+}
+
+function authConfirmPage(config: OAuthConfig, nonce: string, clientName: string | null): Response {
+  const continueUrl = (provider: AuthProvider) => {
+    const url = new URL("/authorize/continue", config.issuer);
+    url.searchParams.set("nonce", nonce);
+    url.searchParams.set("provider", provider);
+    return url.toString();
+  };
+  const name = clientName ? escapeHtml(clientName) : "your MCP client";
+  return new Response(
+    `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Connect FreeIdeaStore MCP</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f8fafc;color:#111827}
+    main{width:min(100% - 32px,460px);padding:32px;border:1px solid #e5e7eb;border-radius:12px;background:white;box-shadow:0 12px 32px rgba(15,23,42,.08)}
+    .brand{font-size:13px;font-weight:800;letter-spacing:0;text-transform:uppercase;color:#0f766e;margin:0 0 10px}
+    h1{font-size:24px;line-height:1.2;margin:0 0 12px}
+    p{line-height:1.5;margin:0 0 22px;color:#374151}
+    .actions{display:flex;gap:10px;flex-wrap:wrap}
+    a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:8px;background:#111827;color:white;text-decoration:none;font-weight:700}
+    a.secondary{background:white;color:#374151;border:1px solid #d1d5db}
+  </style>
+</head>
+<body>
+  <main>
+    <p class="brand">FreeIdeaStore</p>
+    <h1>Connect FreeIdeaStore MCP</h1>
+    <p>${name} wants to use FreeIdeaStore MCP tools as your account. Choose how to sign in.</p>
+    <div class="actions">
+      <a href="${escapeHtml(continueUrl("github"))}" autofocus>Continue with GitHub</a>
+      <a class="secondary" href="${escapeHtml(continueUrl("google"))}">Continue with Google</a>
+    </div>
+  </main>
+</body>
+</html>`,
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Set-Cookie": `${AUTH_IN_FLIGHT_COOKIE}=1; Max-Age=120; Path=/; Secure; HttpOnly; SameSite=Lax`,
+      },
+    },
+  );
 }
 
 async function register(request: Request, config: OAuthConfig): Promise<Response> {
@@ -147,10 +249,11 @@ async function authorize(request: Request, config: OAuthConfig): Promise<Respons
   if (codeChallengeMethod && codeChallengeMethod !== "S256") {
     return new Response("only S256 is supported", { status: 400 });
   }
+  if (cookieValue(request, AUTH_IN_FLIGHT_COOKIE)) return authAlreadyInProgress();
 
   const clientRaw = await config.store.get(`client:${clientId}`);
   if (!clientRaw) return new Response("invalid client_id", { status: 400 });
-  const client = JSON.parse(clientRaw) as { redirect_uris: string[] };
+  const client = JSON.parse(clientRaw) as { redirect_uris: string[]; client_name?: string | null };
   if (!client.redirect_uris.includes(redirectUri)) {
     return new Response("redirect_uri not registered", { status: 400 });
   }
@@ -162,14 +265,20 @@ async function authorize(request: Request, config: OAuthConfig): Promise<Respons
     { expirationTtl: 600 },
   );
 
-  const fasUrl = new URL(config.fasAuthStart);
-  fasUrl.searchParams.set("response_mode", "query");
-  fasUrl.searchParams.set("app_id", "mcp");
-  const callbackUrl = new URL("/oauth/callback", config.issuer);
-  callbackUrl.searchParams.set("nonce", nonce);
-  fasUrl.searchParams.set("return_to", callbackUrl.toString());
+  return authConfirmPage(config, nonce, client.client_name ?? null);
+}
 
-  return Response.redirect(fasUrl.toString(), 302);
+async function continueAuthorize(request: Request, config: OAuthConfig): Promise<Response> {
+  const url = new URL(request.url);
+  const nonce = url.searchParams.get("nonce");
+  const provider = authProvider(url.searchParams.get("provider"));
+  if (!nonce) return new Response("missing nonce", { status: 400 });
+  if (!provider) return new Response("unsupported provider", { status: 400 });
+
+  const reqRaw = await config.store.get(`authreq:${nonce}`);
+  if (!reqRaw) return new Response("invalid or expired nonce", { status: 400 });
+
+  return Response.redirect(fasAuthStartUrl(config, nonce, provider), 302);
 }
 
 async function oauthCallback(request: Request, config: OAuthConfig): Promise<Response> {
@@ -208,7 +317,13 @@ async function oauthCallback(request: Request, config: OAuthConfig): Promise<Res
   const redirect = new URL(authReq.redirectUri);
   redirect.searchParams.set("code", code);
   if (authReq.state) redirect.searchParams.set("state", authReq.state);
-  return Response.redirect(redirect.toString(), 302);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: redirect.toString(),
+      "Set-Cookie": `${AUTH_IN_FLIGHT_COOKIE}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`,
+    },
+  });
 }
 
 async function tokenExchange(request: Request, config: OAuthConfig): Promise<Response> {
