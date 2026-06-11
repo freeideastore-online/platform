@@ -15,6 +15,9 @@ type TextResult = { content: { type: "text"; text: string }[] };
 const text = (value: string): TextResult => ({ content: [{ type: "text", text: value }] });
 
 const STAGES = ["raw", "critique", "researched", "pivot", "prototype", "built"] as const;
+const CONTRIBUTION_KINDS = ["comment", "evidence", "risk", "pivot", "prototype", "refinement", "kill-signal"] as const;
+const REACTION_TYPES = ["support", "trash", "pivot"] as const;
+const TOOL_COUNT = 9;
 
 const FREE_IDEA_SECTIONS = [
   ["snapshot", "Snapshot", "One paragraph describing the idea, user, and current maturity."],
@@ -176,14 +179,20 @@ async function putRepoFile(env: Env, org: string, repo: string, filePath: string
   return `${existing.sha ? "Updated" : "Created"} ${filePath}`;
 }
 
-async function fisApi<T>(env: Env, path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; data: T | { error: string } }> {
+async function fisApi<T>(
+  env: Env,
+  path: string,
+  init?: RequestInit & { contributorHandle?: string },
+): Promise<{ ok: boolean; status: number; data: T | { error: string } }> {
   const base = env.FIS_API_BASE || env.PUBLIC_BASE || "https://freeideastore.online";
+  const contributorHandle = init?.contributorHandle || "fis-mcp";
+  const { contributorHandle: _contributorHandle, ...requestInit } = init || {};
   const res = await fetch(`${base}${path}`, {
-    ...init,
+    ...requestInit,
     headers: {
       "Content-Type": "application/json",
-      "x-idea-handle": "fis-mcp",
-      ...init?.headers,
+      "x-idea-handle": contributorHandle,
+      ...requestInit.headers,
     },
   });
   const raw = await res.text();
@@ -208,6 +217,43 @@ export class FisMcp extends McpAgent<Env> {
     );
 
     this.server.tool(
+      "get_idea",
+      "Read a FreeIdeaStore idea body, metadata, and optionally its contribution history.",
+      {
+        idea_id: z.string().min(2),
+        include_contributions: z.boolean().optional(),
+      },
+      async (input) => {
+        const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.online";
+        const ideaRes = await fisApi<{ idea: Record<string, unknown>; body: string; url: string }>(
+          this.env,
+          `/api/ideas/${encodeURIComponent(input.idea_id)}`,
+        );
+        if (!ideaRes.ok || "error" in ideaRes.data) {
+          return text(`Error reading idea (${ideaRes.status}): ${"error" in ideaRes.data ? ideaRes.data.error : "unknown error"}`);
+        }
+
+        let contributions: unknown[] = [];
+        if (input.include_contributions) {
+          const contributionRes = await fisApi<{ contributions: unknown[] }>(
+            this.env,
+            `/api/ideas/${encodeURIComponent(input.idea_id)}/contributions`,
+          );
+          if (!contributionRes.ok || "error" in contributionRes.data) {
+            return text(`Error reading contributions (${contributionRes.status}): ${"error" in contributionRes.data ? contributionRes.data.error : "unknown error"}`);
+          }
+          contributions = contributionRes.data.contributions;
+        }
+
+        return text(JSON.stringify({
+          ...ideaRes.data,
+          url: `${publicBase}${ideaRes.data.url}`,
+          contributions,
+        }, null, 2));
+      },
+    );
+
+    this.server.tool(
       "create_free_idea",
       "Create a cheap FreeIdeaStore idea page through the Worker API. This writes one D1 row and, when configured, one R2 body object.",
       {
@@ -221,6 +267,7 @@ export class FisMcp extends McpAgent<Env> {
         risk: z.string().optional(),
         body: z.string().optional().describe("Optional markdown body for the idea page."),
         source_url: z.string().optional(),
+        contributor_handle: z.string().optional().describe("Optional profile handle to attribute the created idea through the current API fallback."),
       },
       async (input) => {
         const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.online";
@@ -256,6 +303,7 @@ export class FisMcp extends McpAgent<Env> {
             body,
             source_url: input.source_url || "",
           }),
+          contributorHandle: input.contributor_handle,
         });
         if (!res.ok || "error" in res.data) {
           return text(`Error creating free idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -270,15 +318,110 @@ export class FisMcp extends McpAgent<Env> {
     );
 
     this.server.tool(
+      "add_idea_contribution",
+      "Add a signed contribution to an existing FreeIdeaStore idea: evidence, risk, pivot, refinement, prototype note, or kill signal.",
+      {
+        idea_id: z.string().min(2),
+        kind: z.enum(CONTRIBUTION_KINDS).optional(),
+        body: z.string().min(3).max(2000),
+        contributor_handle: z.string().optional().describe("Optional profile handle to attribute the contribution through the current API fallback."),
+      },
+      async (input) => {
+        const res = await fisApi<{ ok: boolean }>(this.env, `/api/ideas/${encodeURIComponent(input.idea_id)}/contributions`, {
+          method: "POST",
+          body: JSON.stringify({
+            kind: input.kind || "comment",
+            body: input.body,
+          }),
+          contributorHandle: input.contributor_handle,
+        });
+        if (!res.ok || "error" in res.data) {
+          return text(`Error adding contribution (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        }
+        return text(JSON.stringify({
+          ok: true,
+          idea: input.idea_id,
+          kind: input.kind || "comment",
+          attribution: input.contributor_handle || "fis-mcp",
+          note: "Contribution added. This records refinement history; it does not rewrite the canonical idea body.",
+        }, null, 2));
+      },
+    );
+
+    this.server.tool(
+      "propose_idea_refinement",
+      "Record a structured refinement proposal for an existing idea without overwriting the canonical idea page.",
+      {
+        idea_id: z.string().min(2),
+        section: z.enum(["snapshot", "signal", "next_step", "risk", "research", "design", "prototype", "validation", "body"]),
+        proposal: z.string().min(10).max(1600),
+        rationale: z.string().optional(),
+        contributor_handle: z.string().optional().describe("Optional profile handle to attribute the refinement through the current API fallback."),
+      },
+      async (input) => {
+        const body = [
+          `Section: ${input.section}`,
+          "",
+          "Proposal:",
+          input.proposal,
+          ...(input.rationale ? ["", "Rationale:", input.rationale] : []),
+        ].join("\n");
+        const res = await fisApi<{ ok: boolean }>(this.env, `/api/ideas/${encodeURIComponent(input.idea_id)}/contributions`, {
+          method: "POST",
+          body: JSON.stringify({ kind: "refinement", body }),
+          contributorHandle: input.contributor_handle,
+        });
+        if (!res.ok || "error" in res.data) {
+          return text(`Error proposing refinement (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        }
+        return text(JSON.stringify({
+          ok: true,
+          idea: input.idea_id,
+          section: input.section,
+          attribution: input.contributor_handle || "fis-mcp",
+          note: "Refinement proposal recorded as a contribution. A later admin/editor flow can merge it into the canonical body.",
+        }, null, 2));
+      },
+    );
+
+    this.server.tool(
+      "react_to_idea",
+      "Add a support, trash, or pivot signal to an existing FreeIdeaStore idea.",
+      {
+        idea_id: z.string().min(2),
+        type: z.enum(REACTION_TYPES),
+        contributor_handle: z.string().optional().describe("Optional profile handle to attribute the reaction through the current API fallback."),
+      },
+      async (input) => {
+        const res = await fisApi<{ ok: boolean }>(this.env, `/api/ideas/${encodeURIComponent(input.idea_id)}/reactions`, {
+          method: "POST",
+          body: JSON.stringify({ type: input.type }),
+          contributorHandle: input.contributor_handle,
+        });
+        if (!res.ok || "error" in res.data) {
+          return text(`Error reacting to idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        }
+        return text(JSON.stringify({
+          ok: true,
+          idea: input.idea_id,
+          type: input.type,
+          attribution: input.contributor_handle || "fis-mcp",
+        }, null, 2));
+      },
+    );
+
+    this.server.tool(
       "promote_to_pro_candidate",
       "Mark a FreeIdeaStore idea as a ProIdeaStore candidate and return a dossier draft payload.",
       {
         idea_id: z.string().min(2),
+        contributor_handle: z.string().optional().describe("Optional profile handle to attribute the promotion action through the current API fallback."),
       },
       async (input) => {
         const res = await fisApi<Record<string, unknown>>(this.env, `/api/ideas/${encodeURIComponent(input.idea_id)}/promote`, {
           method: "POST",
           body: JSON.stringify({}),
+          contributorHandle: input.contributor_handle,
         });
         if (!res.ok || "error" in res.data) {
           return text(`Error promoting idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -329,7 +472,7 @@ export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
-      return Response.json({ ok: true, service: "freeideastore-mcp", tools: 4 });
+      return Response.json({ ok: true, service: "freeideastore-mcp", tools: TOOL_COUNT });
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
       return FisMcp.serve("/mcp").fetch(request, env, ctx);

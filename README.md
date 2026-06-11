@@ -59,11 +59,15 @@ curl -X POST https://freeideastore.online/api/ideas \
 MCP provisioning follows the same cheap path through `packages/mcp`:
 
 - `free_idea_template` returns the one-page free idea template.
+- `get_idea` reads an existing idea body, metadata, and optional contribution history.
 - `create_free_idea` creates a D1/R2-backed idea page.
+- `add_idea_contribution` records evidence, risk, pivot, prototype, refinement, or kill-signal notes.
+- `propose_idea_refinement` records a structured section-level refinement proposal without overwriting the canonical body.
+- `react_to_idea` adds a support, trash, or pivot signal.
 - `promote_to_pro_candidate` marks an idea for ProIdeaStore review and returns a dossier draft.
 - `proidea_book_template` and `dry_run_proidea_book_export` are for promoted ideas only.
 
-The MCP Worker does not need a GitHub token for ordinary free idea creation.
+The MCP Worker does not need a GitHub token for ordinary free idea creation or contribution. Current MCP attribution uses the Worker API profile fallback through `contributor_handle`; browser sign-in is still the safer path for true user-session actions.
 
 ## API
 
