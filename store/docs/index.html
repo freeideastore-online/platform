@@ -9,7 +9,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}:root{--accent:#0891b2;--paper:#f7faf9;--panel:#fff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6}body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.6}a{color:inherit;text-decoration:none}header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9)}.brand span:last-child{font-family:Fraunces,serif}nav{margin-left:auto;display:flex;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}.layout{max-width:1040px;margin:0 auto;padding:2rem 1.25rem;display:grid;grid-template-columns:230px minmax(0,1fr);gap:1rem}.toc,.content{border:1px solid var(--line);border-radius:8px;background:white;padding:1rem}.toc{position:sticky;top:72px;align-self:start}.toc a{display:block;color:var(--muted);font-size:.84rem;font-weight:800;padding:.35rem 0}.eyebrow{color:var(--accent);font-size:.72rem;font-weight:900;letter-spacing:.1em;text-transform:uppercase}h1{font-family:Fraunces,serif;font-size:clamp(2rem,4vw,3.6rem);line-height:1;margin:.35rem 0 1rem}h2{font-size:1.08rem;margin:1.2rem 0 .45rem}p,li{color:var(--muted);font-size:.93rem}ul,ol{display:grid;gap:.4rem;padding-left:1.2rem}.callout{border-left:4px solid var(--accent);background:#ecfeff;padding:.8rem;margin:1rem 0;color:#155e75;font-weight:800}@media(max-width:820px){nav{display:none}.layout{grid-template-columns:1fr}.toc{position:static}}
+*{box-sizing:border-box;margin:0;padding:0}:root{--accent:#0891b2;--paper:#f7faf9;--panel:#fff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6}html{scroll-behavior:smooth;scroll-padding-top:88px}body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.6}a{color:inherit;text-decoration:none}header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9)}.brand span:last-child{font-family:Fraunces,serif}nav{margin-left:auto;display:flex;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}.layout{max-width:1040px;margin:0 auto;padding:2rem 1.25rem;display:grid;grid-template-columns:230px minmax(0,1fr);gap:1rem}.toc,.content{border:1px solid var(--line);border-radius:8px;background:white;padding:1rem}.toc{position:sticky;top:72px;align-self:start}.toc a{display:block;border-radius:6px;color:var(--muted);font-size:.84rem;font-weight:800;padding:.35rem .45rem}.toc a:hover,.toc a.active{background:#ecfeff;color:#155e75}.eyebrow{color:var(--accent);font-size:.72rem;font-weight:900;letter-spacing:.1em;text-transform:uppercase}h1{font-family:Fraunces,serif;font-size:clamp(2rem,4vw,3.6rem);line-height:1;margin:.35rem 0 1rem}.doc-section{border-top:1px solid var(--line);margin-top:1rem;min-height:42vh;padding:1rem 0;scroll-margin-top:88px}.doc-section:target{background:linear-gradient(90deg,#ecfeff,transparent);border-radius:8px;padding-left:.8rem;padding-right:.8rem}.doc-section h2{font-size:1.08rem;margin:0 0 .45rem}p,li{color:var(--muted);font-size:.93rem}ul,ol{display:grid;gap:.4rem;padding-left:1.2rem}.callout{border-left:4px solid var(--accent);background:#ecfeff;padding:.8rem;margin:1rem 0;color:#155e75;font-weight:800}@media(max-width:820px){nav{display:none}.layout{grid-template-columns:1fr}.toc{position:static}}
 </style>
 </head>
 <body>
@@ -21,15 +21,25 @@
     <h1>FreeIdeaStore guide.</h1>
     <p>FreeIdeaStore keeps early ideas cheap and easy to publish. The important work is the public trail of thinking around each idea.</p>
     <div class="callout">Home is for browsing live ideas. About and Docs are for explanation.</div>
-    <h2 id="create">Create an idea</h2>
-    <ol><li>Open the console.</li><li>Sign in with GitHub or Google when attribution matters.</li><li>Add a short title, summary, next step, and main risk.</li><li>Keep the first version small. The page can mature over time.</li></ol>
-    <h2 id="contribute">Contribute well</h2>
-    <ul><li>Add evidence from public sources.</li><li>Name the risk that could kill the idea.</li><li>Suggest a sharper customer or narrower wedge.</li><li>Support ideas only when the next validation step is clear.</li></ul>
-    <h2 id="profiles">Contributor profiles</h2>
-    <p>Profiles should show real work by real signed-in people. Seed personas and fake reputation do not belong in the public contributor directory.</p>
-    <h2 id="graduate">Graduate to ProIdeaStore</h2>
-    <p>An idea becomes a pro candidate when it has enough evidence, risk clarity, customer focus, and implementation shape to justify a serious dossier.</p>
+    <section class="doc-section" id="create"><h2>Create an idea</h2>
+    <ol><li>Open the console.</li><li>Sign in with GitHub or Google when attribution matters.</li><li>Add a short title, summary, next step, and main risk.</li><li>Keep the first version small. The page can mature over time.</li></ol></section>
+    <section class="doc-section" id="contribute"><h2>Contribute well</h2>
+    <ul><li>Add evidence from public sources.</li><li>Name the risk that could kill the idea.</li><li>Suggest a sharper customer or narrower wedge.</li><li>Support ideas only when the next validation step is clear.</li></ul></section>
+    <section class="doc-section" id="profiles"><h2>Contributor profiles</h2>
+    <p>Profiles should show real work by real signed-in people. Seed personas and fake reputation do not belong in the public contributor directory.</p></section>
+    <section class="doc-section" id="graduate"><h2>Graduate to ProIdeaStore</h2>
+    <p>An idea becomes a pro candidate when it has enough evidence, risk clarity, customer focus, and implementation shape to justify a serious dossier.</p></section>
   </article>
 </main>
+<script>
+const links = [...document.querySelectorAll('.toc a[href^="#"]')];
+function syncHash() {
+  const id = location.hash.slice(1);
+  links.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === '#' + id));
+  if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+}
+window.addEventListener('hashchange', syncHash);
+syncHash();
+</script>
 </body>
 </html>
