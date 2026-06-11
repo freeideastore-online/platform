@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [vars]
+API_BASE = "https://api.freeappstore.online"
 GITHUB_ORG = "freeideastore-online"
 PLATFORM_REPO = "platform"
 PUBLIC_BASE = "https://freeideastore.online"
@@ -12,6 +13,7 @@ FIS_API_BASE = "https://freeideastore.online"
 
 # Secrets:
 #   GITHUB_TOKEN - optional PAT for future pro-book export tooling.
+#   SESSION_SIGNING_KEY - shared FAS auth HMAC key for MCP OAuth.
 
 [durable_objects]
 bindings = [

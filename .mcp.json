@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "freeideastore": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://freeideastore-mcp.serge-the-dev.workers.dev/mcp"]
+    }
+  }
+}

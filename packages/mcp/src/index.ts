@@ -1,18 +1,25 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { createAuthChallenge, handleOAuthRoute, resolveOAuthToken, type OAuthStore } from "./oauth-provider.js";
 
 interface Env {
+  API_BASE?: string;
   GITHUB_TOKEN?: string;
   GITHUB_ORG?: string;
   PLATFORM_REPO?: string;
   PUBLIC_BASE?: string;
   FIS_API_BASE?: string;
   MCP_OBJECT: DurableObjectNamespace;
+  SESSION_SIGNING_KEY?: string;
 }
 
 type TextResult = { content: { type: "text"; text: string }[] };
 const text = (value: string): TextResult => ({ content: [{ type: "text", text: value }] });
+interface McpProps extends Record<string, unknown> {
+  userId?: string;
+  token?: string;
+}
 
 const STAGES = ["raw", "critique", "researched", "pivot", "prototype", "built"] as const;
 const CONTRIBUTION_KINDS = ["comment", "evidence", "risk", "pivot", "prototype", "refinement", "kill-signal"] as const;
@@ -182,16 +189,18 @@ async function putRepoFile(env: Env, org: string, repo: string, filePath: string
 async function fisApi<T>(
   env: Env,
   path: string,
-  init?: RequestInit & { contributorHandle?: string },
+  init?: RequestInit & { contributorHandle?: string; token?: string },
 ): Promise<{ ok: boolean; status: number; data: T | { error: string } }> {
   const base = env.FIS_API_BASE || env.PUBLIC_BASE || "https://freeideastore.online";
   const contributorHandle = init?.contributorHandle || "fis-mcp";
-  const { contributorHandle: _contributorHandle, ...requestInit } = init || {};
+  const token = init?.token;
+  const { contributorHandle: _contributorHandle, token: _token, ...requestInit } = init || {};
   const res = await fetch(`${base}${path}`, {
     ...requestInit,
     headers: {
       "Content-Type": "application/json",
       "x-idea-handle": contributorHandle,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...requestInit.headers,
     },
   });
@@ -205,8 +214,78 @@ async function fisApi<T>(
   return { ok: res.ok, status: res.status, data };
 }
 
-export class FisMcp extends McpAgent<Env> {
+function decodeUid(token: string): string | undefined {
+  try {
+    const b64 = token.split(".")[0]?.replace(/-/g, "+").replace(/_/g, "/") || "";
+    const json = JSON.parse(atob(b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), "=")));
+    return typeof json.uid === "string" ? json.uid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function authenticateRequest(request: Request, env: Env): Promise<McpProps> {
+  const auth = request.headers.get("Authorization") || "";
+  if (!auth.startsWith("Bearer ")) return {};
+  let token = auth.slice(7).trim();
+  if (!token) return {};
+
+  const session = await resolveOAuthToken(token, oauthStore(env));
+  if (session) token = session;
+
+  return { userId: decodeUid(token), token };
+}
+
+type OAuthObject = {
+  oauthGet(key: string): Promise<string | null>;
+  oauthPut(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  oauthDelete(key: string): Promise<void>;
+};
+
+function oauthObject(env: Env): OAuthObject {
+  const id = env.MCP_OBJECT.idFromName("oauth");
+  return env.MCP_OBJECT.get(id) as unknown as OAuthObject;
+}
+
+function oauthStore(env: Env): OAuthStore {
+  const object = oauthObject(env);
+  return {
+    get: (key) => object.oauthGet(key),
+    put: (key, value, options) => object.oauthPut(key, value, options),
+    delete: (key) => object.oauthDelete(key),
+  };
+}
+
+export class FisMcp extends McpAgent<Env, unknown, McpProps> {
   server = new McpServer({ name: "FreeIdeaStore", version: "0.1.0" });
+
+  async setAuth(props: McpProps): Promise<void> {
+    this.props = props;
+    try {
+      await (this as unknown as { ctx: { storage: { put(k: string, v: unknown): Promise<void> } } }).ctx.storage.put("props", props);
+    } catch {
+      // In-memory assignment is enough for the immediately following tool call.
+    }
+  }
+
+  async oauthGet(key: string): Promise<string | null> {
+    const stored = await (this as unknown as { ctx: { storage: { get<T>(k: string): Promise<T | undefined>; delete(k: string): Promise<void> } } }).ctx.storage.get<{ value: string; expiresAt?: number }>(`oauth:${key}`);
+    if (!stored) return null;
+    if (stored.expiresAt && stored.expiresAt <= Date.now()) {
+      await (this as unknown as { ctx: { storage: { delete(k: string): Promise<void> } } }).ctx.storage.delete(`oauth:${key}`);
+      return null;
+    }
+    return stored.value;
+  }
+
+  async oauthPut(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> {
+    const expiresAt = options?.expirationTtl ? Date.now() + options.expirationTtl * 1000 : undefined;
+    await (this as unknown as { ctx: { storage: { put(k: string, v: unknown): Promise<void> } } }).ctx.storage.put(`oauth:${key}`, { value, expiresAt });
+  }
+
+  async oauthDelete(key: string): Promise<void> {
+    await (this as unknown as { ctx: { storage: { delete(k: string): Promise<void> } } }).ctx.storage.delete(`oauth:${key}`);
+  }
 
   async init() {
     this.server.tool(
@@ -228,6 +307,7 @@ export class FisMcp extends McpAgent<Env> {
         const ideaRes = await fisApi<{ idea: Record<string, unknown>; body: string; url: string }>(
           this.env,
           `/api/ideas/${encodeURIComponent(input.idea_id)}`,
+          { token: this.props.token },
         );
         if (!ideaRes.ok || "error" in ideaRes.data) {
           return text(`Error reading idea (${ideaRes.status}): ${"error" in ideaRes.data ? ideaRes.data.error : "unknown error"}`);
@@ -238,6 +318,7 @@ export class FisMcp extends McpAgent<Env> {
           const contributionRes = await fisApi<{ contributions: unknown[] }>(
             this.env,
             `/api/ideas/${encodeURIComponent(input.idea_id)}/contributions`,
+            { token: this.props.token },
           );
           if (!contributionRes.ok || "error" in contributionRes.data) {
             return text(`Error reading contributions (${contributionRes.status}): ${"error" in contributionRes.data ? contributionRes.data.error : "unknown error"}`);
@@ -304,6 +385,7 @@ export class FisMcp extends McpAgent<Env> {
             source_url: input.source_url || "",
           }),
           contributorHandle: input.contributor_handle,
+          token: this.props.token,
         });
         if (!res.ok || "error" in res.data) {
           return text(`Error creating free idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -334,6 +416,7 @@ export class FisMcp extends McpAgent<Env> {
             body: input.body,
           }),
           contributorHandle: input.contributor_handle,
+          token: this.props.token,
         });
         if (!res.ok || "error" in res.data) {
           return text(`Error adding contribution (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -370,6 +453,7 @@ export class FisMcp extends McpAgent<Env> {
           method: "POST",
           body: JSON.stringify({ kind: "refinement", body }),
           contributorHandle: input.contributor_handle,
+          token: this.props.token,
         });
         if (!res.ok || "error" in res.data) {
           return text(`Error proposing refinement (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -397,6 +481,7 @@ export class FisMcp extends McpAgent<Env> {
           method: "POST",
           body: JSON.stringify({ type: input.type }),
           contributorHandle: input.contributor_handle,
+          token: this.props.token,
         });
         if (!res.ok || "error" in res.data) {
           return text(`Error reacting to idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -422,6 +507,7 @@ export class FisMcp extends McpAgent<Env> {
           method: "POST",
           body: JSON.stringify({}),
           contributorHandle: input.contributor_handle,
+          token: this.props.token,
         });
         if (!res.ok || "error" in res.data) {
           return text(`Error promoting idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -469,12 +555,46 @@ export class FisMcp extends McpAgent<Env> {
 }
 
 export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
+    const issuer = `${url.protocol}//${url.host}`;
+
+    if (env.SESSION_SIGNING_KEY) {
+      const oauthRes = await handleOAuthRoute(request, {
+        issuer,
+        fasAuthStart: `${env.API_BASE || "https://api.freeappstore.online"}/v1/auth/github/start`,
+        store: oauthStore(env),
+        sessionSigningKey: env.SESSION_SIGNING_KEY,
+      });
+      if (oauthRes) return oauthRes;
+    }
+
     if (url.pathname === "/health") {
       return Response.json({ ok: true, service: "freeideastore-mcp", tools: TOOL_COUNT });
     }
+
+    if (url.pathname === "/" || url.pathname === "") {
+      return new Response(
+        "FreeIdeaStore MCP Server\n\nConnect: npx mcp-remote https://mcp.freeideastore.online/mcp\n\nTools: free_idea_template, get_idea, create_free_idea, add_idea_contribution, propose_idea_refinement, react_to_idea, promote_to_pro_candidate, proidea_book_template, dry_run_proidea_book_export\n\nAuth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FAS session token>.\n",
+        { headers: { "content-type": "text/plain; charset=utf-8" } },
+      );
+    }
+
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
+      const auth = await authenticateRequest(request, env);
+      const sessionId = request.headers.get("mcp-session-id");
+      if (auth.token && sessionId) {
+        try {
+          const id = env.MCP_OBJECT.idFromName(`streamable-http:${sessionId}`);
+          const stub = env.MCP_OBJECT.get(id) as unknown as { setAuth(p: McpProps): Promise<void> };
+          await stub.setAuth(auth);
+        } catch {
+          // Tool handlers will still fall back to unsigned/public behavior.
+        }
+      }
+      if (!auth.token && request.method !== "OPTIONS" && env.SESSION_SIGNING_KEY) {
+        return createAuthChallenge({ issuer });
+      }
       return FisMcp.serve("/mcp").fetch(request, env, ctx);
     }
     return new Response("FreeIdeaStore MCP: use /mcp", { status: 404 });

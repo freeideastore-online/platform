@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "servers": [
+    {
+      "name": "FreeIdeaStore",
+      "description": "AI agent tools for FreeIdeaStore. Create ideas, read idea research, add evidence, propose refinements, react with support/trash/pivot signals, and promote mature ideas toward ProIdeaStore.",
+      "endpoint": "https://freeideastore-mcp.serge-the-dev.workers.dev/mcp",
+      "transport": "streamable-http",
+      "auth": {
+        "type": "oauth2",
+        "authorization_server": "https://freeideastore-mcp.serge-the-dev.workers.dev"
+      },
+      "tools": [
+        {
+          "name": "free_idea_template",
+          "description": "Return the cheap FreeIdeaStore one-page idea template."
+        },
+        {
+          "name": "get_idea",
+          "description": "Read a FreeIdeaStore idea body, metadata, and optional contribution history."
+        },
+        {
+          "name": "create_free_idea",
+          "description": "Create a D1-backed FreeIdeaStore idea page."
+        },
+        {
+          "name": "add_idea_contribution",
+          "description": "Record evidence, risk, pivot, prototype, refinement, or kill-signal notes on an idea."
+        },
+        {
+          "name": "propose_idea_refinement",
+          "description": "Record a structured section-level refinement proposal without overwriting the canonical body."
+        },
+        {
+          "name": "react_to_idea",
+          "description": "Add a support, trash, or pivot signal to an idea."
+        },
+        {
+          "name": "promote_to_pro_candidate",
+          "description": "Mark an idea as a ProIdeaStore candidate and return a dossier draft."
+        },
+        {
+          "name": "proidea_book_template",
+          "description": "Return the full ProIdeaStore/Zensical book spine."
+        },
+        {
+          "name": "dry_run_proidea_book_export",
+          "description": "Dry-run a full Zensical-style book export for a promoted idea."
+        }
+      ]
+    }
+  ]
+}
