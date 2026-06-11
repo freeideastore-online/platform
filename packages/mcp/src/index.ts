@@ -177,7 +177,7 @@ async function putRepoFile(env: Env, org: string, repo: string, filePath: string
 }
 
 async function fisApi<T>(env: Env, path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; data: T | { error: string } }> {
-  const base = env.FIS_API_BASE || env.PUBLIC_BASE || "https://freeideastore.serge-the-dev.workers.dev";
+  const base = env.FIS_API_BASE || env.PUBLIC_BASE || "https://freeideastore.online";
   const res = await fetch(`${base}${path}`, {
     ...init,
     headers: {
@@ -223,7 +223,7 @@ export class FisMcp extends McpAgent<Env> {
         source_url: z.string().optional(),
       },
       async (input) => {
-        const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.serge-the-dev.workers.dev";
+        const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.online";
         const body = input.body || [
           "## Snapshot",
           input.summary,
@@ -305,7 +305,7 @@ export class FisMcp extends McpAgent<Env> {
         category: z.string().optional(),
       },
       async (input) => {
-        const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.serge-the-dev.workers.dev";
+        const publicBase = this.env.PUBLIC_BASE || "https://freeideastore.online";
         const slug = slugify(input.slug || input.title);
         const files = ideaFiles({
           slug,

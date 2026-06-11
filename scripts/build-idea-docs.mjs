@@ -5,7 +5,7 @@ const root = process.cwd();
 const booksRoot = path.join(root, 'idea-books');
 const storeDir = path.join(root, 'store');
 const outRoot = path.join(storeDir, 'ideas');
-const publicBase = 'https://freeideastore.serge-the-dev.workers.dev';
+const publicBase = 'https://freeideastore.online';
 
 const chapterFiles = [
   'snapshot',

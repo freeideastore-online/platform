@@ -7,8 +7,8 @@ workers_dev = true
 [vars]
 GITHUB_ORG = "freeideastore-online"
 PLATFORM_REPO = "platform"
-PUBLIC_BASE = "https://freeideastore.serge-the-dev.workers.dev"
-FIS_API_BASE = "https://freeideastore.serge-the-dev.workers.dev"
+PUBLIC_BASE = "https://freeideastore.online"
+FIS_API_BASE = "https://freeideastore.online"
 
 # Secrets:
 #   GITHUB_TOKEN - optional PAT for future pro-book export tooling.

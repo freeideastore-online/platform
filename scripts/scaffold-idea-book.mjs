@@ -2,7 +2,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = process.cwd();
-const publicBase = 'https://freeideastore.serge-the-dev.workers.dev';
+const publicBase = 'https://freeideastore.online';
 const registryPath = path.join(root, 'store', 'registry.json');
 
 const chapters = [

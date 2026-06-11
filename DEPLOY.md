@@ -4,7 +4,7 @@ FreeIdeaStore is hosted on Cloudflare Workers with Worker Assets and D1. The Wor
 
 ## Live
 
-https://freeideastore.serge-the-dev.workers.dev
+https://freeideastore.online
 
 ## Cloudflare Resources
 
@@ -44,13 +44,18 @@ Do not create one Git repository or one generated static file tree for every fre
 
 ## Custom Domain
 
-`freeideastore.online` is not currently a Cloudflare zone in the account used for deployment, so the Worker is live on `workers.dev`.
+`freeideastore.online` is the canonical public domain for the FreeIdeaStore Worker.
 
-When the zone exists:
+Wrangler config:
 
-1. Add route blocks back to `packages/worker/wrangler.toml`.
-2. Update canonical links and sitemap to `https://freeideastore.online/`.
-3. Deploy with Wrangler.
+```toml
+[[routes]]
+pattern = "freeideastore.online"
+zone_name = "freeideastore.online"
+custom_domain = true
+```
+
+The `workers.dev` URL may still exist as a fallback, but product links, sitemap, robots, MCP defaults, and Playwright E2E tests use `https://freeideastore.online`.
 
 ## Doppler
 

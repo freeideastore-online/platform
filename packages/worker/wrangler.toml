@@ -3,6 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2025-05-01"
 workers_dev = true
 
+[[routes]]
+pattern = "freeideastore.online"
+zone_name = "freeideastore.online"
+custom_domain = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "freeideastore"

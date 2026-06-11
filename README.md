@@ -22,7 +22,7 @@ pnpm dev
 
 Live Worker:
 
-https://freeideastore.serge-the-dev.workers.dev
+https://freeideastore.online
 
 ## Product Principle
 
@@ -50,7 +50,7 @@ The old `idea-books/:slug/` source tree remains as a reference/export shape for 
 Create a cheap free idea through the API:
 
 ```bash
-curl -X POST https://freeideastore.serge-the-dev.workers.dev/api/ideas \
+curl -X POST https://freeideastore.online/api/ideas \
   -H 'content-type: application/json' \
   -H 'x-idea-handle: serge' \
   -d '{"title":"New Idea","summary":"One sentence summary with enough context.","category":"platform","stage":"raw"}'
