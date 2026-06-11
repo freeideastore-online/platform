@@ -190,10 +190,10 @@ class FakeD1 {
   }
 }
 
-function env(db = new FakeD1()) {
+function env(db = new FakeD1(), assetResponse = new Response('asset fallback', { status: 404 })) {
   return {
     DB: db,
-    ASSETS: { fetch: () => Promise.resolve(new Response('asset fallback', { status: 404 })) },
+    ASSETS: { fetch: () => Promise.resolve(assetResponse.clone()) },
   } as unknown as Parameters<typeof worker.fetch>[1] & { DB: FakeD1 };
 }
 
@@ -229,7 +229,31 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('2 supports / 0 trash / 0 pivots');
   });
 
-  it('redirects old chapter URLs to dynamic page section anchors', async () => {
+  it('serves generated idea book chapter assets when they exist', async () => {
+    const response = await worker.fetch(
+      new Request('https://fis.test/ideas/asx-filings-analyst/research-notes/'),
+      env(new FakeD1(), new Response('<h1>Research Notes</h1>', { headers: { 'content-type': 'text/html;charset=UTF-8' } })),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('Research Notes');
+  });
+
+  it('links from dynamic idea pages to generated book chapters when available', async () => {
+    const response = await worker.fetch(
+      new Request('https://fis.test/ideas/asx-filings-analyst/'),
+      env(new FakeD1(), new Response('<h1>Snapshot</h1>', { headers: { 'content-type': 'text/html;charset=UTF-8' } })),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Book chapters');
+    expect(html).toContain('href="/ideas/asx-filings-analyst/snapshot/"');
+  });
+
+  it('redirects missing old chapter URLs to dynamic page section anchors', async () => {
     const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/research-notes/'), env());
 
     expect(response.status).toBe(302);

@@ -16,3 +16,4 @@ database_id = "6c8cefe4-f170-45fd-9979-ebef9068e1aa"
 [assets]
 directory = "../../store"
 binding = "ASSETS"
+run_worker_first = true

@@ -1,7 +1,7 @@
 [project]
 site_name = "ASX Filings Analyst"
-site_url = "https://freeideastore.serge-the-dev.workers.dev/ideas/asx-filings-analyst"
-site_description = "A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention."
+site_url = "https://freeideastore.online/ideas/asx-filings-analyst"
+site_description = "A citation-first ASX research assistant that reads public filings and builds a weekly undervaluation watchlist."
 docs_dir = "docs"
 site_dir = "../../store/ideas/asx-filings-analyst"
 copyright = "FreeIdeaStore"
@@ -10,7 +10,7 @@ copyright = "FreeIdeaStore"
 idea_slug = "asx-filings-analyst"
 stage = "researched"
 category = "finance"
-homepage = "https://freeideastore.serge-the-dev.workers.dev"
+homepage = "https://freeideastore.online"
 
 [project.theme]
 variant = "modern"

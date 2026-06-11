@@ -1,6 +1,6 @@
 [project]
 site_name = "ProIdea Dossier Builder"
-site_url = "https://freeideastore.serge-the-dev.workers.dev/ideas/proidea-dossier-builder"
+site_url = "https://freeideastore.online/ideas/proidea-dossier-builder"
 site_description = "A structured path that turns strong free ideas into investor-ready ProIdeaStore dossiers."
 docs_dir = "docs"
 site_dir = "../../store/ideas/proidea-dossier-builder"
@@ -10,7 +10,7 @@ copyright = "FreeIdeaStore"
 idea_slug = "proidea-dossier-builder"
 stage = "pivot"
 category = "platform"
-homepage = "https://freeideastore.serge-the-dev.workers.dev"
+homepage = "https://freeideastore.online"
 
 [project.theme]
 variant = "modern"

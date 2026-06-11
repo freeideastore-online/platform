@@ -1,6 +1,6 @@
 [project]
 site_name = "Idea Reputation System"
-site_url = "https://freeideastore.serge-the-dev.workers.dev/ideas/idea-reputation-system"
+site_url = "https://freeideastore.online/ideas/idea-reputation-system"
 site_description = "A reputation layer where people earn recognition by improving ideas before they ever build a product."
 docs_dir = "docs"
 site_dir = "../../store/ideas/idea-reputation-system"
@@ -10,7 +10,7 @@ copyright = "FreeIdeaStore"
 idea_slug = "idea-reputation-system"
 stage = "raw"
 category = "platform"
-homepage = "https://freeideastore.serge-the-dev.workers.dev"
+homepage = "https://freeideastore.online"
 
 [project.theme]
 variant = "modern"

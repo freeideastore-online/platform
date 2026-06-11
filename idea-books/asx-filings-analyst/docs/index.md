@@ -1,12 +1,14 @@
 ---
 title: ASX Filings Analyst
-summary: A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention.
+summary: A citation-first ASX research assistant that reads public filings and builds a weekly undervaluation watchlist.
 stage: researched
 category: finance
 ---
 
 # ASX Filings Analyst
 
-A weekly public-data research assistant that reads ASX reports and flags companies that may deserve attention.
+A citation-first ASX research assistant that reads public filings and builds a weekly undervaluation watchlist.
 
-This is the independent FreeIdeaStore idea book for ASX Filings Analyst. Each chapter is a working document for improving, challenging, validating, or graduating the idea.
+This idea is not a robot stock tipper. The strongest version is a disciplined research workflow: collect public ASX announcements and company reports, extract the facts, show valuation signals, link every claim back to source material, and clearly separate "worth researching" from "buy this".
+
+The book captures the full brainstorming note, including competitors, differentiation, data licensing risk, financial advice boundaries, scoring model, and the cheapest validation plan.

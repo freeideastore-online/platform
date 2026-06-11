@@ -469,6 +469,11 @@ async function ideaBody(env: Env, idea: IdeaRow) {
   return idea.body_md || defaultIdeaBody(idea);
 }
 
+async function existingAsset(env: Env, request: Request) {
+  const response = await env.ASSETS.fetch(request);
+  return response.status === 404 ? null : response;
+}
+
 async function listContributors(env: Env) {
   const rows = await env.DB.prepare(
     `SELECT
@@ -863,6 +868,8 @@ async function renderIdeaPage(env: Env, request: Request, ideaId: string) {
 
   const body = await ideaBody(env, idea);
   const headings = markdownHeadings(body);
+  const bookStartPath = `/ideas/${idea.id}/snapshot/`;
+  const bookStart = await existingAsset(env, new Request(new URL(bookStartPath, request.url).toString(), request));
   const page = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -913,7 +920,7 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5.8vw,4.5rem);line-height:.
       <div><strong>Contributions</strong><span>${escapeHtml(idea.contribution_count)} notes, critiques, risks, or evidence links</span></div>
       <div><strong>Next step</strong><span>${escapeHtml(idea.next_step || 'Needs a next validation step.')}</span></div>
       <div><strong>Risk</strong><span>${escapeHtml(idea.risk || 'Risk not yet named.')}</span></div>
-      <div class="actions"><a class="button" href="/#ideas">Back to store</a><a class="button secondary" href="/api/ideas/${escapeHtml(idea.id)}">JSON</a></div>
+      <div class="actions"><a class="button" href="/#ideas">Back to store</a>${bookStart ? `<a class="button secondary" href="${escapeHtml(bookStartPath)}">Book chapters</a>` : ''}<a class="button secondary" href="/api/ideas/${escapeHtml(idea.id)}">JSON</a></div>
     </aside>
   </div>
 </main>
@@ -1125,6 +1132,8 @@ export default {
 
     const ideaSectionMatch = url.pathname.match(/^\/ideas\/([^/]+)\/([^/]+)\/?$/);
     if (ideaSectionMatch) {
+      const asset = await existingAsset(env, request);
+      if (asset) return asset;
       const ideaId = pathId(ideaSectionMatch[1]);
       const sectionId = pathId(ideaSectionMatch[2]);
       if (!ideaId || !sectionId) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });

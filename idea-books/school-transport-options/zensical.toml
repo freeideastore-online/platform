@@ -1,7 +1,7 @@
 [project]
 site_name = "School Transport Options"
-site_url = "https://freeideastore.serge-the-dev.workers.dev/ideas/school-transport-options"
-site_description = "A safer, clearer way for parents to compare and coordinate school transport choices."
+site_url = "https://freeideastore.online/ideas/school-transport-options"
+site_description = "A practical guide and product idea around safe school transport options for Australian children aged 5 to 10."
 docs_dir = "docs"
 site_dir = "../../store/ideas/school-transport-options"
 copyright = "FreeIdeaStore"
@@ -10,7 +10,7 @@ copyright = "FreeIdeaStore"
 idea_slug = "school-transport-options"
 stage = "critique"
 category = "local-services"
-homepage = "https://freeideastore.serge-the-dev.workers.dev"
+homepage = "https://freeideastore.online"
 
 [project.theme]
 variant = "modern"
