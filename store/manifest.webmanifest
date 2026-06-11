@@ -1,0 +1,17 @@
+{
+  "name": "FreeIdeaStore",
+  "short_name": "FIS",
+  "description": "A public idea refinery where contributors critique, research, support, pivot, and mature ideas.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7faf9",
+  "theme_color": "#102027",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

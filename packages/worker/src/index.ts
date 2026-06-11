@@ -30,6 +30,24 @@ type IdeaRow = {
   contribution_count: number;
 };
 
+type AuthUser = {
+  handle: string;
+  displayName: string;
+  provider: string;
+};
+
+type ContributorRow = {
+  id: string;
+  handle: string;
+  display_name: string;
+  bio?: string;
+  reputation: number;
+  badges_json?: string;
+  idea_count: number;
+  contribution_count: number;
+  reaction_count: number;
+};
+
 const JSON_HEADERS = {
   'Content-Type': 'application/json;charset=UTF-8',
   'Cache-Control': 'no-store',
@@ -47,6 +65,14 @@ const SECURITY_HEADERS: Record<string, string> = {
 
 const IDEA_STAGES = new Set(['raw', 'critique', 'researched', 'pivot', 'prototype', 'built']);
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
+const AUTH_PREFIX = '/.fis/auth';
+const SESSION_COOKIE_NAME = '__Host-fis_session';
+const NONCE_COOKIE_NAME = '__Host-fis_auth_nonce';
+const AUTH_API_BASE = 'https://api.freeappstore.online';
+const AUTH_APP_ID = 'freeideastore';
+const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+const NONCE_TTL_SECONDS = 10 * 60;
+const AUTH_PROVIDERS = new Set(['github', 'google']);
 
 function json(data: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(data), {
@@ -109,17 +135,175 @@ async function bodyJson(request: Request) {
   }
 }
 
+function readCookie(header: string | null, name: string) {
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const [rawName, ...rawValue] = part.trim().split('=');
+    if (rawName !== name) continue;
+    try {
+      return decodeURIComponent(rawValue.join('='));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function sameOriginPath(baseUrl: URL, raw: string | null) {
+  if (!raw) return '/';
+  try {
+    const parsed = new URL(raw, baseUrl.origin);
+    if (parsed.origin !== baseUrl.origin) return '/';
+    if (parsed.pathname === AUTH_PREFIX || parsed.pathname.startsWith(`${AUTH_PREFIX}/`)) return '/';
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return '/';
+  }
+}
+
+function cookie(name: string, value: string, maxAge: number) {
+  return [
+    `${name}=${encodeURIComponent(value)}`,
+    `Max-Age=${maxAge}`,
+    'Path=/',
+    'Secure',
+    'HttpOnly',
+    'SameSite=Lax',
+  ].join('; ');
+}
+
+function clearCookie(name: string) {
+  return `${name}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`;
+}
+
+function redirect(location: string, status: 302 | 303, cookies: string[] = []) {
+  const headers = new Headers({ Location: location, 'Cache-Control': 'no-store' });
+  for (const item of cookies) headers.append('Set-Cookie', item);
+  return new Response(null, { status, headers });
+}
+
+function methodNotAllowed(allow: string) {
+  return new Response('Method not allowed', {
+    status: 405,
+    headers: { ...SECURITY_HEADERS, Allow: allow, 'Cache-Control': 'no-store' },
+  });
+}
+
+function isSameOriginMutation(request: Request) {
+  const url = new URL(request.url);
+  const origin = request.headers.get('Origin');
+  if (origin && origin !== url.origin) return false;
+  const fetchSite = request.headers.get('Sec-Fetch-Site');
+  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') return false;
+  return true;
+}
+
+function normalizeAuthUser(payload: unknown): AuthUser | null {
+  const data = (payload || {}) as Record<string, unknown>;
+  const user = ((data.user || data.profile || data.account || data) || {}) as Record<string, unknown>;
+  const email = String(user.email || '');
+  const rawHandle = String(user.handle || user.login || user.username || email.split('@')[0] || user.name || '');
+  const handle = slug(rawHandle);
+  if (!handle) return null;
+  return {
+    handle,
+    displayName: String(user.displayName || user.display_name || user.name || rawHandle).trim() || handle,
+    provider: String(user.provider || data.provider || 'auth'),
+  };
+}
+
+async function fetchAuthPayload(token: string) {
+  const response = await fetch(`${AUTH_API_BASE}/v1/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = { error: text };
+  }
+  return { response, body };
+}
+
+async function authUserFor(request: Request) {
+  const token = readCookie(request.headers.get('Cookie'), SESSION_COOKIE_NAME);
+  if (!token) return null;
+  try {
+    const { response, body } = await fetchAuthPayload(token);
+    if (!response.ok) return null;
+    return normalizeAuthUser(body);
+  } catch {
+    return null;
+  }
+}
+
 async function profileFor(request: Request, env: Env) {
-  const raw = request.headers.get('x-idea-handle') || 'guest';
+  const authUser = await authUserFor(request);
+  const raw = authUser?.handle || request.headers.get('x-idea-handle') || 'guest';
   const handle = slug(raw) || 'guest';
   const profileId = `profile-${handle}`;
   await env.DB.prepare(
     `INSERT OR IGNORE INTO profiles (id, handle, display_name, reputation, badges_json)
      VALUES (?, ?, ?, 0, '[]')`,
   )
-    .bind(profileId, handle, handle.replace(/-/g, ' '))
+    .bind(profileId, handle, authUser?.displayName || handle.replace(/-/g, ' '))
     .run();
   return profileId;
+}
+
+async function handleAuth(request: Request, url: URL) {
+  if (!url.pathname.startsWith(`${AUTH_PREFIX}/`) && url.pathname !== AUTH_PREFIX) return null;
+
+  if (url.pathname === `${AUTH_PREFIX}/start`) {
+    if (request.method !== 'GET') return methodNotAllowed('GET');
+    const provider = url.searchParams.get('provider') || 'github';
+    if (!AUTH_PROVIDERS.has(provider)) return new Response('unknown provider', { status: 404, headers: SECURITY_HEADERS });
+    const returnPath = sameOriginPath(url, url.searchParams.get('return_to') || '/console/');
+    const nonce = crypto.randomUUID();
+    const callback = new URL(`${AUTH_PREFIX}/callback`, url.origin);
+    callback.searchParams.set('return_to', returnPath);
+    callback.searchParams.set('nonce', nonce);
+    const start = new URL(`/v1/auth/${provider}/start`, AUTH_API_BASE);
+    start.searchParams.set('app_id', AUTH_APP_ID);
+    start.searchParams.set('return_to', callback.toString());
+    start.searchParams.set('response_mode', 'query');
+    return redirect(start.toString(), 302, [cookie(NONCE_COOKIE_NAME, nonce, NONCE_TTL_SECONDS)]);
+  }
+
+  if (url.pathname === `${AUTH_PREFIX}/callback`) {
+    if (request.method !== 'GET') return methodNotAllowed('GET');
+    const returnPath = sameOriginPath(url, url.searchParams.get('return_to') || '/console/');
+    const nonce = url.searchParams.get('nonce');
+    const storedNonce = readCookie(request.headers.get('Cookie'), NONCE_COOKIE_NAME);
+    if (!nonce || nonce !== storedNonce) return redirect(`${url.origin}${returnPath}#auth_error=invalid_state`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
+    const session = url.searchParams.get('session');
+    if (!session) return redirect(`${url.origin}${returnPath}#auth_error=missing_session`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
+    const { response } = await fetchAuthPayload(session);
+    if (!response.ok) return redirect(`${url.origin}${returnPath}#auth_error=invalid_session`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
+    return redirect(`${url.origin}${returnPath}`, 303, [
+      cookie(SESSION_COOKIE_NAME, session, SESSION_TTL_SECONDS),
+      clearCookie(NONCE_COOKIE_NAME),
+    ]);
+  }
+
+  if (url.pathname === `${AUTH_PREFIX}/me`) {
+    if (request.method !== 'GET') return methodNotAllowed('GET');
+    const token = readCookie(request.headers.get('Cookie'), SESSION_COOKIE_NAME);
+    if (!token) return json({ error: 'not signed in' }, { status: 401 });
+    const { response, body } = await fetchAuthPayload(token);
+    const authUser = response.ok ? normalizeAuthUser(body) : null;
+    const headers: Record<string, string> = response.ok ? {} : { 'Set-Cookie': clearCookie(SESSION_COOKIE_NAME) };
+    return json(authUser ? { user: authUser } : body, { status: response.status, headers });
+  }
+
+  if (url.pathname === `${AUTH_PREFIX}/logout`) {
+    if (request.method !== 'POST') return methodNotAllowed('POST');
+    if (!isSameOriginMutation(request)) return new Response('Forbidden', { status: 403, headers: SECURITY_HEADERS });
+    return new Response(null, { status: 204, headers: { 'Set-Cookie': clearCookie(SESSION_COOKIE_NAME), 'Cache-Control': 'no-store' } });
+  }
+
+  return new Response('Not found', { status: 404, headers: SECURITY_HEADERS });
 }
 
 async function uniqueIdeaId(env: Env, title: string) {
@@ -282,6 +466,237 @@ async function ideaBody(env: Env, idea: IdeaRow) {
   return idea.body_md || defaultIdeaBody(idea);
 }
 
+async function listContributors(env: Env) {
+  const rows = await env.DB.prepare(
+    `SELECT
+       p.id,
+       p.handle,
+       p.display_name,
+       p.bio,
+       p.reputation,
+       p.badges_json,
+       COUNT(DISTINCT i.id) AS idea_count,
+       COUNT(DISTINCT c.id) AS contribution_count,
+       COUNT(DISTINCT r.id) AS reaction_count
+     FROM profiles p
+     LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed'
+     LEFT JOIN contributions c ON c.profile_id = p.id
+     LEFT JOIN reactions r ON r.profile_id = p.id
+     GROUP BY p.id
+     ORDER BY p.reputation DESC, contribution_count DESC, idea_count DESC, p.handle ASC
+     LIMIT 100`,
+  ).all<ContributorRow>();
+  return rows.results || [];
+}
+
+async function contributorByHandle(env: Env, handle: string) {
+  return env.DB.prepare(
+    `SELECT
+       p.id,
+       p.handle,
+       p.display_name,
+       p.bio,
+       p.reputation,
+       p.badges_json,
+       COUNT(DISTINCT i.id) AS idea_count,
+       COUNT(DISTINCT c.id) AS contribution_count,
+       COUNT(DISTINCT r.id) AS reaction_count
+     FROM profiles p
+     LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed'
+     LEFT JOIN contributions c ON c.profile_id = p.id
+     LEFT JOIN reactions r ON r.profile_id = p.id
+     WHERE p.handle = ?
+     GROUP BY p.id`,
+  )
+    .bind(handle)
+    .first<ContributorRow>();
+}
+
+function parseBadges(value: unknown) {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)).slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderContributorShell(title: string, body: string, request: Request) {
+  return new Response(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>${escapeHtml(title)} - FreeIdeaStore</title>
+<meta name="description" content="FreeIdeaStore contributor reputation, ideas, critiques, support, pivots, and research activity.">
+<link rel="canonical" href="${escapeHtml(new URL(request.url).origin)}${escapeHtml(new URL(request.url).pathname)}">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}:root{--accent:#0891b2;--gold:#f59e0b;--paper:#f7faf9;--panel:#fff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6}
+body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.5}a{color:inherit;text-decoration:none}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.mark{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900}.brand span:last-child{font-family:Fraunces,serif}nav{margin-left:auto;display:flex;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}
+.shell{max-width:1120px;margin:0 auto;padding:2rem 1.25rem}.eyebrow{color:var(--accent);font-size:.72rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase}h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.2rem);line-height:.98;margin:.45rem 0 1rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.85rem}.card,.panel{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 10px 22px rgba(16,32,39,.04)}.card h2{font-size:1rem}.meta{display:flex;flex-wrap:wrap;gap:.35rem;margin:.65rem 0}.pill{border:1px solid var(--line);border-radius:999px;background:#ecfeff;color:#155e75;font-size:.68rem;font-weight:900;padding:.22rem .48rem;text-transform:uppercase}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem;margin-top:.8rem}.stat{border-left:3px solid var(--line);padding-left:.55rem}.stat strong{display:block;font-size:1.05rem}.stat span{color:var(--muted);font-size:.7rem;font-weight:800}.list{display:grid;gap:.55rem;margin-top:1rem}.item{border:1px solid var(--line);border-radius:8px;background:#fbfdfd;padding:.75rem}.item strong{display:block}.item span{display:block;color:var(--muted);font-size:.78rem;margin-top:.2rem}.button{display:inline-flex;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.55rem .7rem;font-size:.78rem;font-weight:900;margin-top:.8rem}@media(max-width:760px){nav{display:none}.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body><header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header><main class="shell">${body}</main></body></html>`, {
+    headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'public, max-age=60' },
+  });
+}
+
+async function renderContributorsPage(env: Env, request: Request) {
+  const contributors = await listContributors(env);
+  const cards = contributors
+    .map((person) => {
+      const badges = parseBadges(person.badges_json);
+      return `<article class="card">
+        <h2><a href="/contributors/${escapeHtml(person.handle)}/">${escapeHtml(person.display_name)}</a></h2>
+        <div class="meta"><span class="pill">@${escapeHtml(person.handle)}</span>${badges.map((badge) => `<span class="pill">${escapeHtml(badge)}</span>`).join('')}</div>
+        <p>${escapeHtml(person.bio || 'Contributor reputation grows when ideas get sharper, safer, or honestly trashed.')}</p>
+        <div class="stats"><div class="stat"><strong>${escapeHtml(person.idea_count)}</strong><span>ideas</span></div><div class="stat"><strong>${escapeHtml(person.contribution_count)}</strong><span>notes</span></div><div class="stat"><strong>${escapeHtml(person.reaction_count)}</strong><span>signals</span></div></div>
+      </article>`;
+    })
+    .join('');
+  return renderContributorShell(
+    'Contributors',
+    `<div class="eyebrow">People behind the ideas</div><h1>Contributor reputation.</h1><section class="grid">${cards}</section>`,
+    request,
+  );
+}
+
+async function renderContributorPage(env: Env, request: Request, handle: string) {
+  const person = await contributorByHandle(env, handle);
+  if (!person) return new Response('Contributor not found', { status: 404, headers: SECURITY_HEADERS });
+  const ideas = await env.DB.prepare(
+    `SELECT id, title, summary, stage, category, updated_at
+     FROM ideas
+     WHERE created_by = ? AND status != 'removed'
+     ORDER BY updated_at DESC
+     LIMIT 30`,
+  )
+    .bind(person.id)
+    .all<Record<string, string>>();
+  const contributions = await env.DB.prepare(
+    `SELECT c.kind, c.body, c.created_at, i.id AS idea_id, i.title AS idea_title
+     FROM contributions c
+     JOIN ideas i ON i.id = c.idea_id
+     WHERE c.profile_id = ?
+     ORDER BY c.created_at DESC
+     LIMIT 40`,
+  )
+    .bind(person.id)
+    .all<Record<string, string>>();
+  const badges = parseBadges(person.badges_json);
+  return renderContributorShell(
+    person.display_name,
+    `<div class="eyebrow">Contributor profile</div><h1>${escapeHtml(person.display_name)}</h1>
+    <section class="panel">
+      <div class="meta"><span class="pill">@${escapeHtml(person.handle)}</span>${badges.map((badge) => `<span class="pill">${escapeHtml(badge)}</span>`).join('')}</div>
+      <p>${escapeHtml(person.bio || 'This profile records idea creation, critique, evidence, pivots, and support signals.')}</p>
+      <div class="stats"><div class="stat"><strong>${escapeHtml(person.idea_count)}</strong><span>ideas created</span></div><div class="stat"><strong>${escapeHtml(person.contribution_count)}</strong><span>contributions</span></div><div class="stat"><strong>${escapeHtml(person.reputation)}</strong><span>reputation</span></div></div>
+    </section>
+    <section class="grid" style="margin-top:1rem">
+      <div class="panel"><h2>Ideas</h2><div class="list">${(ideas.results || []).map((idea) => `<a class="item" href="/ideas/${escapeHtml(idea.id)}/"><strong>${escapeHtml(idea.title)}</strong><span>${escapeHtml(idea.stage)} / ${escapeHtml(idea.category)} - ${escapeHtml(idea.summary)}</span></a>`).join('') || '<p>No ideas created yet.</p>'}</div></div>
+      <div class="panel"><h2>Contributions</h2><div class="list">${(contributions.results || []).map((item) => `<a class="item" href="/ideas/${escapeHtml(item.idea_id)}/"><strong>${escapeHtml(item.kind)} on ${escapeHtml(item.idea_title)}</strong><span>${escapeHtml(item.body)}</span></a>`).join('') || '<p>No contributions yet.</p>'}</div></div>
+    </section>`,
+    request,
+  );
+}
+
+function renderConsolePage(request: Request) {
+  const origin = new URL(request.url).origin;
+  return new Response(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Console - FreeIdeaStore</title>
+<meta name="description" content="Create, draft, and attribute new FreeIdeaStore ideas with GitHub or Google sign-in.">
+<link rel="canonical" href="${escapeHtml(origin)}/console/">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}:root{--accent:#0891b2;--gold:#f59e0b;--paper:#f7faf9;--panel:#fff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6;--bad:#dc2626}
+body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.5}a{color:inherit;text-decoration:none}button,input,textarea,select{font:inherit}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.mark{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900}.brand span:last-child{font-family:Fraunces,serif}nav{margin-left:auto;display:flex;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}
+.shell{max-width:1120px;margin:0 auto;padding:2rem 1.25rem}.eyebrow{color:var(--accent);font-size:.72rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase}h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.4rem);line-height:.98;margin:.45rem 0 1rem}.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:1rem;align-items:start}.panel{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 10px 22px rgba(16,32,39,.04)}.panel h2{font-size:1rem;margin-bottom:.6rem}.muted{color:var(--muted);font-size:.86rem}.auth{display:grid;gap:.5rem}.button{display:inline-flex;justify-content:center;align-items:center;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;cursor:pointer;padding:.65rem .85rem;font-weight:900}.button.secondary{background:white;color:var(--accent)}.button.danger{border-color:var(--bad);background:white;color:var(--bad)}form{display:grid;gap:.75rem}label{display:grid;gap:.3rem;color:var(--muted);font-size:.78rem;font-weight:900;text-transform:uppercase}input,textarea,select{width:100%;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);padding:.65rem}textarea{min-height:120px;resize:vertical}.split{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.status{border:1px solid var(--line);border-radius:8px;background:#fbfdfd;color:var(--muted);padding:.75rem;font-size:.84rem;margin-top:.75rem}.status.ok{border-color:#99f6e4;color:#115e59}.status.err{border-color:#fecaca;color:#991b1b}@media(max-width:840px){.layout{grid-template-columns:1fr}nav{display:none}.split{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
+<main class="shell">
+  <div class="eyebrow">Creation console</div><h1>Put an idea into the refinery.</h1>
+  <div class="layout">
+    <section class="panel">
+      <form id="idea-form">
+        <label>Title<input name="title" required minlength="3" maxlength="120" placeholder="Example: Local repair marketplace"></label>
+        <label>Summary<textarea name="summary" required minlength="10" maxlength="1000" placeholder="Who has the problem, what hurts, and why this may be worth exploring?"></textarea></label>
+        <div class="split">
+          <label>Stage<select name="stage"><option>raw</option><option>critique</option><option>researched</option><option>pivot</option><option>prototype</option><option>built</option></select></label>
+          <label>Category<input name="category" maxlength="60" placeholder="platform, finance, local-services"></label>
+        </div>
+        <label>Preview<textarea name="preview" maxlength="1000" placeholder="Short public card preview or current signal."></textarea></label>
+        <label>Next step<input name="nextStep" maxlength="500" placeholder="Cheapest validation step."></label>
+        <label>Risk<input name="risk" maxlength="500" placeholder="Main reason this could fail."></label>
+        <label>Body markdown<textarea name="body" maxlength="24000" placeholder="## Snapshot&#10;## Brainstorming Log&#10;## Research Notes&#10;## Prototype Plan"></textarea></label>
+        <label id="guest-label">Guest handle<input name="handle" maxlength="40" placeholder="only used when not signed in"></label>
+        <button class="button" type="submit">Create idea</button>
+      </form>
+      <div id="status" class="status">Drafts are attributed to your signed-in profile when available.</div>
+    </section>
+    <aside class="panel">
+      <h2>Session</h2>
+      <p id="session" class="muted">Checking sign-in...</p>
+      <div class="auth" id="auth-actions">
+        <a class="button" href="${AUTH_PREFIX}/start?provider=github&return_to=/console/">Sign in with GitHub</a>
+        <a class="button secondary" href="${AUTH_PREFIX}/start?provider=google&return_to=/console/">Sign in with Google</a>
+      </div>
+    </aside>
+  </div>
+</main>
+<script>
+const form = document.querySelector('#idea-form');
+const statusBox = document.querySelector('#status');
+const sessionBox = document.querySelector('#session');
+const actions = document.querySelector('#auth-actions');
+const guestLabel = document.querySelector('#guest-label');
+let signedInUser = null;
+function setStatus(message, kind = '') { statusBox.className = 'status ' + kind; statusBox.textContent = message; }
+async function loadSession() {
+  const response = await fetch('${AUTH_PREFIX}/me').catch(() => null);
+  if (!response || !response.ok) {
+    sessionBox.textContent = 'Not signed in. You can test with a guest handle, but public attribution should use GitHub or Google.';
+    return;
+  }
+  const data = await response.json();
+  signedInUser = data.user;
+  sessionBox.textContent = 'Signed in as @' + signedInUser.handle + ' via ' + signedInUser.provider + '.';
+  guestLabel.style.display = 'none';
+  actions.innerHTML = '<button class="button danger" id="logout" type="button">Sign out</button>';
+  document.querySelector('#logout').addEventListener('click', async () => {
+    await fetch('${AUTH_PREFIX}/logout', { method: 'POST' });
+    location.reload();
+  });
+}
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(form).entries());
+  const headers = { 'content-type': 'application/json' };
+  if (!signedInUser && data.handle) headers['x-idea-handle'] = data.handle;
+  const response = await fetch('/api/ideas', { method: 'POST', headers, body: JSON.stringify(data) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) return setStatus(result.error || 'Could not create idea.', 'err');
+  setStatus('Idea created. Opening the public page...', 'ok');
+  location.href = result.url;
+});
+loadSession();
+</script>
+</body></html>`, {
+    headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'no-store' },
+  });
+}
+
 async function renderIdeaPage(env: Env, request: Request, ideaId: string) {
   const idea = await ideaById(env, ideaId);
   if (!idea) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
@@ -309,11 +724,11 @@ async function renderIdeaPage(env: Env, request: Request, ideaId: string) {
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--accent:#0ea5e9;--accent-dark:#0369a1;--paper:#f8fafc;--panel:#fff;--ink:#111827;--muted:#64748b;--line:#dbe3ef;--good:#16a34a;--bad:#dc2626}
+:root{--accent:#0891b2;--accent-dark:#155e75;--gold:#f59e0b;--paper:#f7faf9;--panel:#fff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6;--good:#16a34a;--bad:#dc2626}
 body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.55}
 a{color:inherit;text-decoration:none}
 header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}
-.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:var(--accent);color:white}.brand span:last-child{font-family:Fraunces,serif}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9);font-weight:900}.brand span:last-child{font-family:Fraunces,serif}
 nav{margin-left:auto;display:flex;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}
 .shell{max-width:1040px;margin:0 auto;padding:2rem 1.25rem}
 .crumb{color:var(--accent-dark);font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em}
@@ -329,7 +744,7 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5.8vw,4.5rem);line-height:.
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="logo">I</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="https://proideastore.serge-the-dev.workers.dev">ProIdeaStore</a></nav></header>
+<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
 <main class="shell">
   <div class="crumb">Cheap public idea page</div>
   <h1>${escapeHtml(idea.title)}</h1>
@@ -378,6 +793,11 @@ async function handleApi(request: Request, env: Env, url: URL) {
   if (url.pathname === '/api/health') {
     const row = await env.DB.prepare('SELECT COUNT(*) AS count FROM ideas').first<{ count: number }>();
     return json({ ok: true, service: 'freeideastore', ideas: row?.count ?? 0 });
+  }
+
+  if (url.pathname === '/api/session' && request.method === 'GET') {
+    const user = await authUserFor(request);
+    return user ? json({ user }) : json({ error: 'not signed in' }, { status: 401 });
   }
 
   if (url.pathname === '/api/ideas' && request.method === 'GET') {
@@ -519,16 +939,20 @@ async function handleApi(request: Request, env: Env, url: URL) {
   }
 
   if (url.pathname === '/api/profiles' && request.method === 'GET') {
-    const rows = await env.DB.prepare(
-      `SELECT p.id, p.handle, p.display_name, p.bio, p.reputation, p.badges_json,
-        COUNT(DISTINCT c.id) AS contributions
-       FROM profiles p
-       LEFT JOIN contributions c ON c.profile_id = p.id
-       GROUP BY p.id
-       ORDER BY p.reputation DESC, contributions DESC
-       LIMIT 50`,
-    ).all();
-    return json({ profiles: rows.results || [] });
+    return json({ profiles: await listContributors(env) });
+  }
+
+  if (url.pathname === '/api/contributors' && request.method === 'GET') {
+    return json({ contributors: await listContributors(env) });
+  }
+
+  const contributorMatch = url.pathname.match(/^\/api\/contributors\/([^/]+)$/);
+  if (contributorMatch && request.method === 'GET') {
+    const handle = pathId(contributorMatch[1]);
+    if (!handle) return bad('invalid contributor handle', 400);
+    const contributor = await contributorByHandle(env, handle);
+    if (!contributor) return bad('contributor not found', 404);
+    return json({ contributor, url: `/contributors/${contributor.handle}/` });
   }
 
   return bad('not found', 404);
@@ -537,6 +961,9 @@ async function handleApi(request: Request, env: Env, url: URL) {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    const authResponse = await handleAuth(request, url);
+    if (authResponse) return authResponse;
 
     if (url.pathname.startsWith('/api/')) {
       try {
@@ -560,6 +987,29 @@ export default {
         const ideaId = pathId(ideaPageMatch[1]);
         if (!ideaId) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
         return await renderIdeaPage(env, request, ideaId);
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+      }
+    }
+
+    if (url.pathname === '/console' || url.pathname === '/console/') {
+      return renderConsolePage(request);
+    }
+
+    if (url.pathname === '/contributors' || url.pathname === '/contributors/') {
+      try {
+        return await renderContributorsPage(env, request);
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+      }
+    }
+
+    const contributorPageMatch = url.pathname.match(/^\/contributors\/([^/]+)\/?$/);
+    if (contributorPageMatch) {
+      try {
+        const handle = pathId(contributorPageMatch[1]);
+        if (!handle) return new Response('Contributor not found', { status: 404, headers: SECURITY_HEADERS });
+        return await renderContributorPage(env, request, handle);
       } catch (error) {
         return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
       }

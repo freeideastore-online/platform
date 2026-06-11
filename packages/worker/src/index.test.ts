@@ -83,6 +83,25 @@ class FakeD1 {
         },
       });
     }
+    if (sql.includes('FROM profiles p') && sql.includes('LEFT JOIN ideas i') && !sql.includes('WHERE p.handle')) {
+      return new FakeStatement({
+        all: () => ({
+          results: [
+            {
+              id: 'profile-risk-finder',
+              handle: 'risk-finder',
+              display_name: 'Risk Finder',
+              bio: '',
+              reputation: 184,
+              badges_json: '["risk-mapper"]',
+              idea_count: 0,
+              contribution_count: 3,
+              reaction_count: 2,
+            },
+          ],
+        }),
+      });
+    }
     if (sql.includes('FROM ideas i') && sql.includes('WHERE i.id = ?')) {
       return new FakeStatement({ first: ([id]) => this.ideas.get(String(id)) ?? null });
     }
@@ -195,6 +214,31 @@ describe('FreeIdeaStore worker', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('https://fis.test/ideas/asx-filings-analyst/#research-notes');
+  });
+
+  it('renders contributor directory and console surfaces', async () => {
+    const contributors = await worker.fetch(new Request('https://fis.test/contributors/'), env());
+    const contributorHtml = await contributors.text();
+    const consolePage = await worker.fetch(new Request('https://fis.test/console/'), env());
+    const consoleHtml = await consolePage.text();
+
+    expect(contributors.status).toBe(200);
+    expect(contributorHtml).toContain('Contributor reputation.');
+    expect(contributorHtml).toContain('Risk Finder');
+    expect(consolePage.status).toBe(200);
+    expect(consoleHtml).toContain('Create idea');
+    expect(consoleHtml).toContain('Sign in with GitHub');
+  });
+
+  it('starts OAuth through the FreeAppStore auth API with a nonce cookie', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/.fis/auth/start?provider=github&return_to=/console/'), env());
+    const location = response.headers.get('location') || '';
+
+    expect(response.status).toBe(302);
+    expect(location).toContain('https://api.freeappstore.online/v1/auth/github/start');
+    expect(location).toContain('app_id=freeideastore');
+    expect(location).toContain('response_mode=query');
+    expect(response.headers.get('set-cookie')).toContain('__Host-fis_auth_nonce=');
   });
 
   it('creates a D1-backed free idea and promotes it to a pro candidate', async () => {

@@ -1,12 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="url(#g)"/>
-  <path d="M244 118h24v276h-24z" fill="#fff"/>
-  <path d="M180 142h152v44H180zM180 326h152v44H180z" fill="#fff"/>
-  <defs>
-    <linearGradient id="g" x1="96" y1="64" x2="416" y2="448" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#0ea5e9"/>
-    </linearGradient>
-  </defs>
+  <rect width="512" height="512" rx="88" fill="#102027"/>
+  <path d="M116 142h280v54H116z" fill="#67e8f9"/>
+  <path d="M116 229h210v54H116z" fill="#ffffff"/>
+  <path d="M116 316h154v54H116z" fill="#f59e0b"/>
+  <path d="M378 224l42 32-42 32-42-32z" fill="#67e8f9"/>
+  <circle cx="398" cy="142" r="24" fill="#f59e0b"/>
 </svg>
-
