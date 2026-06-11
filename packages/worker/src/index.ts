@@ -591,7 +591,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem
 .shell{max-width:1120px;margin:0 auto;padding:2rem 1.25rem}.eyebrow{color:var(--accent);font-size:.72rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase}h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.2rem);line-height:.98;margin:.45rem 0 1rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.85rem}.profile-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:1rem;align-items:start}.card,.panel,.hero-card{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 10px 22px rgba(16,32,39,.04)}.hero-card{display:grid;grid-template-columns:88px 1fr;gap:1rem;align-items:center;margin-bottom:1rem}.avatar{display:grid;width:88px;height:88px;place-items:center;border-radius:50%;background:#102027;color:#67e8f9;font-size:1.8rem;font-weight:900;box-shadow:inset 0 -7px 0 rgba(245,158,11,.9)}.card h2,.panel h2{font-size:1rem}.profile-title{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}.profile-title h1{margin:.1rem 0;font-size:clamp(2rem,4vw,3.5rem)}.muted{color:var(--muted);font-size:.88rem}.meta{display:flex;flex-wrap:wrap;gap:.35rem;margin:.65rem 0}.pill{border:1px solid var(--line);border-radius:999px;background:#ecfeff;color:#155e75;font-size:.68rem;font-weight:900;padding:.22rem .48rem;text-transform:uppercase}.pill.gold{background:#fffbeb;color:#92400e}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem;margin-top:.8rem}.stat{border-left:3px solid var(--line);padding-left:.55rem}.stat strong{display:block;font-size:1.05rem}.stat span{color:var(--muted);font-size:.7rem;font-weight:800}.score{display:grid;gap:.35rem}.score strong{font-size:2rem}.meter{height:10px;border-radius:999px;background:#e6f3f5;overflow:hidden}.meter i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--gold))}.list{display:grid;gap:.55rem;margin-top:1rem}.item{border:1px solid var(--line);border-radius:8px;background:#fbfdfd;padding:.75rem}.item strong{display:block}.item span,.item time{display:block;color:var(--muted);font-size:.78rem;margin-top:.2rem}.button{display:inline-flex;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.55rem .7rem;font-size:.78rem;font-weight:900;margin-top:.8rem}.empty{color:var(--muted);font-size:.85rem}.mix{display:grid;gap:.55rem;margin-top:.75rem}.mix-row{display:grid;gap:.32rem}.mix-row div{display:flex;justify-content:space-between;gap:.75rem;font-size:.78rem}.mix-row span{color:var(--muted)}.mix-row i{display:block;height:8px;border-radius:999px;background:var(--accent)}@media(max-width:860px){nav{display:none}.profile-grid{grid-template-columns:1fr}.hero-card{grid-template-columns:64px 1fr}.avatar{width:64px;height:64px;font-size:1.25rem}}@media(max-width:760px){.stats{grid-template-columns:1fr}}
 </style>
 </head>
-<body><header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header><main class="shell">${body}</main></body></html>`, {
+<body><header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/about/">About</a><a href="/docs/">Docs</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header><main class="shell">${body}</main></body></html>`, {
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'public, max-age=60' },
   });
 }
@@ -713,7 +713,7 @@ async function renderAccountPage(env: Env, request: Request) {
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a href="/console/">Sign in</a>`}</nav></header>
+<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/about/">About</a><a href="/docs/">Docs</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a href="/console/">Sign in</a>`}</nav></header>
 <main class="shell">
   ${
     user
@@ -764,7 +764,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><span id="account-slot"></span><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
+<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/about/">About</a><a href="/docs/">Docs</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><span id="account-slot"></span><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
 <main class="shell">
   <div class="eyebrow">Creation console</div><h1>Put an idea into the refinery.</h1>
   <div class="layout">
@@ -894,7 +894,7 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5.8vw,4.5rem);line-height:.
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
+<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/about/">About</a><a href="/docs/">Docs</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
 <main class="shell">
   <div class="crumb">Cheap public idea page</div>
   <h1>${escapeHtml(idea.title)}</h1>

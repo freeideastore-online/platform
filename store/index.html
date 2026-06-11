@@ -3,154 +3,62 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>FreeIdeaStore - Ideas Earn Builders</title>
-<meta name="description" content="FreeIdeaStore is a public idea lab where ideas are critiqued, researched, supported, pivoted, parked, or matured into ProIdeaStore opportunities.">
+<title>FreeIdeaStore - Ideas</title>
+<meta name="description" content="Browse public ideas being shaped by contributors in FreeIdeaStore.">
 <link rel="canonical" href="https://freeideastore.online/">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--accent:#0891b2;--accent-dark:#155e75;--gold:#f59e0b;--paper:#f7faf9;--panel:#fff;--panel-alt:#ecfeff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6;--good:#16a34a;--warn:#f59e0b;--bad:#dc2626}
+:root{--accent:#0891b2;--accent-dark:#155e75;--paper:#f7faf9;--panel:#fff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6}
 body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.5}
 a{color:inherit;text-decoration:none}
-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.92);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}
-.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}
-.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9)}
-.brand span:last-child{font-family:Fraunces,serif;font-size:1.05rem}
-nav{margin-left:auto;display:flex;gap:.9rem;font-size:.8rem;font-weight:700}
-nav a{color:var(--muted)}
-nav a:hover{color:var(--ink)}
-.hero{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(320px,.92fr);gap:2rem;max-width:1180px;margin:0 auto;padding:3rem 1.25rem 1.5rem;align-items:end}
-.eyebrow{color:var(--accent-dark);font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-h1{font-family:Fraunces,serif;font-size:clamp(2.2rem,6vw,5.1rem);line-height:.94;margin:.55rem 0 .9rem;letter-spacing:0}
-.hero p{max-width:680px;color:var(--muted);font-size:1rem}
-.actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1.2rem}
-.button{border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.75rem 1rem;font-size:.85rem;font-weight:800}
-.button.secondary{background:var(--panel);color:var(--accent-dark)}
-.pipeline{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 12px 26px rgba(15,23,42,.05)}
-.pipeline h2{font-size:.82rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.7rem}
-.steps{display:grid;gap:.5rem}
-.step{display:flex;align-items:center;gap:.7rem;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:.68rem}
-.dot{height:10px;width:10px;border-radius:99px;background:var(--accent)}
-.step strong{display:block;font-size:.82rem}
-.step span{display:block;color:var(--muted);font-size:.72rem}
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;max-width:1180px;margin:0 auto;padding:0 1.25rem 1.25rem}
-.metric{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem}
-.metric strong{display:block;font-size:1.4rem}
-.metric span{color:var(--muted);font-size:.75rem;font-weight:700}
-.forge{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,.8fr);gap:1rem;max-width:1180px;margin:0 auto;padding:0 1.25rem 1.5rem}
-.workbench,.scouts{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 12px 28px rgba(15,23,42,.05)}
-.workbench h2,.scouts h2{font-family:Fraunces,serif;font-size:1.45rem;margin-bottom:.45rem}
-.workbench p,.scouts p{color:var(--muted);font-size:.84rem}
-.lanes{display:grid;grid-template-columns:repeat(5,1fr);gap:.55rem;margin-top:1rem}
-.lane{min-height:160px;border:1px solid var(--line);border-radius:8px;background:linear-gradient(180deg,#fff,#f8fafc);padding:.65rem}
-.lane strong{display:block;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:.55rem}
-.ticket{border:1px solid var(--line);border-radius:7px;background:#fff;padding:.55rem;margin-bottom:.45rem;font-size:.76rem;font-weight:800}
-.ticket span{display:block;color:var(--muted);font-size:.66rem;font-weight:700;margin-top:.2rem}
-.scout-list{display:grid;gap:.55rem;margin-top:1rem}
-.scout{display:grid;grid-template-columns:38px 1fr auto;gap:.65rem;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:.58rem}
-.avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:8px;background:var(--ink);color:white;font-weight:900}
-.scout strong{display:block;font-size:.78rem}.scout span{display:block;color:var(--muted);font-size:.68rem}
-.points{color:var(--accent-dark);font-size:.8rem;font-weight:900}
-.toolbar{display:flex;flex-wrap:wrap;gap:.45rem;max-width:1180px;margin:0 auto;padding:1rem 1.25rem}
-.filter{border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);cursor:pointer;font:700 .75rem Manrope,system-ui,sans-serif;padding:.44rem .75rem}
-.filter.active{background:var(--ink);border-color:var(--ink);color:white}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:.9rem;max-width:1180px;margin:0 auto;padding:0 1.25rem 2rem}
-.card{display:flex;min-height:230px;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 8px 20px rgba(15,23,42,.04)}
-.card.hidden{display:none}
-.topline{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.85rem}
-.stage{border-radius:999px;background:var(--panel-alt);color:var(--accent-dark);padding:.24rem .56rem;font-size:.68rem;font-weight:800;text-transform:uppercase}
-.category{color:var(--muted);font-size:.72rem;font-weight:800;text-transform:uppercase}
-.card h3{font-size:1.08rem;margin-bottom:.4rem}
-.card p{color:var(--muted);font-size:.84rem}
-.preview{border:1px solid var(--line);border-radius:8px;background:#f8fbff;color:#334155;margin:.8rem 0 0;padding:.72rem;font-size:.8rem;font-weight:700}
-.sections{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.7rem}
-.section-tag{border:1px solid #bae6fd;border-radius:999px;background:#ecfeff;color:var(--accent-dark);font-size:.66rem;font-weight:900;padding:.2rem .46rem;text-transform:uppercase}
-.detail{display:grid;gap:.5rem;margin-top:1rem}
-.detail div{border-left:3px solid var(--line);padding-left:.65rem}
-.detail strong{display:block;font-size:.72rem;text-transform:uppercase;color:var(--ink)}
-.detail span{display:block;color:var(--muted);font-size:.78rem}
-.card-footer{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin-top:auto;padding-top:1rem;color:var(--muted);font-size:.76rem;font-weight:800}
-.docs-link{display:inline-flex;align-items:center;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.48rem .62rem;font-size:.72rem;font-weight:900;white-space:nowrap}
-.docs-link:hover{background:var(--accent-dark);border-color:var(--accent-dark)}
-.section{border-top:1px solid var(--line);background:var(--panel);padding:2rem 1.25rem}
-.section-inner{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
-.panel{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:1rem}
-.panel h2{font-family:Fraunces,serif;font-size:1.45rem;margin-bottom:.6rem}
-.panel ul{display:grid;gap:.45rem;color:var(--muted);font-size:.88rem;list-style:none}
-.panel li:before{content:"";display:inline-block;width:7px;height:7px;background:var(--accent);border-radius:99px;margin-right:.45rem}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9)}.brand span:last-child{font-family:Fraunces,serif;font-size:1.05rem}
+nav{margin-left:auto;display:flex;align-items:center;gap:.9rem;font-size:.8rem;font-weight:800}nav a{color:var(--muted)}nav a:hover{color:var(--ink)}
+.shell{max-width:1180px;margin:0 auto;padding:1.4rem 1.25rem 2rem}
+.intro{display:flex;align-items:end;justify-content:space-between;gap:1.25rem;margin-bottom:1rem}
+.eyebrow{color:var(--accent-dark);font-size:.72rem;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+h1{font-family:Fraunces,serif;font-size:clamp(2rem,4.6vw,4rem);line-height:1;margin:.35rem 0 .55rem;letter-spacing:0}
+.intro p{max-width:690px;color:var(--muted);font-size:.95rem}
+.actions{display:flex;gap:.55rem;flex-wrap:wrap}.button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.62rem .82rem;font-size:.8rem;font-weight:900}.button.secondary{background:white;color:var(--accent-dark)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:.75rem 0;margin-bottom:1rem}
+.filter{border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);cursor:pointer;font:800 .74rem Manrope,system-ui,sans-serif;padding:.4rem .7rem}.filter.active{background:var(--ink);border-color:var(--ink);color:white}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:.8rem}
+.card{display:flex;min-height:218px;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 8px 20px rgba(15,23,42,.035)}
+.topline{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.75rem}.stage{border-radius:999px;background:#ecfeff;color:var(--accent-dark);padding:.22rem .54rem;font-size:.66rem;font-weight:900;text-transform:uppercase}.category{color:var(--muted);font-size:.7rem;font-weight:900;text-transform:uppercase}
+.card h2{font-size:1.05rem;margin-bottom:.35rem}.card p{color:var(--muted);font-size:.84rem}.facts{display:grid;gap:.5rem;margin-top:.8rem}.fact{border-left:3px solid var(--line);padding-left:.62rem}.fact strong{display:block;font-size:.68rem;text-transform:uppercase}.fact span{display:block;color:var(--muted);font-size:.76rem}
+.card-footer{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin-top:auto;padding-top:.9rem;color:var(--muted);font-size:.74rem;font-weight:800}.docs-link{display:inline-flex;align-items:center;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;padding:.46rem .6rem;font-size:.72rem;font-weight:900;white-space:nowrap}
+.empty{border:1px solid var(--line);border-radius:8px;background:white;padding:1rem;color:var(--muted)}
 footer{border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:.75rem;padding:1rem;text-align:center}
-@media(max-width:920px){.forge{grid-template-columns:1fr}.lanes{grid-template-columns:1fr 1fr}}
-@media(max-width:820px){header{align-items:flex-start}.hero{grid-template-columns:1fr;padding-top:2rem}.metrics{grid-template-columns:repeat(2,1fr)}.section-inner{grid-template-columns:1fr}nav{display:none}}
-@media(max-width:560px){.lanes{grid-template-columns:1fr}}
+@media(max-width:820px){nav{display:none}.intro{display:block}.actions{margin-top:1rem}.shell{padding-top:1rem}}
 </style>
 </head>
 <body>
 <header>
-  <a href="./" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a>
+  <a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a>
   <nav>
-    <a href="#ideas">Ideas</a>
+    <a href="/#ideas">Ideas</a>
+    <a href="/about/">About</a>
+    <a href="/docs/">Docs</a>
     <a href="/contributors/">Contributors</a>
     <a href="/console/">Console</a>
-    <a href="#reputation">Reputation</a>
     <a href="https://proideastore.online">ProIdeaStore</a>
-    <a href="https://openfrontier.pages.dev">Open Frontier</a>
   </nav>
 </header>
 
-<main>
-  <section class="hero">
+<main class="shell">
+  <section class="intro">
     <div>
-      <div class="eyebrow">Public idea refinery</div>
-      <h1>Ideas earn builders.</h1>
-      <p>Post raw ideas, critique them, find evidence, suggest pivots, support the promising ones, trash the weak ones, and build visible reputation. Free ideas stay as cheap public pages until they earn a ProIdeaStore dossier.</p>
-      <div class="actions">
-        <a class="button" href="#ideas">Browse ideas</a>
-        <a class="button secondary" href="/contributors/">See contributors</a>
-        <a class="button secondary" href="/console/">Create idea</a>
-      </div>
+      <div class="eyebrow">Live idea catalog</div>
+      <h1>Ideas in progress.</h1>
+      <p>Browse public ideas, open the working page, and add sharper evidence, risks, pivots, or support from the console.</p>
     </div>
-    <aside class="pipeline" aria-label="Idea maturity pipeline">
-      <h2>Idea maturity path</h2>
-      <div class="steps">
-        <div class="step"><span class="dot"></span><div><strong>Raw</strong><span>Useful enough to discuss.</span></div></div>
-        <div class="step"><span class="dot"></span><div><strong>Critiqued</strong><span>Risks, substitutes, and gaps named.</span></div></div>
-        <div class="step"><span class="dot"></span><div><strong>Researched</strong><span>Evidence and competitors attached.</span></div></div>
-        <div class="step"><span class="dot"></span><div><strong>Pivoted</strong><span>Sharper customer, wedge, or model.</span></div></div>
-        <div class="step"><span class="dot"></span><div><strong>Candidate</strong><span>Ready for ProIdeaStore review.</span></div></div>
-      </div>
-    </aside>
-  </section>
-
-  <section class="metrics" aria-label="Store metrics">
-    <div class="metric"><strong>6</strong><span>seed ideas</span></div>
-    <div class="metric"><strong>13</strong><span>contribution types</span></div>
-    <div class="metric"><strong>5</strong><span>maturity stages</span></div>
-    <div class="metric"><strong>1</strong><span>cheap page path</span></div>
-  </section>
-
-  <section class="forge" aria-label="Idea refinement workbench">
-    <div class="workbench">
-      <h2>The refinery board</h2>
-      <p>Ideas move when people add useful pressure: sharper customer, better evidence, a cleaner pivot, or an honest reason to stop.</p>
-      <div class="lanes">
-        <div class="lane"><strong>Raw</strong><div class="ticket">Idea Reputation System<span>needs anti-spam rules</span></div></div>
-        <div class="lane"><strong>Critique</strong><div class="ticket">School Transport<span>trust and liability review</span></div></div>
-        <div class="lane"><strong>Research</strong><div class="ticket">ASX Analyst<span>competitor map done</span></div></div>
-        <div class="lane"><strong>Prototype</strong><div class="ticket">Volleyball Parents<span>local club pilot next</span></div></div>
-        <div class="lane"><strong>Graduate</strong><div class="ticket">ProIdea Dossier<span>ready for pro curation</span></div></div>
-      </div>
+    <div class="actions">
+      <a class="button" href="/console/">Create idea</a>
+      <a class="button secondary" href="/about/">How it works</a>
     </div>
-    <aside class="scouts">
-      <h2>Visible judgment</h2>
-      <p>Profiles should make hidden product taste visible before someone is hired, funded, or invited to build.</p>
-      <div class="scout-list">
-        <div class="scout"><div class="avatar">R</div><div><strong>Risk Finder</strong><span>finds why ideas break</span></div><div class="points">184</div></div>
-        <div class="scout"><div class="avatar">P</div><div><strong>Pivot Maker</strong><span>sharpens the wedge</span></div><div class="points">156</div></div>
-        <div class="scout"><div class="avatar">E</div><div><strong>Evidence Hunter</strong><span>brings sources, not vibes</span></div><div class="points">143</div></div>
-      </div>
-    </aside>
   </section>
 
   <div class="toolbar" id="ideas">
@@ -164,39 +72,14 @@ footer{border-top:1px solid var(--line);background:var(--panel);color:var(--mute
   </div>
 
   <section class="grid" id="idea-grid" aria-label="Idea cards"></section>
-
-  <section class="section" id="reputation">
-    <div class="section-inner">
-      <div class="panel">
-        <h2>People are the product.</h2>
-        <ul>
-          <li>Critiques show strategic judgment.</li>
-          <li>Pivots show creativity under constraints.</li>
-          <li>Evidence links show research discipline.</li>
-          <li>Prototype starts show execution bias.</li>
-          <li>Kill signals show honesty and taste.</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h2>Pro graduation.</h2>
-        <ul>
-          <li>Strong ideas become curated ProIdeaStore dossiers.</li>
-          <li>Top contributors are attached to the opportunity history.</li>
-          <li>Builders, investors, and operators can see who improved the idea.</li>
-          <li>Ready concepts can flow into ProAppStore or ProGameStore builds.</li>
-        </ul>
-      </div>
-    </div>
-  </section>
 </main>
 
-<footer>FreeIdeaStore - part of Open Frontier. Raw ideas are free; visible judgment compounds.</footer>
+<footer>FreeIdeaStore - public ideas, real contributors, cheap pages.</footer>
 
 <script>
 const grid = document.querySelector('#idea-grid');
 const buttons = document.querySelectorAll('.filter');
 let ideas = [];
-let registry = {};
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -207,41 +90,31 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function ideaMeta(idea) {
-  return registry[idea.id] || {};
-}
-
 function render(stage = 'all') {
-  grid.innerHTML = ideas
-    .filter((idea) => stage === 'all' || idea.stage === stage)
-    .map((idea) => {
-      const meta = ideaMeta(idea);
-      const title = idea.title || idea.name;
-      const summary = idea.summary || idea.signal;
-      const preview = meta.preview || summary;
-      const docsUrl = meta.docsUrl || `/ideas/${idea.id}/`;
-      const sections = meta.docsSections || ['brainstorming', 'design', 'prototype'];
-      return `
+  const visible = ideas.filter((idea) => stage === 'all' || idea.stage === stage);
+  if (!visible.length) {
+    grid.innerHTML = '<div class="empty">No ideas match this filter yet.</div>';
+    return;
+  }
+  grid.innerHTML = visible
+    .map((idea) => `
       <article class="card" data-stage="${escapeHtml(idea.stage)}">
         <div class="topline">
           <span class="stage">${escapeHtml(idea.stage)}</span>
           <span class="category">${escapeHtml(idea.category)}</span>
         </div>
-        <h3>${escapeHtml(title)}</h3>
-        <p>${escapeHtml(summary)}</p>
-        <div class="preview">${escapeHtml(preview)}</div>
-        <div class="sections">${sections.map((section) => `<span class="section-tag">${escapeHtml(section)}</span>`).join('')}</div>
-        <div class="detail">
-          <div><strong>Next step</strong><span>${escapeHtml(idea.next_step || idea.nextStep || 'Needs a next validation step.')}</span></div>
-          <div><strong>Risk</strong><span>${escapeHtml(idea.risk)}</span></div>
+        <h2>${escapeHtml(idea.title || idea.name)}</h2>
+        <p>${escapeHtml(idea.summary || idea.preview || idea.signal)}</p>
+        <div class="facts">
+          <div class="fact"><strong>Next</strong><span>${escapeHtml(idea.next_step || idea.nextStep || 'Needs a validation step.')}</span></div>
+          <div class="fact"><strong>Risk</strong><span>${escapeHtml(idea.risk || 'Not named yet.')}</span></div>
         </div>
         <div class="card-footer">
-          <span>${escapeHtml(idea.contribution_count ?? idea.contributors ?? 0)} contributions / ${escapeHtml(idea.support ?? 0)} support</span>
-          <a class="docs-link" href="${escapeHtml(docsUrl)}">Open page</a>
+          <span>${escapeHtml(idea.contribution_count ?? 0)} contributions</span>
+          <a class="docs-link" href="/ideas/${encodeURIComponent(idea.id)}/">Open page</a>
         </div>
       </article>
-    `;
-    })
+    `)
     .join('');
 }
 
@@ -253,22 +126,18 @@ buttons.forEach((button) => {
   });
 });
 
-Promise.all([
-  fetch('registry.json').then((response) => response.json()),
-  fetch('/api/ideas')
-    .then((response) => {
-      if (!response.ok) throw new Error('api unavailable');
-      return response.json();
-    })
-    .catch(() => null),
-])
-  .then(([registryData, apiData]) => {
-    registry = Object.fromEntries((registryData.ideas || []).map((idea) => [idea.id, idea]));
-    ideas = (apiData && apiData.ideas && apiData.ideas.length ? apiData.ideas : registryData.ideas) || [];
+fetch('/api/ideas')
+  .then((response) => {
+    if (!response.ok) throw new Error('api unavailable');
+    return response.json();
+  })
+  .catch(() => fetch('/registry.json').then((response) => response.json()))
+  .then((data) => {
+    ideas = data.ideas || [];
     render();
   })
   .catch(() => {
-    grid.innerHTML = '<article class="card"><h3>Ideas unavailable</h3><p>The collaboration API could not be loaded.</p></article>';
+    grid.innerHTML = '<article class="card"><h2>Ideas unavailable</h2><p>The collaboration API could not be loaded.</p></article>';
   });
 </script>
 </body>
