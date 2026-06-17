@@ -7,7 +7,7 @@
 - MCP server: https://mcp.freeideastore.online/mcp — transport: streamable-http; auth: OAuth 2.1 (PKCE + dynamic client registration), sign in with GitHub or Google. Also accepts `Authorization: Bearer <FAS session token>`.
 - MCP manifest: https://freeideastore.online/.well-known/mcp.json — canonical list of servers and tools.
 - Add to Claude Code: `claude mcp add --transport http freeideastore https://mcp.freeideastore.online/mcp` then authenticate via `/mcp`.
-- Key MCP tools: list_idea_skills, get_idea_skill, apply_idea_skill, create_free_idea, get_idea, my_ideas, add_idea_contribution, propose_idea_refinement, publish_idea_update, react_to_idea, promote_to_pro_candidate.
+- MCP tools (authoritative list is in the manifest): free_idea_template, get_idea, create_free_idea, add_idea_contribution, propose_idea_refinement, react_to_idea, promote_to_pro_candidate, proidea_book_template, dry_run_proidea_book_export.
 
 ## REST API (read-only without auth)
 

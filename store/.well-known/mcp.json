@@ -4,11 +4,11 @@
     {
       "name": "FreeIdeaStore",
       "description": "AI agent tools for FreeIdeaStore. Create ideas, read idea research, add evidence, propose refinements, react with support/trash/pivot signals, and promote mature ideas toward ProIdeaStore.",
-      "endpoint": "https://freeideastore-mcp.serge-the-dev.workers.dev/mcp",
+      "endpoint": "https://mcp.freeideastore.online/mcp",
       "transport": "streamable-http",
       "auth": {
         "type": "oauth2",
-        "authorization_server": "https://freeideastore-mcp.serge-the-dev.workers.dev"
+        "authorization_server": "https://mcp.freeideastore.online"
       },
       "tools": [
         {
