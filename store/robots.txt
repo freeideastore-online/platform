@@ -2,3 +2,6 @@ User-agent: *
 Allow: /
 
 Sitemap: https://freeideastore.online/sitemap.xml
+
+# AI agents: see https://freeideastore.online/llms.txt
+# MCP manifest: https://freeideastore.online/.well-known/mcp.json

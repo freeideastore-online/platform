@@ -597,6 +597,12 @@ export default {
       }
       return FisMcp.serve("/mcp").fetch(request, env, ctx);
     }
+    // Agents that start from the MCP host should still find the canonical
+    // discovery manifest instead of hitting a dead end.
+    if (url.pathname === "/.well-known/mcp.json") {
+      return Response.redirect("https://freeideastore.online/.well-known/mcp.json", 302);
+    }
+
     return new Response("FreeIdeaStore MCP: use /mcp", { status: 404 });
   },
 };
