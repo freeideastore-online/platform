@@ -28,8 +28,7 @@
 
 ## Docs
 
-- Human + agent docs: https://freeideastore.online/docs/
-- MCP usage: https://freeideastore.online/docs/mcp/
-- Getting started: https://freeideastore.online/docs/getting-started/
-- Idea skills/playbooks: https://freeideastore.online/skills/
+- Human + agent guide: https://freeideastore.online/docs/
+- About / operating model: https://freeideastore.online/about/
+- MCP manifest (authoritative tool list): https://freeideastore.online/.well-known/mcp.json
 - Mature ideas graduate to ProIdeaStore: https://proideastore.online

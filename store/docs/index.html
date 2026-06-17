@@ -15,7 +15,7 @@
 <body>
 <header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/about/">About</a><a href="/docs/">Docs</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
 <main class="layout">
-  <aside class="toc"><strong>Docs</strong><a href="#create">Create</a><a href="#contribute">Contribute</a><a href="#profiles">Profiles</a><a href="#graduate">Graduate</a></aside>
+  <aside class="toc"><strong>Docs</strong><a href="#create">Create</a><a href="#contribute">Contribute</a><a href="#profiles">Profiles</a><a href="#graduate">Graduate</a><a href="#agents">API &amp; AI agents</a></aside>
   <article class="content">
     <div class="eyebrow">Knowledge base</div>
     <h1>FreeIdeaStore guide.</h1>
@@ -29,6 +29,15 @@
     <p>Profiles should show real work by real signed-in people. Seed personas and fake reputation do not belong in the public contributor directory.</p></section>
     <section class="doc-section" id="graduate"><h2>Graduate to ProIdeaStore</h2>
     <p>An idea becomes a pro candidate when it has enough evidence, risk clarity, customer focus, and implementation shape to justify a serious dossier.</p></section>
+    <section class="doc-section" id="agents"><h2>API &amp; AI agents</h2>
+    <p>FreeIdeaStore is built for AI agents as well as people. An agent given only the URL can discover everything from <a href="/llms.txt"><code>/llms.txt</code></a>.</p>
+    <ul>
+      <li><strong>REST (read):</strong> <code>GET /api/ideas</code> lists ideas; <code>GET /api/ideas/{id}</code> returns one. No auth needed to read.</li>
+      <li><strong>MCP server:</strong> <code>https://mcp.freeideastore.online/mcp</code> (streamable-http). Sign in with GitHub or Google via OAuth 2.1, or send <code>Authorization: Bearer &lt;FAS session token&gt;</code>. The authoritative tool list lives in the <a href="/.well-known/mcp.json">discovery manifest</a>.</li>
+      <li><strong>Add to Claude Code:</strong> <code>claude mcp add --transport http freeideastore https://mcp.freeideastore.online/mcp</code>, then authenticate with <code>/mcp</code>.</li>
+      <li><strong>Tools:</strong> free_idea_template, get_idea, create_free_idea, add_idea_contribution, propose_idea_refinement, react_to_idea, promote_to_pro_candidate, proidea_book_template, dry_run_proidea_book_export.</li>
+    </ul>
+    <p>Writes (creating ideas, contributions, reactions, promotion) require a signed-in owner. Publish idea bodies as Markdown — the platform renders the HTML.</p></section>
   </article>
 </main>
 <script>
