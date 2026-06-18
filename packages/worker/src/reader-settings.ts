@@ -72,6 +72,9 @@ export function readerSettingsScript() {
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
+    document.querySelectorAll('[data-reader-theme-toggle]').forEach((button) => {
+      button.innerHTML = resolvedTheme === 'dark' ? '&#9728;' : '&#9790;';
+    });
   };
   document.querySelectorAll('[data-reader-theme-option]').forEach((button) => button.onclick = () => {
     const theme = button.dataset.readerThemeOption;
@@ -81,6 +84,12 @@ export function readerSettingsScript() {
   });
   document.querySelectorAll('[data-reader-size-option]').forEach((button) => button.onclick = () => {
     localStorage.setItem('fis:reader-size', button.dataset.readerSizeOption || 'normal');
+    apply();
+  });
+  document.querySelectorAll('[data-reader-theme-toggle]').forEach((button) => button.onclick = () => {
+    const current = root.dataset.readerTheme;
+    const next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('fis:reader-theme', next);
     apply();
   });
   media.onchange = apply;
