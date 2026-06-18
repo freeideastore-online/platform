@@ -1,32 +1,5 @@
+import { json, slug, SECURITY_HEADERS } from './http';
 import type { AuthUser, Env } from './types';
-
-const JSON_HEADERS = {
-  'Content-Type': 'application/json;charset=UTF-8',
-  'Cache-Control': 'no-store',
-  'X-Content-Type-Options': 'nosniff',
-};
-
-const SECURITY_HEADERS: Record<string, string> = {
-  'Content-Security-Policy':
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'SAMEORIGIN',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-};
-function json(data: unknown, init: ResponseInit = {}) {
-  return new Response(JSON.stringify(data), {
-    ...init,
-    headers: { ...JSON_HEADERS, ...SECURITY_HEADERS, ...(init.headers || {}) },
-  });
-}
-function slug(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
-}
 export const AUTH_PREFIX = '/.fis/auth';
 const SESSION_COOKIE_NAME = '__Host-fis_session';
 const NONCE_COOKIE_NAME = '__Host-fis_auth_nonce';

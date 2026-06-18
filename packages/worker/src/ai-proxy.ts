@@ -35,14 +35,7 @@ If the user's input is too vague, interview them first — ask at most 3 focused
 
 export async function handleAiProxy(request: Request, env: Env): Promise<Response> {
   if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        ...SECURITY_HEADERS,
-        'Access-Control-Allow-Origin': new URL(request.url).origin,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+    return new Response(null, { status: 204, headers: SECURITY_HEADERS });
   }
 
   if (request.method !== 'POST') return bad('method not allowed', 405);
@@ -81,8 +74,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
     });
 
     if (!res.ok) {
-      const errText = await res.text().catch(() => 'unknown error');
-      return json({ error: `Provider error (${res.status}): ${errText.slice(0, 200)}` }, { status: res.status });
+      return json({ error: `AI provider returned an error (${res.status})` }, { status: res.status });
     }
 
     return new Response(res.body, {
@@ -115,8 +107,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
   });
 
   if (!res.ok) {
-    const errText = await res.text().catch(() => 'unknown error');
-    return json({ error: `Provider error (${res.status}): ${errText.slice(0, 200)}` }, { status: res.status });
+    return json({ error: `AI provider returned an error (${res.status})` }, { status: res.status });
   }
 
   return new Response(res.body, {

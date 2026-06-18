@@ -1,19 +1,8 @@
+import { id, slug } from './http';
 import { defaultIdeaBody } from './markdown';
 import type { ContributorRow, Env, IdeaRow, ProfileContributionRow, ProfileIdeaRow } from './types';
 
 const HIDDEN_CONTRIBUTOR_HANDLES = "'system','risk-finder','pivot-maker','evidence-hunter','cloudflare-smoke'";
-
-function slug(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
-}
-
-function id(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`;
-}
 
 export async function uniqueIdeaId(env: Env, title: string) {
   const base = slug(title) || id('idea');

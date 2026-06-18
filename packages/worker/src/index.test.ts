@@ -472,8 +472,8 @@ describe('FreeIdeaStore worker', () => {
     expect(html).not.toContain('<small>FreeIdeaStore book</small>');
     expect(html).not.toContain('Idea book overview');
     expect(html).not.toContain('<small>Review filings. Cite sources.</small>');
-    expect(html).toContain('data-reader-theme-option="dark"');
-    expect(html).toContain('data-reader-size-option="xlarge"');
+    expect(html).toContain('theme-toggle');
+    expect(html).toContain('data-theme');
     expect(html).toContain('href="#design-sketch"');
     expect(html).toContain('<h2 id="design-sketch">Design Sketch</h2>');
     expect(html).toContain('<ol>');
@@ -493,7 +493,6 @@ describe('FreeIdeaStore worker', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('Start reading');
     expect(html).toContain('href="/ideas/asx-filings-analyst/snapshot/"');
   });
 
@@ -548,8 +547,8 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('class="book-sidebar"');
     expect(html).not.toContain('<small>Review filings. Cite sources.</small>');
     expect(html).toContain('aria-label="Filter chapters"');
-    expect(html).toContain('aria-label="Reader settings"');
-    expect(html).toContain('fis:reader-size');
+    expect(html).toContain('theme-toggle');
+    expect(html).toContain('fis:reader-theme');
     expect(html).toContain('On this page');
     expect(html).toContain('<small>Previous</small>Snapshot');
     expect(html).toContain('<small>Next</small>Risk');

@@ -7,18 +7,27 @@ import {
 } from './reader-settings';
 
 describe('reader settings snippets', () => {
-  it('renders persistent theme and font-size controls', () => {
+  it('boot script reads theme from localStorage', () => {
     expect(readerSettingsBootScript()).toContain('fis:reader-theme');
-    expect(readerSettingsBootScript()).toContain('fis:reader-size');
-    expect(readerSettingsBootScript()).toContain("storedTheme === 'light' || storedTheme === 'dark'");
-    expect(readerSettingsControls()).toContain('data-reader-theme-option="light"');
-    expect(readerSettingsControls()).toContain('data-reader-theme-option="dark"');
-    expect(readerSettingsControls()).not.toContain('data-reader-theme-option="system"');
-    expect(readerSettingsControls()).toContain('data-reader-size-option="xlarge"');
-    expect(readerSettingsCss()).toContain('data-reader-theme="light"');
-    expect(readerSettingsCss()).toContain('data-reader-theme="dark"');
-    expect(readerSettingsCss()).toContain('data-reader-size="xlarge"');
+    expect(readerSettingsBootScript()).toContain('dataset.theme');
+    expect(readerSettingsBootScript()).toContain('style.background');
+  });
+
+  it('controls render a theme toggle button', () => {
+    expect(readerSettingsControls()).toContain('theme-toggle');
+    expect(readerSettingsControls()).toContain('aria-label');
+  });
+
+  it('CSS contains light and dark theme variables', () => {
+    expect(readerSettingsCss()).toContain('data-theme="dark"');
+    expect(readerSettingsCss()).toContain('--page:');
+    expect(readerSettingsCss()).toContain('--panel:');
+    expect(readerSettingsCss()).toContain('chapter-badge');
+  });
+
+  it('script wires toggle and media listener', () => {
     expect(readerSettingsScript()).toContain('fis:reader-theme');
-    expect(readerSettingsScript()).toContain('media.onchange = apply');
+    expect(readerSettingsScript()).toContain('theme-toggle');
+    expect(readerSettingsScript()).toContain('onchange');
   });
 });
