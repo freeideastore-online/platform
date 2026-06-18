@@ -10,6 +10,8 @@ export function readerSettingsBootScript() {
     root.dataset.readerTheme = resolvedTheme;
     root.dataset.readerThemeChoice = theme;
     root.dataset.readerSize = size;
+    root.style.background = resolvedTheme === 'dark' ? '#0f1518' : '#f8fafc';
+    root.style.colorScheme = resolvedTheme;
   } catch {}
 })();
 </script>`;
@@ -17,6 +19,8 @@ export function readerSettingsBootScript() {
 
 export function readerSettingsCss() {
   return `
+html{background:#0f1518;color-scheme:dark}
+@media(prefers-color-scheme:light){html{background:#f8fafc;color-scheme:light}}
 :root{--reader-scale:1}
 :root[data-reader-theme="light"]{color-scheme:light;--page:#f8fafc;--panel:#fff;--panel-soft:#f1f7fb;--panel-alt:#fbfdfe;--topbar-bg:rgba(255,255,255,.95);--ink:#111827;--muted:#334155;--line:#cbd5e1;--accent:#0e7490;--accent-dark:#0f4c5c;--accent-strong:#0f4c5c;--mark:#ecfeff;--body-text:#273646;--title-text:#263445;--strong-text:#17202a;--chapter-badge:#e2f3f7;--focus:#cffafe;--hover-line:#67c1d4;--progress-track:#e8eef4;--shadow:0 16px 36px rgba(15,23,42,.06)}
 :root[data-reader-theme="dark"]{color-scheme:dark;--paper:#0f1518;--page:#0f1518;--panel:#151d22;--panel-soft:#1d2a31;--panel-alt:#111a1f;--topbar-bg:rgba(15,21,24,.96);--ink:#edf5f7;--muted:#a9bbc3;--line:#2c3b43;--accent:#22d3ee;--accent-dark:#67e8f9;--accent-strong:#67e8f9;--mark:#16313a;--body-text:#d5e2e7;--title-text:#d5e2e7;--strong-text:#edf5f7;--chapter-badge:#183743;--focus:#164e63;--hover-line:#22d3ee;--progress-track:#24343c;--shadow:none}
