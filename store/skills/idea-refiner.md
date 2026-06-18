@@ -20,6 +20,7 @@ After enough notes, critiques, or answers exist to improve the public page.
 
 - Complete replacement markdown document.
 - Updated summary, stage, category, signal, next step, and risk fields when appropriate.
+- If the title exceeds 80 characters, shorten it. Long titles break the page layout. Move detail to the summary.
 - Preserve useful existing content unless it is outdated or misleading.
 - Shape serious canonical documents into the universal 2-level spine: Overview, People And Problem, Context And Evidence, Proposed Solution, Risks And Constraints, Validation, Prototype Or Pilot, Model And Distribution, Evolution.
 - Convert named products, companies, services, datasets, regulators, and important public sources into clickable Markdown links on first meaningful mention when a credible URL exists.

@@ -46,7 +46,7 @@ ${readerSettingsBootScript()}
 body{background:var(--page);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.68}
 a{color:inherit;text-decoration:none}
 .book-topbar{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.8rem;align-items:center;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.6rem .95rem;backdrop-filter:blur(14px)}
-.top-brand{display:flex;align-items:center;gap:.65rem;min-width:0;font-weight:900}.top-brand strong{display:block;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-brand small{display:block;color:var(--muted);font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em}
+.top-brand{display:flex;align-items:center;gap:.65rem;min-width:0;font-weight:900}.top-brand strong{display:block;max-width:min(60vw,540px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-brand small{display:block;color:var(--muted);font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em}
 .book-shell{display:grid;grid-template-columns:292px minmax(0,1fr) 238px;min-height:calc(100vh - 58px)}
 .book-sidebar{position:sticky;top:58px;height:calc(100vh - 58px);overflow:auto;border-right:1px solid var(--line);background:var(--panel);padding:1rem}
 .logo{display:grid;flex:0 0 auto;width:34px;height:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9)}
@@ -59,7 +59,7 @@ a{color:inherit;text-decoration:none}
 .mobile-page-toc{display:none;border-bottom:1px solid var(--line);background:var(--panel-alt);padding:.7rem 1rem}.mobile-page-toc strong{display:block;color:var(--title-text);font-size:.68rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.45rem}.mobile-page-toc nav{display:flex;gap:.45rem;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:.15rem}.mobile-page-toc a{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--accent-strong);font-size:.75rem;font-weight:900;line-height:1.15;padding:.42rem .62rem;white-space:nowrap}.mobile-page-toc a:hover{border-color:var(--hover-line);background:var(--mark)}
 .content-wrap{display:grid;grid-template-columns:minmax(0,920px);justify-content:center;padding:2.2rem 1.35rem 4rem}
 .article{width:100%}.crumb{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;color:var(--accent-strong);font-size:.73rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;margin-bottom:.78rem}.crumb a{color:var(--accent-strong)}
-h1{font-family:Fraunces,serif;font-size:clamp(2.35rem,5vw,4.85rem);line-height:.95;letter-spacing:0;margin-bottom:1rem;max-width:880px}
+h1{font-family:Fraunces,serif;font-size:clamp(1.6rem,3.5vw,2.8rem);line-height:1.08;letter-spacing:-.01em;margin-bottom:1rem;max-width:880px}
 h2{font-family:Fraunces,serif;font-size:1.7rem;margin:1.55rem 0 .55rem;scroll-margin-top:1rem}h3{font-size:1.08rem;margin:1.35rem 0 .35rem;scroll-margin-top:1rem}
 p{color:var(--body-text);margin:.78rem 0;max-width:760px}ul,ol{display:grid;gap:.42rem;margin:.78rem 0 1rem 1.25rem;color:var(--body-text);max-width:760px}li::marker{color:var(--accent-strong);font-weight:900}
 .summary{border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--panel);padding:1rem 1.05rem;border-radius:8px;color:var(--body-text);font-weight:800;box-shadow:var(--shadow);margin-bottom:1rem;max-width:820px}.meta{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:1.25rem}.pill{border:1px solid var(--line);border-radius:999px;background:var(--panel);padding:.32rem .62rem;color:var(--title-text);font-size:.7rem;font-weight:900;text-transform:uppercase}
@@ -69,13 +69,13 @@ p{color:var(--body-text);margin:.78rem 0;max-width:760px}ul,ol{display:grid;gap:
 footer{max-width:920px;margin:1.8rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
 @media(max-width:1180px){.book-shell{grid-template-columns:280px minmax(0,1fr)}.toc-rail{display:none}.mobile-page-toc{display:block}}
 @media(max-width:960px){.book-topbar{grid-template-columns:minmax(0,1fr) auto}.book-topbar>.reader-controls{grid-column:1/-1;justify-content:flex-start}}
-@media(max-width:860px){.book-topbar{position:relative}.top-brand strong{max-width:210px}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body{padding:.9rem}.chapter-nav{grid-template-columns:1fr}.chapter-nav .next{text-align:left}h1{font-size:clamp(2rem,12vw,3.1rem)}}
+@media(max-width:860px){.book-topbar{position:relative}.top-brand strong{max-width:min(55vw,280px)}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body{padding:.9rem}.chapter-nav{grid-template-columns:1fr}.chapter-nav .next{text-align:left}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
 ${readerSettingsCss()}
 </style>
 </head>
 <body>
 <header class="book-topbar">
-  <a class="top-brand" href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><span class="logo">FI</span><strong>${escapeHtml(idea.title)}</strong></a>
+  <div class="top-brand"><a href="/" class="logo" aria-label="Home">FI</a><a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
   ${readerSettingsControls()}
 </header>
 <details class="mobile-book-nav">

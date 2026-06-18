@@ -11,6 +11,7 @@ export async function createIdea(request: Request, env: Env) {
   const title = String(input.title || '').trim();
   const summary = String(input.summary || '').trim();
   if (title.length < 3 || summary.length < 10) return bad('title and summary are required');
+  if (title.length > 80) return bad('title must be 80 characters or fewer — use summary for detail');
 
   const ideaId = await uniqueIdeaId(env, title);
   const profileId = await profileFor(request, env);
@@ -29,7 +30,7 @@ export async function createIdea(request: Request, env: Env) {
   )
     .bind(
       ideaId,
-      title.slice(0, 120),
+      title.slice(0, 80),
       summary.slice(0, 1000),
       String(input.preview || '').slice(0, 1000),
       String(input.signal || '').slice(0, 1000),
@@ -126,7 +127,7 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
      WHERE id = ?`,
   )
     .bind(
-      String(input.title || idea.title).trim().slice(0, 120),
+      String(input.title || idea.title).trim().slice(0, 80),
       String(input.summary || idea.summary).trim().slice(0, 1000),
       String(input.preview ?? idea.preview ?? '').slice(0, 1000),
       String(input.signal ?? idea.signal ?? '').slice(0, 1000),

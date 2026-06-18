@@ -26,7 +26,7 @@ Use these as `##` top-level sections. Use the listed items as `###` sub-sections
 
 ## Output Contract
 
-- `title`: short, specific, and not hype-heavy.
+- `title`: short, specific, and not hype-heavy. **Maximum 80 characters.** Long titles break the page layout. Put detail in the summary, not the title. Bad: "TEK-to-ESG Translator — Indigenous-Governed Platform for Turning Traditional Knowledge into Corporate Disclosure". Good: "TEK-to-ESG Translator".
 - `summary`: one paragraph for cards and listings.
 - `stage`: usually `raw`, unless evidence already exists.
 - `category`: one useful category tag.

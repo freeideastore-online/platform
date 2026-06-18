@@ -8,7 +8,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
     "create_free_idea",
     "Create a cheap FreeIdeaStore idea page through the Worker API. This writes one D1 row and, when configured, one R2 body object.",
     {
-      title: z.string().min(2),
+      title: z.string().min(2).max(80).describe("Short, specific idea title. Maximum 80 characters — long titles break the page layout. Use the subtitle or summary for detail."),
       summary: z.string().min(10),
       stage: z.enum(STAGES).optional(),
       category: z.string().optional(),

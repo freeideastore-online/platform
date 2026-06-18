@@ -42,6 +42,15 @@ function renderInline(value: string): string {
   let index = 0;
   while (index < value.length) {
     const rest = value.slice(index);
+    const markdownImage = rest.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+|data:[^)\s]+)\)/i);
+    if (markdownImage) {
+      const alt = escapeHtml(markdownImage[1] || '');
+      const src = escapeHtml(markdownImage[2] || '');
+      html += `<img src="${src}" alt="${alt}" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:.5rem 0">`;
+      index += markdownImage[0].length;
+      continue;
+    }
+
     const markdownLink = rest.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/i);
     if (markdownLink) {
       html += externalLink(markdownLink[1] || '', markdownLink[2] || '');

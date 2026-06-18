@@ -43,6 +43,7 @@ export const IDEA_SKILLS: IdeaSkill[] = [
       "Should the first public version feel playful, serious, technical, or investor-style?",
     ],
     outputContract: [
+      "A short title (maximum 80 characters). Long titles break the page layout.",
       "One paragraph summary suitable for create_free_idea.summary.",
       "A short Current Signal section.",
       "A concrete Next Step that can be done cheaply.",
@@ -66,7 +67,7 @@ export const IDEA_SKILLS: IdeaSkill[] = [
       "How can strangers help with evidence, criticism, pivots, or prototype work?",
     ],
     outputContract: [
-      "title: short, specific, and not hype-heavy.",
+      "title: short, specific, and not hype-heavy. Maximum 80 characters — long titles break the page layout.",
       "summary: one paragraph for cards and listings.",
       "stage: usually raw, unless evidence already exists.",
       "category: one useful category tag.",

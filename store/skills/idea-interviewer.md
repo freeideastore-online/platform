@@ -20,6 +20,7 @@ Before `create_free_idea`, especially when the user has only a rough sentence or
 
 ## Output Contract
 
+- A short title (maximum 80 characters). Long titles break the page layout — put the subtitle or explanation in the summary instead.
 - One paragraph summary suitable for `create_free_idea.summary`.
 - A short Current Signal section.
 - A concrete Next Step that can be done cheaply.
