@@ -50,7 +50,7 @@ function renderAvatarLink(user) {
   clear(accountSlot);
   const link = linkElement('/profile/', 'account-avatar', '');
   link.setAttribute('aria-label', 'Profile');
-  if (user.avatarUrl) {
+  if (user.avatarUrl && /^https:\\/\\//.test(user.avatarUrl)) {
     const img = document.createElement('img');
     img.src = user.avatarUrl;
     img.alt = user.handle || 'Profile';

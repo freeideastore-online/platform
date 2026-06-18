@@ -20,7 +20,7 @@ function formatDate(value: unknown) {
 
 function accountAvatar(user: AuthUser, size = 40) {
   const dimension = `${size}px`;
-  if (user.avatarUrl) {
+  if (user.avatarUrl && /^https:\/\//.test(user.avatarUrl)) {
     return `<img src="${escapeHtml(user.avatarUrl)}" alt="${escapeHtml(user.handle)}" width="${escapeHtml(size)}" height="${escapeHtml(size)}">`;
   }
   return `<span style="width:${dimension};height:${dimension}">${escapeHtml(initials(user.displayName || user.handle))}</span>`;
