@@ -2,7 +2,8 @@ import { id, slug } from './http';
 import { defaultIdeaBody } from './markdown';
 import type { ContributorRow, Env, IdeaRow, ProfileContributionRow, ProfileIdeaRow } from './types';
 
-const HIDDEN_CONTRIBUTOR_HANDLES = "'system','risk-finder','pivot-maker','evidence-hunter','cloudflare-smoke'";
+const HIDDEN_HANDLES = ['system', 'risk-finder', 'pivot-maker', 'evidence-hunter', 'cloudflare-smoke'] as const;
+const HIDDEN_HANDLES_PLACEHOLDERS = HIDDEN_HANDLES.map(() => '?').join(',');
 
 export async function uniqueIdeaId(env: Env, title: string) {
   const base = slug(title) || id('idea');
@@ -104,11 +105,11 @@ export async function listContributors(env: Env) {
      LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed'
      LEFT JOIN contributions c ON c.profile_id = p.id
      LEFT JOIN reactions r ON r.profile_id = p.id
-     WHERE p.handle NOT IN (${HIDDEN_CONTRIBUTOR_HANDLES})
+     WHERE p.handle NOT IN (${HIDDEN_HANDLES_PLACEHOLDERS})
      GROUP BY p.id
      ORDER BY p.reputation DESC, contribution_count DESC, idea_count DESC, p.handle ASC
      LIMIT 100`,
-  ).all<ContributorRow>();
+  ).bind(...HIDDEN_HANDLES).all<ContributorRow>();
   return rows.results || [];
 }
 
@@ -128,10 +129,10 @@ export async function contributorByHandle(env: Env, handle: string) {
      LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed'
      LEFT JOIN contributions c ON c.profile_id = p.id
      LEFT JOIN reactions r ON r.profile_id = p.id
-     WHERE p.handle = ? AND p.handle NOT IN (${HIDDEN_CONTRIBUTOR_HANDLES})
+     WHERE p.handle = ? AND p.handle NOT IN (${HIDDEN_HANDLES_PLACEHOLDERS})
      GROUP BY p.id`,
   )
-    .bind(handle)
+    .bind(handle, ...HIDDEN_HANDLES)
     .first<ContributorRow>();
 }
 

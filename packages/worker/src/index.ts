@@ -21,7 +21,7 @@ export default {
       try {
         return await handleAiProxy(request, env);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 
@@ -29,7 +29,7 @@ export default {
       try {
         return await handleApi(request, env, url);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 
@@ -41,7 +41,7 @@ export default {
         if (!ideaId || !sectionId) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
         return await renderIdeaChapterPage(env, request, ideaId, sectionId);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 
@@ -49,7 +49,7 @@ export default {
       try {
         return await renderIdeasCatalogPage(env, request);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 
@@ -60,7 +60,7 @@ export default {
         if (!ideaId) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
         return await renderIdeaPage(env, request, ideaId);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 
@@ -72,7 +72,7 @@ export default {
       try {
         return await renderContributorsPage(env, request);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 
@@ -80,7 +80,7 @@ export default {
       try {
         return await renderAccountPage(env, request);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 
@@ -91,7 +91,7 @@ export default {
         if (!handle) return new Response('Contributor not found', { status: 404, headers: SECURITY_HEADERS });
         return await renderContributorPage(env, request, handle);
       } catch (error) {
-        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+        return json({ error: 'internal error' }, { status: 500 });
       }
     }
 

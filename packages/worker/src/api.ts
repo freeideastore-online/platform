@@ -100,6 +100,10 @@ export async function handleApi(request: Request, env: Env, url: URL) {
     if (!(await ideaById(env, ideaId))) return bad('idea not found', 404);
     const registered = await registeredProfileFor(request, env);
     if (!registered) return json({ error: 'sign in required to comment or contribute' }, { status: 401 });
+    const recentCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM contributions WHERE profile_id = ? AND created_at > datetime('now', '-1 minute')",
+    ).bind(registered.profileId).first<{ n: number }>();
+    if ((recentCount?.n ?? 0) >= 10) return json({ error: 'too many contributions — wait a minute' }, { status: 429 });
     const input = await bodyJson(request);
     const body = String(input.body || '').trim();
     const kind = String(input.kind || 'comment').trim();
@@ -122,6 +126,10 @@ export async function handleApi(request: Request, env: Env, url: URL) {
     if (!(await ideaById(env, ideaId))) return bad('idea not found', 404);
     const registered = await registeredProfileFor(request, env);
     if (!registered) return json({ error: 'sign in required to react to ideas' }, { status: 401 });
+    const recentCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM reactions WHERE profile_id = ? AND created_at > datetime('now', '-1 minute')",
+    ).bind(registered.profileId).first<{ n: number }>();
+    if ((recentCount?.n ?? 0) >= 15) return json({ error: 'too many reactions — wait a minute' }, { status: 429 });
     const input = await bodyJson(request);
     const type = String(input.type || '').trim();
     if (!['support', 'trash', 'pivot'].includes(type)) return bad('reaction type must be support, trash, or pivot');
