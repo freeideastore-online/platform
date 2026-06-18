@@ -1,0 +1,1858 @@
+{
+  "version": "0.44.0",
+  "timestamp": "2026-06-11T23:05:04.190Z",
+  "score": 80,
+  "grade": "B",
+  "checks": [
+    {
+      "name": "structure",
+      "score": 95,
+      "grade": "A",
+      "details": {
+        "found": [
+          "package.json",
+          "tsconfig.json",
+          "LICENSE",
+          ".gitignore",
+          "README.md",
+          "lockfile"
+        ],
+        "missing": [],
+        "srcFiles": 28,
+        "testFiles": 5,
+        "testRatio": "18%",
+        "monorepo": true,
+        "workspaceTool": "pnpm",
+        "packages": 2
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "Low test-to-source ratio: 5 tests for 28 source files (18%)",
+          "rule": "low-test-ratio"
+        }
+      ],
+      "duration": 3
+    },
+    {
+      "name": "lint",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "skipped": true,
+        "reason": "no linter detected"
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "types",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "errors": 0,
+        "ok": true
+      },
+      "issues": [],
+      "duration": 3118
+    },
+    {
+      "name": "type-safety",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "filesScanned": 28,
+        "totalUnsafe": 0
+      },
+      "issues": [],
+      "duration": 10
+    },
+    {
+      "name": "standards",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "filesScanned": 28,
+        "codeSmells": 0,
+        "largeFiles": 0,
+        "namingViolations": 0
+      },
+      "issues": [],
+      "duration": 12
+    },
+    {
+      "name": "complexity",
+      "score": 66,
+      "grade": "C",
+      "details": {
+        "totalFiles": 28,
+        "totalLines": 3846,
+        "longFunctions": 10,
+        "complexFunctions": 10,
+        "functionCount": 119
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "registerAccountTools: 111 lines (max 60)",
+          "file": "packages/mcp/src/register-account-tools.ts",
+          "line": 6,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "registerAccountTools: complexity 17 (max 15)",
+          "file": "packages/mcp/src/register-account-tools.ts",
+          "line": 6,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "registerCollaborationTools: 175 lines (max 60)",
+          "file": "packages/mcp/src/register-collaboration-tools.ts",
+          "line": 6,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "registerCollaborationTools: complexity 31 (max 15)",
+          "file": "packages/mcp/src/register-collaboration-tools.ts",
+          "line": 6,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "registerPublishingTools: 112 lines (max 60)",
+          "file": "packages/mcp/src/register-publishing-tools.ts",
+          "line": 6,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "createIdea: complexity 16 (max 15)",
+          "file": "packages/worker/src/api-idea-mutations.ts",
+          "line": 9,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "updateIdea: 61 lines (max 60)",
+          "file": "packages/worker/src/api-idea-mutations.ts",
+          "line": 87,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "updateIdea: complexity 20 (max 15)",
+          "file": "packages/worker/src/api-idea-mutations.ts",
+          "line": 87,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "handleApi: 146 lines (max 60)",
+          "file": "packages/worker/src/api.ts",
+          "line": 7,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "handleApi: complexity 51 (max 15)",
+          "file": "packages/worker/src/api.ts",
+          "line": 7,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "handleAuth: complexity 22 (max 15)",
+          "file": "packages/worker/src/auth.ts",
+          "line": 184,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "consoleScript: 204 lines (max 60)",
+          "file": "packages/worker/src/console-page.ts",
+          "line": 18,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "consoleScript: complexity 52 (max 15)",
+          "file": "packages/worker/src/console-page.ts",
+          "line": 18,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "renderConsolePage: 77 lines (max 60)",
+          "file": "packages/worker/src/console-page.ts",
+          "line": 222,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "renderIdeaChapterPage: 118 lines (max 60)",
+          "file": "packages/worker/src/idea-chapter-page.ts",
+          "line": 12,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "renderIdeaPage: 254 lines (max 60)",
+          "file": "packages/worker/src/idea-home-page.ts",
+          "line": 13,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "renderIdeaPage: complexity 42 (max 15)",
+          "file": "packages/worker/src/idea-home-page.ts",
+          "line": 13,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "fetch: 81 lines (max 60)",
+          "file": "packages/worker/src/index.ts",
+          "line": 13,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "fetch: complexity 32 (max 15)",
+          "file": "packages/worker/src/index.ts",
+          "line": 13,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "ideaChapters: complexity 16 (max 15)",
+          "file": "packages/worker/src/markdown.ts",
+          "line": 112,
+          "rule": "high-complexity"
+        }
+      ],
+      "duration": 11
+    },
+    {
+      "name": "duplication",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "filesScanned": 28,
+        "totalSourceLines": 3846,
+        "duplicateBlocks": 13,
+        "duplicationPct": "3.3%",
+        "tool": "built-in"
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "Duplicate (19 lines): const SECURITY_HEADERS: Record<string, string> = {",
+          "file": "packages/worker/src/contributor-pages.ts:4 ↔ packages/worker/src/account-page.ts:5",
+          "rule": "duplicate-code",
+          "snippet": "const SECURITY_HEADERS: Record<string, string> = {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (17 lines): const SECURITY_HEADERS: Record<string, string> = {",
+          "file": "packages/worker/src/console-page.ts:2 ↔ packages/worker/src/account-page.ts:5",
+          "rule": "duplicate-code",
+          "snippet": "const SECURITY_HEADERS: Record<string, string> = {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (11 lines): return text(`Error listing my activity (${res.status}): ${\"error\" in res.data ? res.data.error : \"un",
+          "file": "packages/mcp/src/register-account-tools.ts:105 ↔ packages/mcp/src/register-account-tools.ts:66",
+          "rule": "duplicate-code",
+          "snippet": "return text(`Error listing my activity (${res.status}): ${\"error\" in res.data ? res.data.error : \"unknown error\"}`);"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (11 lines): }",
+          "file": "packages/worker/src/contributor-pages.ts:29 ↔ packages/worker/src/account-page.ts:21",
+          "rule": "duplicate-code",
+          "snippet": "}"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (10 lines): export async function updateIdea(request: Request, env: Env, rawIdeaId: string) {",
+          "file": "packages/worker/src/api-idea-mutations.ts:87 ↔ packages/worker/src/api-idea-mutations.ts:51",
+          "rule": "duplicate-code",
+          "snippet": "export async function updateIdea(request: Request, env: Env, rawIdeaId: string) {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (10 lines): export async function promoteIdea(request: Request, env: Env, rawIdeaId: string) {",
+          "file": "packages/worker/src/api-idea-mutations.ts:149 ↔ packages/worker/src/api-idea-mutations.ts:51",
+          "rule": "duplicate-code",
+          "snippet": "export async function promoteIdea(request: Request, env: Env, rawIdeaId: string) {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (10 lines): );",
+          "file": "packages/worker/src/contributor-pages.ts:48 ↔ packages/worker/src/account-page.ts:28",
+          "rule": "duplicate-code",
+          "snippet": ");"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (10 lines): function escapeHtml(value: unknown) {",
+          "file": "packages/worker/src/markdown.ts:11 ↔ packages/worker/src/account-page.ts:14",
+          "rule": "duplicate-code",
+          "snippet": "function escapeHtml(value: unknown) {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (9 lines): export function slug(input: string) {",
+          "file": "packages/worker/src/http.ts:43 ↔ packages/worker/src/auth.ts:23",
+          "rule": "duplicate-code",
+          "snippet": "export function slug(input: string) {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (9 lines): function slug(input: string) {",
+          "file": "packages/worker/src/markdown.ts:3 ↔ packages/worker/src/auth.ts:23",
+          "rule": "duplicate-code",
+          "snippet": "function slug(input: string) {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (8 lines): export function escapeHtml(value: unknown) {",
+          "file": "packages/worker/src/http.ts:60 ↔ packages/worker/src/account-page.ts:14",
+          "rule": "duplicate-code",
+          "snippet": "export function escapeHtml(value: unknown) {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (7 lines): if (url.pathname === '/api/me/activity' && request.method === 'GET') {",
+          "file": "packages/worker/src/api.ts:35 ↔ packages/worker/src/api.ts:25",
+          "rule": "duplicate-code",
+          "snippet": "if (url.pathname === '/api/me/activity' && request.method === 'GET') {"
+        },
+        {
+          "severity": "warning",
+          "message": "Duplicate (7 lines): function slug(input: string) {",
+          "file": "packages/worker/src/data.ts:6 ↔ packages/worker/src/auth.ts:23",
+          "rule": "duplicate-code",
+          "snippet": "function slug(input: string) {"
+        }
+      ],
+      "duration": 275
+    },
+    {
+      "name": "error-handling",
+      "score": 93,
+      "grade": "A",
+      "details": {
+        "emptyCatch": 1,
+        "throwString": 0,
+        "floatingPromises": 0,
+        "jsonParseUnsafe": 0,
+        "infiniteLoops": 0,
+        "hasErrorBoundary": "n/a",
+        "tool": "built-in"
+      },
+      "issues": [
+        {
+          "severity": "error",
+          "message": "Empty catch block",
+          "file": "packages/worker/src/reader-settings.ts",
+          "line": 12,
+          "rule": "empty-catch"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 19,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 20,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 21,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 22,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 31,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 32,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 33,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 34,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 39,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 40,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 41,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 42,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 50,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 51,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 52,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 53,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 62,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 63,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 64,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 65,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 70,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 71,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 72,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 73,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 81,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 82,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 83,
+          "rule": "error-info-leak"
+        },
+        {
+          "severity": "info",
+          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
+          "file": "packages/worker/src/index.ts",
+          "line": 84,
+          "rule": "error-info-leak"
+        }
+      ],
+      "duration": 15
+    },
+    {
+      "name": "react",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "skipped": true,
+        "reason": "not a React project"
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "accessibility",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "skipped": true,
+        "reason": "no JSX/TSX/Vue/Svelte files"
+      },
+      "issues": [],
+      "duration": 2
+    },
+    {
+      "name": "docs",
+      "score": 46,
+      "grade": "D",
+      "details": {
+        "readmeLines": 138,
+        "totalExports": 73,
+        "documentedExports": 1,
+        "documentedPct": "1%",
+        "hasChangelog": false
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "Only 1% of exports have documentation (1/73)",
+          "rule": "undocumented-exports"
+        },
+        {
+          "severity": "info",
+          "message": "No CHANGELOG.md — version history not documented",
+          "rule": "no-changelog"
+        }
+      ],
+      "duration": 3
+    },
+    {
+      "name": "best-practices",
+      "score": 74,
+      "grade": "C",
+      "details": {
+        "practicesChecked": 23,
+        "practicesFollowed": 11,
+        "adherence": "48%"
+      },
+      "issues": [
+        {
+          "severity": "info",
+          "message": "package.json missing repository field — provenance attestation won't link to source",
+          "rule": "repository-field"
+        },
+        {
+          "severity": "info",
+          "message": "No SECURITY.md — users don't know how to report vulnerabilities",
+          "rule": "security-policy"
+        },
+        {
+          "severity": "info",
+          "message": "No CODEOWNERS file — no mandatory reviewers for critical paths",
+          "rule": "codeowners"
+        },
+        {
+          "severity": "info",
+          "message": "No CONTRIBUTING.md — onboarding is harder for new contributors",
+          "rule": "contributing-guide"
+        },
+        {
+          "severity": "info",
+          "message": "No pre-commit hooks (husky/lefthook) — lint/format not enforced before commit",
+          "rule": "pre-commit-hooks"
+        },
+        {
+          "severity": "info",
+          "message": "No Dependabot/Renovate — dependency updates are manual and often forgotten",
+          "rule": "automated-deps"
+        },
+        {
+          "severity": "warning",
+          "message": "No linter config (ESLint/Biome/dart analyze) — code style not enforced",
+          "rule": "linter-config"
+        },
+        {
+          "severity": "info",
+          "message": "No formatter config (Prettier/Biome/.editorconfig) — inconsistent code formatting",
+          "rule": "formatter-config"
+        },
+        {
+          "severity": "info",
+          "message": "No test coverage configuration — coverage thresholds not enforced",
+          "rule": "coverage-config"
+        },
+        {
+          "severity": "info",
+          "message": "No commit convention enforcement (commitlint/changesets) — changelog generation is manual",
+          "rule": "conventional-commits"
+        }
+      ],
+      "duration": 2
+    },
+    {
+      "name": "env-validation",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "envFiles": [],
+        "hasExample": false
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "git-hygiene",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "skipped": true,
+        "reason": "runner error: require is not defined"
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "memory-safety",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "totalFiles": 28,
+        "affectedFiles": 0,
+        "patterns": 0
+      },
+      "issues": [],
+      "duration": 5
+    },
+    {
+      "name": "testing",
+      "score": 32,
+      "grade": "F",
+      "details": {
+        "pyramid": {
+          "unit": 5,
+          "integration": 0,
+          "component": 0,
+          "e2e": 0
+        },
+        "layersPresent": "1/2",
+        "e2eTool": "playwright",
+        "testFiles": 5,
+        "srcFiles": 28,
+        "pairing": "12%",
+        "quality": {
+          "assertionsPerTest": 5.4,
+          "mockRatio": 0,
+          "snapshotRatio": 0
+        }
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "No integration tests — consider testing service boundaries",
+          "rule": "no-integration-tests"
+        },
+        {
+          "severity": "warning",
+          "message": "Only 12% of source files have matching test files",
+          "rule": "low-test-pairing"
+        },
+        {
+          "severity": "info",
+          "message": "No test file for packages/mcp/src/fis-api.ts",
+          "file": "packages/mcp/src/fis-api.ts",
+          "rule": "untested-file"
+        },
+        {
+          "severity": "info",
+          "message": "No test file for packages/mcp/src/idea-skill-catalog.ts",
+          "file": "packages/mcp/src/idea-skill-catalog.ts",
+          "rule": "untested-file"
+        },
+        {
+          "severity": "info",
+          "message": "No test file for packages/mcp/src/idea-skills.ts",
+          "file": "packages/mcp/src/idea-skills.ts",
+          "rule": "untested-file"
+        },
+        {
+          "severity": "info",
+          "message": "No test file for packages/mcp/src/mcp-auth.ts",
+          "file": "packages/mcp/src/mcp-auth.ts",
+          "rule": "untested-file"
+        },
+        {
+          "severity": "info",
+          "message": "No test file for packages/mcp/src/mcp-types.ts",
+          "file": "packages/mcp/src/mcp-types.ts",
+          "rule": "untested-file"
+        },
+        {
+          "severity": "info",
+          "message": "...and 17 more untested files",
+          "rule": "untested-file"
+        }
+      ],
+      "duration": 781
+    },
+    {
+      "name": "secrets",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "secretsFound": 0,
+        "tool": "secretlint",
+        "suggestion": "Install gitleaks for deeper secret detection (800+ patterns): brew install gitleaks"
+      },
+      "issues": [],
+      "duration": 75
+    },
+    {
+      "name": "security",
+      "score": 96,
+      "grade": "A",
+      "details": {
+        "filesScanned": 28,
+        "patterns": 4,
+        "cweCategories": 2,
+        "errors": 0,
+        "warnings": 1,
+        "storageAudit": {
+          "localStorageSecrets": 0,
+          "sessionStorageSecrets": 0,
+          "hardcodedCredentials": 0,
+          "insecureCookies": 4,
+          "total": 0
+        },
+        "tool": "built-in"
+      },
+      "issues": [
+        {
+          "severity": "info",
+          "message": "Cookie may be missing Secure flag — can be sent over HTTP",
+          "file": "packages/worker/src/auth.ts",
+          "line": 82,
+          "rule": "CWE-614"
+        },
+        {
+          "severity": "info",
+          "message": "Cookie may be missing Secure flag — can be sent over HTTP",
+          "file": "packages/worker/src/auth.ts",
+          "line": 225,
+          "rule": "CWE-614"
+        },
+        {
+          "severity": "info",
+          "message": "Cookie may be missing Secure flag — can be sent over HTTP",
+          "file": "packages/worker/src/auth.ts",
+          "line": 232,
+          "rule": "CWE-614"
+        },
+        {
+          "severity": "warning",
+          "message": "Set-Cookie without Cache-Control: no-store",
+          "file": "packages/worker/src/auth.ts",
+          "line": 232,
+          "rule": "CWE-525"
+        }
+      ],
+      "duration": 26
+    },
+    {
+      "name": "dependencies",
+      "score": 84,
+      "grade": "B",
+      "details": {
+        "vulnerabilities": {
+          "critical": 0,
+          "high": 0,
+          "moderate": 8,
+          "low": 4
+        },
+        "outdated": 1,
+        "majorOutdated": 1,
+        "licenses": {
+          "copyleft": 0,
+          "unknown": 0
+        }
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "8 moderate vulnerabilities"
+        },
+        {
+          "severity": "warning",
+          "message": "1 packages behind by a major version",
+          "rule": "major-outdated"
+        },
+        {
+          "severity": "info",
+          "message": "typescript 5.9.3 → 6.0.3",
+          "rule": "outdated-package"
+        }
+      ],
+      "duration": 1475
+    },
+    {
+      "name": "architecture",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "totalModules": 28,
+        "circularDeps": 0,
+        "godModules": 0,
+        "orphans": 0,
+        "highFanOut": 0,
+        "connectors": 0,
+        "graph": {
+          "packages/mcp/src/fis-api.ts": {
+            "imports": [
+              "packages/mcp/src/idea-skills.ts",
+              "packages/mcp/src/mcp-types.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/register-account-tools.ts",
+              "packages/mcp/src/register-collaboration-tools.ts",
+              "packages/mcp/src/register-publishing-tools.ts",
+              "packages/mcp/src/register-skill-tools.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/idea-skill-catalog.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/mcp/src/idea-skills.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/idea-skills.ts": {
+            "imports": [
+              "packages/mcp/src/idea-skill-catalog.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/fis-api.ts",
+              "packages/mcp/src/index.ts",
+              "packages/mcp/src/register-skill-tools.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/index.ts": {
+            "imports": [
+              "packages/mcp/src/oauth-provider.ts",
+              "packages/mcp/src/idea-skills.ts",
+              "packages/mcp/src/mcp-auth.ts",
+              "packages/mcp/src/mcp-types.ts",
+              "packages/mcp/src/register-account-tools.ts",
+              "packages/mcp/src/register-collaboration-tools.ts",
+              "packages/mcp/src/register-publishing-tools.ts",
+              "packages/mcp/src/register-skill-tools.ts"
+            ],
+            "importedBy": [],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/mcp-auth.ts": {
+            "imports": [
+              "packages/mcp/src/oauth-provider.ts",
+              "packages/mcp/src/mcp-types.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/index.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/mcp-types.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/mcp/src/fis-api.ts",
+              "packages/mcp/src/index.ts",
+              "packages/mcp/src/mcp-auth.ts",
+              "packages/mcp/src/register-account-tools.ts",
+              "packages/mcp/src/register-collaboration-tools.ts",
+              "packages/mcp/src/register-publishing-tools.ts",
+              "packages/mcp/src/register-skill-tools.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/oauth-pages.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/mcp/src/oauth-provider.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/oauth-provider.ts": {
+            "imports": [
+              "packages/mcp/src/session.ts",
+              "packages/mcp/src/oauth-pages.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/index.ts",
+              "packages/mcp/src/mcp-auth.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/register-account-tools.ts": {
+            "imports": [
+              "packages/mcp/src/fis-api.ts",
+              "packages/mcp/src/mcp-types.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/index.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/register-collaboration-tools.ts": {
+            "imports": [
+              "packages/mcp/src/fis-api.ts",
+              "packages/mcp/src/mcp-types.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/index.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/register-publishing-tools.ts": {
+            "imports": [
+              "packages/mcp/src/fis-api.ts",
+              "packages/mcp/src/mcp-types.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/index.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/register-skill-tools.ts": {
+            "imports": [
+              "packages/mcp/src/idea-skills.ts",
+              "packages/mcp/src/fis-api.ts",
+              "packages/mcp/src/mcp-types.ts"
+            ],
+            "importedBy": [
+              "packages/mcp/src/index.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/mcp/src/session.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/mcp/src/oauth-provider.ts"
+            ],
+            "dir": "packages/mcp/src"
+          },
+          "packages/worker/src/account-page.ts": {
+            "imports": [
+              "packages/worker/src/data.ts",
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/api-idea-mutations.ts": {
+            "imports": [
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/data.ts",
+              "packages/worker/src/http.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/api.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/api.ts": {
+            "imports": [
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/api-idea-mutations.ts",
+              "packages/worker/src/data.ts",
+              "packages/worker/src/http.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/auth.ts": {
+            "imports": [
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/account-page.ts",
+              "packages/worker/src/api-idea-mutations.ts",
+              "packages/worker/src/api.ts",
+              "packages/worker/src/idea-home-page.ts",
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/console-page.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/contributor-pages.ts": {
+            "imports": [
+              "packages/worker/src/data.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/data.ts": {
+            "imports": [
+              "packages/worker/src/markdown.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/account-page.ts",
+              "packages/worker/src/api-idea-mutations.ts",
+              "packages/worker/src/api.ts",
+              "packages/worker/src/contributor-pages.ts",
+              "packages/worker/src/idea-catalog-page.ts",
+              "packages/worker/src/idea-chapter-page.ts",
+              "packages/worker/src/idea-home-page.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/http.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/worker/src/api-idea-mutations.ts",
+              "packages/worker/src/api.ts",
+              "packages/worker/src/idea-catalog-page.ts",
+              "packages/worker/src/idea-chapter-page.ts",
+              "packages/worker/src/idea-home-page.ts",
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/idea-catalog-page.ts": {
+            "imports": [
+              "packages/worker/src/data.ts",
+              "packages/worker/src/http.ts",
+              "packages/worker/src/markdown.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/idea-chapter-page.ts": {
+            "imports": [
+              "packages/worker/src/data.ts",
+              "packages/worker/src/http.ts",
+              "packages/worker/src/markdown.ts",
+              "packages/worker/src/reader-settings.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/idea-home-page.ts": {
+            "imports": [
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/data.ts",
+              "packages/worker/src/http.ts",
+              "packages/worker/src/markdown.ts",
+              "packages/worker/src/reader-settings.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/index.ts": {
+            "imports": [
+              "packages/worker/src/api.ts",
+              "packages/worker/src/console-page.ts",
+              "packages/worker/src/types.ts",
+              "packages/worker/src/contributor-pages.ts",
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/account-page.ts",
+              "packages/worker/src/idea-catalog-page.ts",
+              "packages/worker/src/idea-chapter-page.ts",
+              "packages/worker/src/idea-home-page.ts",
+              "packages/worker/src/http.ts"
+            ],
+            "importedBy": [],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/markdown.ts": {
+            "imports": [
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/data.ts",
+              "packages/worker/src/idea-catalog-page.ts",
+              "packages/worker/src/idea-chapter-page.ts",
+              "packages/worker/src/idea-home-page.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/reader-settings.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/worker/src/idea-chapter-page.ts",
+              "packages/worker/src/idea-home-page.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/types.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/worker/src/account-page.ts",
+              "packages/worker/src/api-idea-mutations.ts",
+              "packages/worker/src/api.ts",
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/contributor-pages.ts",
+              "packages/worker/src/data.ts",
+              "packages/worker/src/idea-catalog-page.ts",
+              "packages/worker/src/idea-chapter-page.ts",
+              "packages/worker/src/idea-home-page.ts",
+              "packages/worker/src/index.ts",
+              "packages/worker/src/markdown.ts"
+            ],
+            "dir": "packages/worker/src"
+          }
+        },
+        "containerSvg": "<svg viewBox=\"0 0 370 120\" xmlns=\"http://www.w3.org/2000/svg\" style=\"width:100%;max-width:370px\"><defs><marker id=\"cont-arrow\" viewBox=\"0 0 10 7\" refX=\"10\" refY=\"3.5\" markerWidth=\"7\" markerHeight=\"5\" orient=\"auto\"><polygon points=\"0 0, 10 3.5, 0 7\" fill=\"#ffffff40\"/></marker></defs><rect x=\"30\" y=\"30\" width=\"140\" height=\"60\" rx=\"8\" fill=\"#d9770615\" stroke=\"#d9770650\"/><text x=\"100\" y=\"54\" text-anchor=\"middle\" fill=\"#e5e5e5\" font-size=\"10\" font-weight=\"700\">mcp</text><text x=\"100\" y=\"70\" text-anchor=\"middle\" fill=\"#6b7280\" font-size=\"8\">[CF Worker]</text><line x1=\"170\" y1=\"60\" x2=\"200\" y2=\"60\" stroke=\"#ffffff20\" stroke-width=\"1.5\" marker-end=\"url(#cont-arrow)\"/><rect x=\"200\" y=\"30\" width=\"140\" height=\"60\" rx=\"8\" fill=\"#d9770615\" stroke=\"#d9770650\"/><text x=\"270\" y=\"54\" text-anchor=\"middle\" fill=\"#e5e5e5\" font-size=\"10\" font-weight=\"700\">worker</text><text x=\"270\" y=\"70\" text-anchor=\"middle\" fill=\"#6b7280\" font-size=\"8\">[CF Worker]</text></svg>",
+        "assessment": {
+          "pattern": "two-tier",
+          "patternDescription": "Two-tier — main code + one sub-package (e.g., src + lib).",
+          "layering": "clean",
+          "stability": [
+            {
+              "package": "packages/mcp/src",
+              "instability": 0.5,
+              "role": "balanced"
+            },
+            {
+              "package": "packages/worker/src",
+              "instability": 0.5,
+              "role": "balanced"
+            }
+          ],
+          "crossCoupling": 0,
+          "cohesion": 100,
+          "rating": "excellent",
+          "insights": [
+            "Clean layering — dependencies flow in one direction without violations.",
+            "Low cross-coupling (0%) — packages are well-isolated.",
+            "No god modules — healthy dependency distribution."
+          ]
+        },
+        "tool": "built-in"
+      },
+      "issues": [],
+      "duration": 837
+    },
+    {
+      "name": "performance",
+      "score": 100,
+      "grade": "A",
+      "details": {
+        "filesScanned": 28,
+        "barrelImports": 0,
+        "heavyDeps": 0,
+        "dynamicOpportunities": 0,
+        "cssInJsRuntime": 0,
+        "deadExports": 0,
+        "unusedFiles": 0,
+        "unusedDeps": 0,
+        "deadCodeTool": "knip"
+      },
+      "issues": [
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/mcp/src/idea-skills.ts",
+          "line": 16,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/mcp/src/register-collaboration-tools.ts",
+          "line": 4,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/mcp/src/register-skill-tools.ts",
+          "line": 3,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/account-page.ts",
+          "line": 1,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/api-idea-mutations.ts",
+          "line": 2,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/api.ts",
+          "line": 1,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/api.ts",
+          "line": 3,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/api.ts",
+          "line": 4,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/contributor-pages.ts",
+          "line": 1,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/idea-chapter-page.ts",
+          "line": 3,
+          "rule": "large-import"
+        }
+      ],
+      "duration": 4987
+    },
+    {
+      "name": "container-health",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "skipped": true,
+        "reason": "no Dockerfile found"
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "confusion",
+      "score": 64,
+      "grade": "C",
+      "details": {
+        "fileConfusability": 0,
+        "genericNames": 0,
+        "exportCollisions": 2,
+        "ambiguousAbbrevs": 2,
+        "filesScanned": 28
+      },
+      "issues": [
+        {
+          "severity": "error",
+          "message": "Export collision: \"IDEA_SKILLS\" exported from 2 files — LLMs may reference the wrong one",
+          "file": "packages/mcp/src/idea-skill-catalog.ts, packages/mcp/src/idea-skills.ts",
+          "rule": "export-collision"
+        },
+        {
+          "severity": "error",
+          "message": "Export collision: \"IdeaSkill\" exported from 2 files — LLMs may reference the wrong one",
+          "file": "packages/mcp/src/idea-skill-catalog.ts, packages/mcp/src/idea-skills.ts",
+          "rule": "export-collision"
+        },
+        {
+          "severity": "warning",
+          "message": "Ambiguous abbreviation \"auth\" in filename — could mean: authentication OR authorization",
+          "file": "packages/mcp/src/mcp-auth.ts",
+          "rule": "ambiguous-abbreviation"
+        },
+        {
+          "severity": "warning",
+          "message": "Ambiguous abbreviation \"auth\" in filename — could mean: authentication OR authorization",
+          "file": "packages/worker/src/auth.ts",
+          "rule": "ambiguous-abbreviation"
+        }
+      ],
+      "duration": 7
+    },
+    {
+      "name": "context",
+      "score": 86,
+      "grade": "B",
+      "details": {
+        "filesScanned": 28,
+        "totalTokens": 54382,
+        "avgTokensPerFile": 1942,
+        "avgImportsPerFile": 2.4,
+        "highTokenFiles": 2,
+        "heavyImportFiles": 0,
+        "circularDeps": 0,
+        "contextSinks": 1
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "~5250 tokens (>4000) — large context cost for LLMs",
+          "file": "packages/worker/src/console-page.ts",
+          "rule": "high-token-count"
+        },
+        {
+          "severity": "warning",
+          "message": "~6075 tokens (>4000) — large context cost for LLMs",
+          "file": "packages/worker/src/idea-home-page.ts",
+          "rule": "high-token-count"
+        },
+        {
+          "severity": "warning",
+          "message": "10 imports but only 1 export — hard to understand in isolation",
+          "file": "packages/worker/src/index.ts",
+          "rule": "context-sink"
+        }
+      ],
+      "duration": 4
+    },
+    {
+      "name": "doc-coherence",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "premium": true,
+        "comingSoon": true,
+        "reason": "Set VCQA_PRO_KEY to enable LLM-powered analysis",
+        "docFiles": [
+          "README.md"
+        ],
+        "hasJSDoc": true,
+        "description": "Detects contradictions between documentation and code. Finds stale README claims, incorrect JSDoc, and misleading comments."
+      },
+      "issues": [],
+      "duration": 3
+    },
+    {
+      "name": "code-coherence",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "premium": true,
+        "comingSoon": true,
+        "reason": "Set VCQA_PRO_KEY to enable LLM-powered analysis",
+        "filesAnalyzed": 28,
+        "totalExports": 98,
+        "totalFunctions": 131,
+        "description": "Detects internal contradictions: inconsistent validation, conflicting defaults, naming drift, and behavioral mismatches."
+      },
+      "issues": [],
+      "duration": 2
+    },
+    {
+      "name": "comment-staleness",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "premium": true,
+        "comingSoon": true,
+        "reason": "Set VCQA_PRO_KEY to enable comment staleness analysis",
+        "description": "Detects stale comments: TODOs older than 6 months, numeric mismatches, commented-out code, semantic contradictions (LLM-powered)."
+      },
+      "issues": [],
+      "duration": 2
+    },
+    {
+      "name": "html-quality",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "htmlFiles": 12
+      },
+      "issues": [
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/about/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/404.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing canonical link — may cause duplicate content issues",
+          "file": "store/docs/404.html",
+          "rule": "missing-canonical"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/architecture/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/collaboration/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/getting-started/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/idea-books/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/idea-pages/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/mcp/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/docs/skills-and-agents/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "info",
+          "message": "Missing Open Graph tags (og:title, og:description) — social sharing will look plain",
+          "file": "store/skills/index.html",
+          "rule": "missing-og"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: about",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: contributors",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: console",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs/architecture",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs/collaboration",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs/getting-started",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs/idea-books",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs/idea-pages",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs/mcp",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: docs/skills-and-agents",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: ../collaboration",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: ../getting-started",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: ../idea-books",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: ../idea-pages",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: ../mcp",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: ../skills-and-agents",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: ../architecture",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: architecture",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: collaboration",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: getting-started",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: idea-books",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: idea-pages",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: mcp",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills-and-agents",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/manifest.json",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/idea-flow-orchestrator.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/idea-interviewer.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/idea-document-architect.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/idea-critic.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/competitor-finder.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/idea-researcher.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/idea-refiner.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/pivot-generator.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/validation-planner.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/prototype-planner.md",
+          "rule": "broken-link"
+        },
+        {
+          "severity": "warning",
+          "message": "Broken internal link: skills/pro-candidate-assessor.md",
+          "rule": "broken-link"
+        }
+      ],
+      "duration": 11
+    },
+    {
+      "name": "frontend-health",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "skipped": true,
+        "reason": "no component files found"
+      },
+      "issues": [],
+      "duration": 2
+    },
+    {
+      "name": "styling",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "skipped": true,
+        "reason": "no component files found"
+      },
+      "issues": [],
+      "duration": 1
+    },
+    {
+      "name": "dead-patterns",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "premium": true,
+        "comingSoon": true,
+        "reason": "Set VCQA_PRO_KEY to enable dead pattern detection",
+        "description": "Detects leftover code from incomplete refactors: fallback paths, parallel implementations, dead guards, hardcoded feature flags. Produces a Feature Map of your codebase."
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "test-audit",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "premium": true,
+        "comingSoon": true,
+        "reason": "Set VCQA_PRO_KEY to enable test audit",
+        "description": "Detects fake and shallow tests: empty test bodies, trivial assertions, tautologies, mock-heavy tests, and tests whose names don't match what they actually verify."
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "file-cohesion",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "premium": true,
+        "comingSoon": true,
+        "reason": "Set VCQA_PRO_KEY to enable file cohesion analysis",
+        "description": "Detects files with multiple responsibilities — the #1 code smell in AI-generated code. Labels each file's concern clusters and suggests concrete split points."
+      },
+      "issues": [],
+      "duration": 0
+    },
+    {
+      "name": "design-consistency",
+      "score": 0,
+      "grade": "F",
+      "details": {
+        "premium": true,
+        "comingSoon": true,
+        "reason": "Set VCQA_PRO_KEY to enable design consistency analysis",
+        "description": "LLM-powered audit of visual consistency — finds components with duplicate styling, inconsistent spacing scales, and missing component extraction opportunities."
+      },
+      "issues": [],
+      "duration": 0
+    }
+  ],
+  "meta": {
+    "cwd": "/Users/serge/dev/stores/freeideastore/platform",
+    "node": "v22.21.1",
+    "duration": 13592,
+    "stack": {
+      "language": "typescript",
+      "framework": "none",
+      "bundler": "none",
+      "testRunner": "vitest",
+      "linter": "none",
+      "packageManager": "pnpm"
+    },
+    "workspace": {
+      "isMonorepo": true,
+      "tool": "pnpm",
+      "packages": [
+        {
+          "name": "@fis/mcp",
+          "path": "packages/mcp",
+          "hasSrc": true,
+          "hasRootCode": false,
+          "hasTests": true,
+          "hasLinter": false
+        },
+        {
+          "name": "@fis/worker",
+          "path": "packages/worker",
+          "hasSrc": true,
+          "hasRootCode": false,
+          "hasTests": true,
+          "hasLinter": false
+        }
+      ],
+      "srcRoots": [
+        "packages/mcp/src",
+        "packages/worker/src"
+      ]
+    },
+    "repoUrl": "https://github.com/freeideastore-online/platform",
+    "branch": "main"
+  }
+}

@@ -3,7 +3,7 @@
     {
       "id": "asx-filings-analyst",
       "name": "ASX Filings Analyst",
-      "stage": "researched",
+      "stage": "researching",
       "category": "finance",
       "signal": "Public reports, valuation screens, source-backed weekly watchlist.",
       "preview": "A research screener that turns ASX announcements and company reports into a cited weekly watchlist.",
@@ -17,7 +17,7 @@
     {
       "id": "parent-volleyball-community",
       "name": "Parent Volleyball Community",
-      "stage": "prototype",
+      "stage": "prototyping",
       "category": "community",
       "signal": "A focused parent/community coordination product has clearer demand than broad social features.",
       "preview": "A team hub for volleyball parents, starting with schedules, RSVP, carpool, and volunteer coordination.",
@@ -31,7 +31,7 @@
     {
       "id": "school-transport-options",
       "name": "School Transport Options",
-      "stage": "critique",
+      "stage": "researching",
       "category": "local-services",
       "signal": "Parents need safer, clearer transport options for ages 5-10.",
       "preview": "A cautious local-services idea that starts with trusted school transport information before any marketplace.",
@@ -45,21 +45,21 @@
     {
       "id": "slowdown-personal-reset",
       "name": "Slowdown Personal Reset",
-      "stage": "built",
+      "stage": "launched",
       "category": "wellbeing",
-      "signal": "A lightweight app already exists; next question is retention and use frequency.",
-      "preview": "A built wellbeing prototype focused on quick reset rituals, now needing retention evidence.",
+      "signal": "A built local-first reset app; next question is whether people return in real stressful moments.",
+      "preview": "A local-first personal reset app that recommends one tiny practice from mood, energy, mental speed, and tension.",
       "docsUrl": "/ideas/slowdown-personal-reset/",
-      "docsSections": ["retention", "flow", "feedback"],
-      "nextStep": "Track 7-day return use and collect qualitative feedback.",
+      "docsSections": ["retention", "competitors", "safety", "privacy"],
+      "nextStep": "Run a seven-day real-moment retention test with five to ten users.",
       "contributors": 1,
       "support": 9,
-      "risk": "Wellbeing apps are crowded and hard to monetize."
+      "risk": "Crowded wellbeing market, weak repeat use, sensitive mood data, and accidental medical or crisis-service claims."
     },
     {
       "id": "idea-reputation-system",
       "name": "Idea Reputation System",
-      "stage": "raw",
+      "stage": "prototyping",
       "category": "platform",
       "signal": "People can earn recognition by improving ideas, not just building apps.",
       "preview": "The platform layer that turns critiques, pivots, evidence, and prototypes into visible contributor reputation.",
@@ -73,7 +73,7 @@
     {
       "id": "proidea-dossier-builder",
       "name": "ProIdea Dossier Builder",
-      "stage": "pivot",
+      "stage": "prototyping",
       "category": "platform",
       "signal": "The valuable artifact may be a complete opportunity packet, not the idea itself.",
       "preview": "A repeatable dossier format for graduating free ideas into investor-ready ProIdeaStore opportunities.",
@@ -85,6 +85,6 @@
       "risk": "Research quality must be high enough to justify curation."
     }
   ],
-  "stages": ["raw", "critique", "researched", "pivot", "prototype", "built"],
+  "stages": ["raw", "shaping", "researching", "validating", "prototyping", "launched", "pivot", "parked"],
   "categories": ["finance", "community", "local-services", "wellbeing", "platform"]
 }

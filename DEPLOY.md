@@ -9,6 +9,7 @@ https://freeideastore.online
 ## Cloudflare Resources
 
 - Worker: `freeideastore`
+- MCP Worker: `freeideastore-mcp`
 - D1: `freeideastore`
 - D1 database ID: `6c8cefe4-f170-45fd-9979-ebef9068e1aa`
 - Optional R2 bucket: `freeideastore-ideas`
@@ -18,10 +19,12 @@ https://freeideastore.online
 ```bash
 pnpm install
 pnpm typecheck
+pnpm docs:build
 pnpm db:migrate:local
 doppler run --project pas --config prd -- pnpm --filter @fis/worker exec wrangler r2 bucket create freeideastore-ideas
 doppler run --project pas --config prd -- pnpm db:migrate:prod
 doppler run --project pas --config prd -- pnpm --filter @fis/worker exec wrangler deploy
+doppler run --project pas --config prd -- pnpm --filter @fis/mcp exec wrangler deploy
 ```
 
 The current Doppler Cloudflare token can deploy Workers and run D1 migrations, but does not have R2 bucket permissions. Until that token is expanded, leave the `IDEA_BUCKET` binding out of `packages/worker/wrangler.toml`; the Worker stores free idea bodies in D1. After R2 is available, add:
@@ -39,18 +42,29 @@ Free ideas use the cheap path by default:
 - D1 for metadata, listing, reactions, comments, reputation, and promotion state.
 - Optional R2 for longer markdown bodies and rendered page cache objects.
 - Worker rendering for `/ideas/:id/`, with bounded list queries on the homepage.
+- Zensical-generated static assets only for the platform documentation under `/docs/`.
 
-Do not create one Git repository or one generated static file tree for every free idea. Full Zensical/book-style artifacts are reserved for promoted ProIdeaStore opportunities.
+Do not create one Git repository, one Zensical project, or one generated static file tree for every free idea. Free idea publications are rendered dynamically from canonical Markdown. Heavier ProIdeaStore diligence artifacts can use a separate Pro workflow later.
 
 ## Custom Domain
 
 `freeideastore.online` is the canonical public domain for the FreeIdeaStore Worker.
+`mcp.freeideastore.online` is the canonical public domain for the FreeIdeaStore MCP Worker.
 
 Wrangler config:
 
 ```toml
 [[routes]]
 pattern = "freeideastore.online"
+zone_name = "freeideastore.online"
+custom_domain = true
+```
+
+MCP Wrangler config:
+
+```toml
+[[routes]]
+pattern = "mcp.freeideastore.online"
 zone_name = "freeideastore.online"
 custom_domain = true
 ```

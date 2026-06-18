@@ -1,0 +1,13 @@
+[project]
+site_name = "FreeIdeaStore Docs"
+site_url = "https://freeideastore.online/docs"
+site_description = "FreeIdeaStore platform documentation for idea pages, dynamic publications, skills, collaboration, MCP, and architecture."
+docs_dir = "platform-docs"
+site_dir = "store/docs"
+copyright = "FreeIdeaStore"
+
+[project.extra]
+homepage = "https://freeideastore.online"
+
+[project.theme]
+variant = "modern"

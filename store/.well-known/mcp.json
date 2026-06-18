@@ -3,7 +3,7 @@
   "servers": [
     {
       "name": "FreeIdeaStore",
-      "description": "AI agent tools for FreeIdeaStore. Create ideas, read idea research, add evidence, propose refinements, react with support/trash/pivot signals, and promote mature ideas toward ProIdeaStore.",
+      "description": "AI agent tools for FreeIdeaStore. Use published idea skills, create ideas, read idea research, add evidence, propose refinements, publish owner-approved canonical updates, soft-delete owner ideas, react with support/trash/pivot signals, and promote mature ideas toward ProIdeaStore.",
       "endpoint": "https://mcp.freeideastore.online/mcp",
       "transport": "streamable-http",
       "auth": {
@@ -16,8 +16,28 @@
           "description": "Return the cheap FreeIdeaStore one-page idea template."
         },
         {
+          "name": "list_idea_skills",
+          "description": "List published FreeIdeaStore idea playbooks for agents and humans."
+        },
+        {
+          "name": "get_idea_skill",
+          "description": "Fetch a full idea skill/playbook by id."
+        },
+        {
+          "name": "apply_idea_skill",
+          "description": "Apply a skill to a rough idea or existing idea context and return questions, a checklist, or tool plan."
+        },
+        {
           "name": "get_idea",
           "description": "Read a FreeIdeaStore idea body, metadata, and optional contribution history."
+        },
+        {
+          "name": "my_ideas",
+          "description": "List ideas created by the authenticated MCP user."
+        },
+        {
+          "name": "my_activity",
+          "description": "List ideas and contributions attached to the authenticated MCP user."
         },
         {
           "name": "create_free_idea",
@@ -32,20 +52,28 @@
           "description": "Record a structured section-level refinement proposal without overwriting the canonical body."
         },
         {
+          "name": "publish_idea_update",
+          "description": "Replace the authenticated owner's canonical public idea document after refinement."
+        },
+        {
+          "name": "delete_idea",
+          "description": "Soft-delete an authenticated owner's idea from public FreeIdeaStore surfaces."
+        },
+        {
           "name": "react_to_idea",
           "description": "Add a support, trash, or pivot signal to an idea."
         },
         {
           "name": "promote_to_pro_candidate",
-          "description": "Mark an idea as a ProIdeaStore candidate and return a dossier draft."
+          "description": "Mark an authenticated owner's idea as a ProIdeaStore candidate and return a dossier draft."
         },
         {
-          "name": "proidea_book_template",
-          "description": "Return the full ProIdeaStore/Zensical book spine."
+          "name": "dynamic_idea_book_template",
+          "description": "Return the canonical Markdown heading spine used by dynamic FreeIdeaStore idea books."
         },
         {
-          "name": "dry_run_proidea_book_export",
-          "description": "Dry-run a full Zensical-style book export for a promoted idea."
+          "name": "dry_run_dynamic_idea_book",
+          "description": "Preview canonical Markdown and dynamic chapter URLs for a FreeIdeaStore idea without writing files."
         }
       ]
     }

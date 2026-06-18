@@ -1,0 +1,84 @@
+{
+  "version": "2026-06-11",
+  "description": "Canonical FreeIdeaStore idea playbooks. MCP exposes these through list_idea_skills, get_idea_skill, and apply_idea_skill.",
+  "mcp": "https://mcp.freeideastore.online/mcp",
+  "skills": [
+    {
+      "id": "idea-flow-orchestrator",
+      "title": "Idea Flow Orchestrator",
+      "path": "/skills/idea-flow-orchestrator.md",
+      "summary": "Choose the right next skill and publishing action for a raw prompt, existing idea, research request, or pro-candidate request.",
+      "suggestedTools": ["list_idea_skills", "get_idea_skill", "apply_idea_skill", "get_idea", "create_free_idea", "add_idea_contribution", "publish_idea_update"]
+    },
+    {
+      "id": "idea-interviewer",
+      "title": "Idea Interviewer",
+      "path": "/skills/idea-interviewer.md",
+      "summary": "Turn a vague idea into enough structured context to publish a useful first page.",
+      "suggestedTools": ["create_free_idea", "add_idea_contribution"]
+    },
+    {
+      "id": "idea-document-architect",
+      "title": "Idea Document Architect",
+      "path": "/skills/idea-document-architect.md",
+      "summary": "Turn the user's first prompt or short interview answers into a coherent generic FreeIdeaStore public idea document.",
+      "suggestedTools": ["create_free_idea", "add_idea_contribution"]
+    },
+    {
+      "id": "idea-critic",
+      "title": "Idea Critic",
+      "path": "/skills/idea-critic.md",
+      "summary": "Pressure-test assumptions, blockers, safety, trust, cost, and reasons to trash or narrow an idea.",
+      "suggestedTools": ["get_idea", "add_idea_contribution", "react_to_idea", "propose_idea_refinement"]
+    },
+    {
+      "id": "competitor-finder",
+      "title": "Competitor Finder",
+      "path": "/skills/competitor-finder.md",
+      "summary": "Find direct competitors, indirect substitutes, and manual workarounds before an idea is treated as novel.",
+      "suggestedTools": ["get_idea", "add_idea_contribution", "propose_idea_refinement"]
+    },
+    {
+      "id": "idea-researcher",
+      "title": "Idea Researcher",
+      "path": "/skills/idea-researcher.md",
+      "summary": "Convert public evidence and source-backed observations into useful idea history.",
+      "suggestedTools": ["get_idea", "add_idea_contribution", "propose_idea_refinement"]
+    },
+    {
+      "id": "idea-refiner",
+      "title": "Idea Refiner",
+      "path": "/skills/idea-refiner.md",
+      "summary": "Merge useful history into a clearer canonical public idea document.",
+      "suggestedTools": ["get_idea", "publish_idea_update", "add_idea_contribution"]
+    },
+    {
+      "id": "pivot-generator",
+      "title": "Pivot Generator",
+      "path": "/skills/pivot-generator.md",
+      "summary": "Find sharper customer, market, product, or format alternatives when the original idea is too broad or risky.",
+      "suggestedTools": ["get_idea", "add_idea_contribution", "react_to_idea", "propose_idea_refinement"]
+    },
+    {
+      "id": "validation-planner",
+      "title": "Validation Planner",
+      "path": "/skills/validation-planner.md",
+      "summary": "Turn an idea into a cheap validation plan that can prove, narrow, pivot, or trash it quickly.",
+      "suggestedTools": ["get_idea", "add_idea_contribution", "propose_idea_refinement", "publish_idea_update"]
+    },
+    {
+      "id": "prototype-planner",
+      "title": "Prototype Planner",
+      "path": "/skills/prototype-planner.md",
+      "summary": "Define the smallest prototype that can test the idea's core workflow without pretending the full product exists.",
+      "suggestedTools": ["get_idea", "add_idea_contribution", "propose_idea_refinement"]
+    },
+    {
+      "id": "pro-candidate-assessor",
+      "title": "Pro Candidate Assessor",
+      "path": "/skills/pro-candidate-assessor.md",
+      "summary": "Decide whether an idea deserves ProIdeaStore diligence or should stay in FreeIdeaStore.",
+      "suggestedTools": ["get_idea", "add_idea_contribution", "promote_to_pro_candidate", "dry_run_dynamic_idea_book"]
+    }
+  ]
+}

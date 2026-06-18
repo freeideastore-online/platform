@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "oauth:smoke": "node scripts/oauth-agent-smoke.mjs",
+    "smoke": "node scripts/agent-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

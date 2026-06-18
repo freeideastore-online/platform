@@ -9,13 +9,15 @@
     "node": ">=22"
   },
   "scripts": {
-    "idea:book:build": "node scripts/build-idea-docs.mjs",
-    "idea:book:new": "node scripts/scaffold-idea-book.mjs",
+    "docs:build": "python3 -m zensical build",
     "dev": "pnpm --filter @fis/worker dev",
     "deploy": "pnpm --filter @fis/worker run deploy",
     "mcp:dev": "pnpm --filter @fis/mcp dev",
     "mcp:deploy": "pnpm --filter @fis/mcp deploy",
-    "test": "pnpm --filter @fis/worker test",
+    "mcp:oauth:smoke": "pnpm --filter @fis/mcp oauth:smoke",
+    "mcp:smoke": "pnpm --filter @fis/mcp smoke",
+    "skills:validate": "node scripts/validate-skills.mjs",
+    "test": "pnpm docs:build && pnpm skills:validate && pnpm --filter @fis/worker test && pnpm --filter @fis/mcp test",
     "test:e2e": "playwright test",
     "typecheck": "pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
     "db:migrate:local": "pnpm --filter @fis/worker db:migrate:local",
