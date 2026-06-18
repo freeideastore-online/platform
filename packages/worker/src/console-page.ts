@@ -1,3 +1,5 @@
+import { THEME_BOOT, THEME_CSS, THEME_SCRIPT } from './theme';
+
 const AUTH_PREFIX = '/.fis/auth';
 const SECURITY_HEADERS: Record<string, string> = {
   'Content-Security-Policy':
@@ -422,10 +424,12 @@ export function renderConsolePage(request: Request) {
 <link rel="canonical" href="${escapeHtml(origin)}/console/">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+${THEME_BOOT}
 <style>
-*{box-sizing:border-box;margin:0;padding:0}:root{--accent:#0891b2;--gold:#f59e0b;--paper:#f7faf9;--panel:#fff;--ink:#102027;--muted:#5d6f78;--line:#d8e3e6;--bad:#dc2626}
-body{background:var(--paper);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.5}a{color:inherit;text-decoration:none}button,input,textarea,select{font:inherit}
-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}.brand{display:flex;align-items:center;gap:.6rem;font-weight:800}.mark{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900}.brand span:last-child{font-family:Fraunces,serif}nav{margin-left:auto;display:flex;align-items:center;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}.account-avatar{display:inline-grid;width:36px;height:36px;place-items:center;border:2px solid var(--line);border-radius:50%;overflow:hidden;background:white}.account-avatar img{width:100%;height:100%;object-fit:cover}.account-avatar span{display:grid;width:100%;height:100%;place-items:center;border-radius:50%;background:#102027;color:#67e8f9;font-weight:900}
+${THEME_CSS}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Manrope,system-ui,sans-serif;line-height:1.5}a{color:inherit;text-decoration:none}button,input,textarea,select{font:inherit}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}.brand{display:flex;align-items:center;gap:.6rem;font-weight:800;margin-right:auto}.mark{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900}.brand span:last-child{font-family:Fraunces,serif}nav{display:flex;align-items:center;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}.account-avatar{display:inline-grid;width:36px;height:36px;place-items:center;border:2px solid var(--line);border-radius:50%;overflow:hidden;background:var(--panel)}.account-avatar img{width:100%;height:100%;object-fit:cover}.account-avatar span{display:grid;width:100%;height:100%;place-items:center;border-radius:50%;background:#102027;color:#67e8f9;font-weight:900}
 .shell{max-width:1120px;margin:0 auto;padding:1.5rem 1.25rem}.eyebrow{color:var(--accent);font-size:.72rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase}h1{font-family:Fraunces,serif;font-size:clamp(2rem,4.6vw,3.9rem);line-height:1;margin:.35rem 0 1rem}.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:1rem;align-items:start}.panel{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:1rem;box-shadow:0 10px 22px rgba(16,32,39,.04)}.panel h2{font-size:1rem;margin-bottom:.6rem}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.75rem}.panel-head h2{margin:0}.muted{color:var(--muted);font-size:.86rem}.auth{display:grid;gap:.5rem}.button{display:inline-flex;justify-content:center;align-items:center;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;cursor:pointer;padding:.65rem .85rem;font-weight:900}.button.secondary{background:white;color:var(--accent)}.button.danger{border-color:var(--bad);background:white;color:var(--bad)}.button.small{padding:.45rem .62rem;font-size:.76rem}button:disabled{cursor:not-allowed;opacity:.58}form{display:grid;gap:.75rem}label{display:grid;gap:.3rem;color:var(--muted);font-size:.78rem;font-weight:900;text-transform:uppercase}input,textarea,select{width:100%;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);padding:.65rem}textarea{min-height:120px;resize:vertical}.split{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.status{border:1px solid var(--line);border-radius:8px;background:#fbfdfd;color:var(--muted);padding:.75rem;font-size:.84rem;margin-top:.75rem}.status.ok{border-color:#99f6e4;color:#115e59}.status.err{border-color:#fecaca;color:#991b1b}.work-panel{margin-bottom:1rem}.work-toolbar{display:flex;align-items:center;gap:.5rem}.count-pill{display:inline-flex;min-width:1.7rem;justify-content:center;border:1px solid var(--line);border-radius:999px;padding:.18rem .5rem;color:var(--muted);font-size:.72rem;font-weight:900}.idea-list,.mini-list{display:grid;gap:.55rem}.idea-item,.mini-item{display:grid;gap:.18rem;border:1px solid var(--line);border-radius:8px;background:#fbfdfd;padding:.75rem;text-align:left}.idea-item:hover,.mini-item:hover{border-color:#9ccbd5;background:#f4fbfc}.idea-item strong,.mini-item strong{font-size:.9rem}.idea-item span,.mini-item span{color:var(--muted);font-size:.78rem}.idea-item time{color:var(--muted);font-size:.72rem}.empty-state{border:1px dashed var(--line);border-radius:8px;padding:1rem;background:#fbfdfd;color:var(--muted);font-size:.86rem}.side-stack{display:grid;gap:1rem}.inline-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.65rem}
 .tabs{display:flex;gap:.35rem;margin-bottom:1rem}.tab{border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);cursor:pointer;padding:.55rem .85rem;font-size:.82rem;font-weight:800}.tab.active{border-color:var(--accent);background:var(--accent);color:white}.hidden{display:none!important}
 .ai-setup{display:grid;gap:.65rem;margin-bottom:.75rem;padding-bottom:.75rem;border-bottom:1px solid var(--line)}
@@ -435,7 +439,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/about/">About</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><span id="account-slot"></span><a href="https://proideastore.online">ProIdeaStore</a></nav></header>
+<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a><span id="account-slot"></span></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button></header>
 <main class="shell">
   <div class="eyebrow">Creation console</div><h1>Put an idea into the refinery.</h1>
   <section class="panel work-panel">
@@ -508,6 +512,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem
   </div>
 </main>
 <script>${consoleScript()}</script>
+${THEME_SCRIPT}
 </body></html>`, {
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'no-store' },
   });

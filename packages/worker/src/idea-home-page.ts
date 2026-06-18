@@ -37,9 +37,7 @@ a{color:inherit;text-decoration:none}
 .book-topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.5rem .95rem;backdrop-filter:blur(14px)}
 .top-brand{display:flex;align-items:center;gap:.65rem;min-width:0;font-weight:900;margin-right:auto}.top-brand strong{display:block;max-width:min(60vw,540px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .logo{display:grid;flex:0 0 auto;width:34px;height:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9);font-weight:900}
-.topbar-nav{display:flex;align-items:center;gap:.15rem}.topbar-nav a{padding:.4rem .6rem;border-radius:6px;color:var(--muted);font-size:.78rem;font-weight:700}.topbar-nav a:hover{background:var(--mark);color:var(--accent-strong)}
-.topbar-theme{display:grid;width:32px;height:32px;place-items:center;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);cursor:pointer;font-size:.86rem;line-height:1;padding:0;margin-left:.25rem}.topbar-theme:hover{border-color:var(--accent);background:var(--mark);color:var(--accent-strong)}
-.book-shell{display:grid;grid-template-columns:292px minmax(0,1fr) 300px;min-height:calc(100vh - 62px)}
+.topbar-nav{display:flex;align-items:center;gap:.15rem}.topbar-nav a{padding:.4rem .6rem;border-radius:6px;color:var(--muted);font-size:.78rem;font-weight:700}.topbar-nav a:hover{background:var(--mark);color:var(--accent-strong)}.book-shell{display:grid;grid-template-columns:292px minmax(0,1fr) 300px;min-height:calc(100vh - 62px)}
 .book-sidebar{position:sticky;top:62px;height:calc(100vh - 62px);overflow:auto;border-right:1px solid var(--line);background:var(--panel);padding:1rem}
 .book-search{position:relative;margin:.75rem 0}.book-search input{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--panel-alt);color:var(--ink);font:inherit;font-size:.8rem;padding:.58rem .65rem}.book-search input:focus{border-color:var(--hover-line);outline:2px solid var(--focus)}
 .nav-title{display:flex;justify-content:space-between;gap:.75rem;color:var(--title-text);font-size:.68rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.7rem 0 .42rem}.chapter-list{display:grid;gap:.28rem}.chapter-link{display:grid;grid-template-columns:28px minmax(0,1fr);gap:.55rem;align-items:center;border:1px solid transparent;border-radius:8px;padding:.54rem .56rem;color:var(--strong-text)}.chapter-link:hover{background:var(--mark);border-color:var(--hover-line)}.chapter-link b{display:grid;width:26px;height:26px;place-items:center;border-radius:999px;background:var(--chapter-badge);color:var(--accent-strong);font-size:.7rem}.chapter-link span{display:block;font-size:.82rem;font-weight:900;line-height:1.25}
@@ -62,7 +60,7 @@ ${readerSettingsCss()}
 <header class="book-topbar">
   <div class="top-brand"><a href="/" class="logo" aria-label="Home">FI</a><a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
   <nav class="topbar-nav"><a href="/">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a></nav>
-  <button class="topbar-theme" type="button" data-reader-theme-toggle aria-label="Toggle theme" title="Toggle theme">&#9790;</button>
+  <button class="theme-toggle" type="button" data-reader-theme-toggle aria-label="Toggle theme" title="Toggle theme">&#9790;</button>
 </header>
 <details class="mobile-book-nav">
   <summary>Chapters</summary>
