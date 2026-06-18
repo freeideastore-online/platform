@@ -1,3 +1,4 @@
+import { handleAiProxy } from './ai-proxy';
 import { handleApi } from './api';
 import { renderConsolePage } from './console-page';
 import type { Env } from './types';
@@ -15,6 +16,14 @@ export default {
 
     const authResponse = await handleAuth(request, url);
     if (authResponse) return authResponse;
+
+    if (url.pathname === '/api/ai/elaborate') {
+      try {
+        return await handleAiProxy(request, env);
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : 'internal error' }, { status: 500 });
+      }
+    }
 
     if (url.pathname.startsWith('/api/')) {
       try {
