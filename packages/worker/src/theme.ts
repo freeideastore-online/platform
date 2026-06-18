@@ -52,7 +52,7 @@ export const THEME_SCRIPT = `<script>
     r.dataset.theme = t;
     r.style.background = '';
     document.querySelectorAll('.theme-toggle').forEach(b => {
-      b.innerHTML = t === 'dark' ? '\\u2600' : '\\u263E';
+      b.textContent = t === 'dark' ? '\\u2600' : '\\u263E';
     });
   };
   document.querySelectorAll('.theme-toggle').forEach(b => b.onclick = () => {

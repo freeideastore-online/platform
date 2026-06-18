@@ -26,7 +26,7 @@ function renderInline(value: string): string {
   let index = 0;
   while (index < value.length) {
     const rest = value.slice(index);
-    const markdownImage = rest.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+|data:[^)\s]+)\)/i);
+    const markdownImage = rest.match(/^!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)/i);
     if (markdownImage) {
       const alt = escapeHtml(markdownImage[1] || '');
       const src = escapeHtml(markdownImage[2] || '');

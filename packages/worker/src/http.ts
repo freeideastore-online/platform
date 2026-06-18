@@ -78,9 +78,15 @@ export function enumValue(value: unknown, allowed: Set<string>, fallback: string
   return allowed.has(normalized) ? normalized : fallback;
 }
 
+const MAX_BODY_BYTES = 256_000; // 256KB
+
 export async function bodyJson(request: Request) {
   try {
-    return (await request.json()) as Record<string, unknown>;
+    const length = Number(request.headers.get('content-length') || '0');
+    if (length > MAX_BODY_BYTES) return {};
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) return {};
+    return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return {};
   }
