@@ -12,7 +12,7 @@ import { registerSkillTools } from "./register-skill-tools.js";
 const ROOT_TEXT =
   "FreeIdeaStore MCP Server\n\n" +
   "Connect: npx mcp-remote https://mcp.freeideastore.online/mcp\n\n" +
-  "Tools: free_idea_template, list_idea_skills, get_idea_skill, apply_idea_skill, get_idea, my_ideas, my_activity, create_free_idea, add_idea_contribution, propose_idea_refinement, publish_idea_update, delete_idea, react_to_idea, promote_to_pro_candidate, dynamic_idea_book_template, dry_run_dynamic_idea_book\n\n" +
+  "Tools: free_idea_template, list_idea_skills, get_idea_skill, apply_idea_skill, get_idea, my_ideas, my_activity, create_free_idea, derive_idea, add_idea_contribution, propose_idea_refinement, publish_idea_update, delete_idea, react_to_idea, promote_to_pro_candidate, dynamic_idea_book_template, dry_run_dynamic_idea_book\n\n" +
   "Auth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FAS session token>.\n";
 
 export class FisMcp extends McpAgent<Env, unknown, McpProps> {

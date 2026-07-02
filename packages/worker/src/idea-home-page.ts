@@ -1,5 +1,5 @@
 import { AUTH_PREFIX } from './auth';
-import { ideaBody, ideaById } from './data';
+import { derivedIdeas, ideaBody, ideaById } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { ideaChapters, markdownHeadings, markdownToHtml } from './markdown';
@@ -15,6 +15,12 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   if (!idea) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
 
   const body = await ideaBody(env, idea);
+  const parent = idea.parent_id
+    ? await env.DB.prepare("SELECT id, title FROM ideas WHERE id = ? AND status != 'removed'")
+        .bind(idea.parent_id)
+        .first<{ id: string; title: string }>()
+    : null;
+  const derived = await derivedIdeas(env, idea.id);
   const headings = markdownHeadings(body);
   const chapters = ideaChapters(body, idea.title);
   const bookStartPath = `/ideas/${idea.id}/${chapters[0]?.id || 'snapshot'}/`;
@@ -77,6 +83,7 @@ ${readerSettingsCss()}
       <h1>${escapeHtml(idea.title)}</h1>
       <div class="summary">${escapeHtml(idea.summary)}</div>
       <div class="meta"><span class="pill">${escapeHtml(idea.stage)}</span><span class="pill">${escapeHtml(idea.category)}</span><span class="pill">${idea.pro_candidate ? 'pro candidate' : 'free idea'}</span></div>
+      ${parent ? `<p class="crumb">Derived from <a href="/ideas/${escapeHtml(parent.id)}/">${escapeHtml(parent.title)}</a></p>` : ''}
       ${ideaDiagram(idea.id)}
       <div class="chapter-body">${markdownToHtml(body)}</div>
     </article>
@@ -99,6 +106,7 @@ ${readerSettingsCss()}
       <div><strong>Contributions</strong><span>${escapeHtml(idea.contribution_count)} notes, critiques, risks, or evidence links</span></div>
       <div><strong>Next step</strong><span>${escapeHtml(idea.next_step || 'Needs a next validation step.')}</span></div>
       <div><strong>Risk</strong><span>${escapeHtml(idea.risk || 'Risk not yet named.')}</span></div>
+      ${derived.length ? `<div><strong>Derived ideas</strong><nav class="toc-box">${derived.map((child) => `<a href="/ideas/${escapeHtml(child.id)}/">${escapeHtml(child.title)}</a>`).join('')}</nav></div>` : ''}
       <div class="actions"><a class="button" href="/#ideas">Back to store</a><a class="button secondary" href="/api/ideas/${escapeHtml(idea.id)}">JSON</a></div>
     </div>
   </aside>

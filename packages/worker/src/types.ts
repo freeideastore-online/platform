@@ -20,6 +20,7 @@ export type IdeaRow = {
   next_step: string;
   risk: string;
   created_by: string;
+  parent_id?: string;
   status: string;
   pro_candidate: number;
   created_at: string;

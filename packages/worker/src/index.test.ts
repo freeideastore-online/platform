@@ -134,6 +134,23 @@ class FakeD1 {
     if (sql.includes('SELECT id FROM ideas WHERE id = ?')) {
       return new FakeStatement({ first: ([id]) => (this.ideas.has(String(id)) ? { id } : null) });
     }
+    if (sql.includes('SELECT id, title FROM ideas WHERE parent_id = ?')) {
+      return new FakeStatement({
+        all: ([parentId]) => ({
+          results: Array.from(this.ideas.values())
+            .filter((idea) => idea.parent_id === parentId && idea.status !== 'removed')
+            .map((idea) => ({ id: idea.id, title: idea.title })),
+        }),
+      });
+    }
+    if (sql.includes('SELECT id, title FROM ideas WHERE id = ?')) {
+      return new FakeStatement({
+        first: ([id]) => {
+          const idea = this.ideas.get(String(id));
+          return idea && idea.status !== 'removed' ? { id: idea.id, title: idea.title } : null;
+        },
+      });
+    }
     if (sql.includes('WITH recent AS')) {
       this.listQuery = sql;
       return new FakeStatement({
@@ -265,6 +282,7 @@ class FakeD1 {
             next_step,
             risk,
             created_by,
+            parent_id = '',
           ] = binds;
           this.ideas.set(String(id), {
             id,
@@ -282,6 +300,7 @@ class FakeD1 {
             next_step,
             risk,
             created_by,
+            parent_id,
             status: 'active',
             pro_candidate: 0,
             created_at: '2026-06-10 00:00:00',
@@ -958,6 +977,65 @@ describe('FreeIdeaStore worker', () => {
     expect(testEnv.DB.promoted).toEqual(['serge-idea-lab']);
     expect(nonOwner.status).toBe(403);
     await expect(nonOwner.json()).resolves.toEqual({ error: 'only the idea owner can promote this idea' });
+  });
+
+  it('derives a new idea that links back to its parent and seeds the parent body', async () => {
+    const testEnv = env();
+    const derive = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/derive', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'forker' },
+        body: JSON.stringify({ title: 'ASX Filings Analyst for Small Caps', summary: 'A small-cap-focused fork of the ASX filings research assistant.' }),
+      }),
+      testEnv,
+    );
+    const derived = (await derive.json()) as { idea: string; parent: string; parentUrl: string };
+
+    const read = await worker.fetch(new Request(`https://fis.test/api/ideas/${derived.idea}`), testEnv);
+    const readBody = (await read.json()) as { idea: { parent_id: string; created_by: string }; body: string };
+
+    expect(derive.status).toBe(201);
+    expect(derived.idea).toBe('asx-filings-analyst-for-small-caps');
+    expect(derived.parent).toBe('asx-filings-analyst');
+    expect(derived.parentUrl).toBe('/ideas/asx-filings-analyst/');
+    expect(readBody.idea.parent_id).toBe('asx-filings-analyst');
+    expect(readBody.idea.created_by).toBe('profile-forker');
+    expect(readBody.body).toContain('Public reports and filings.');
+  });
+
+  it('renders the derivation links on both the parent and the fork', async () => {
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/derive', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'forker' },
+        body: JSON.stringify({ title: 'ASX Filings Analyst for Small Caps', summary: 'A small-cap-focused fork of the ASX filings research assistant.' }),
+      }),
+      testEnv,
+    );
+
+    const child = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst-for-small-caps/'), testEnv);
+    const childHtml = await child.text();
+    const parent = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), testEnv);
+    const parentHtml = await parent.text();
+
+    expect(childHtml).toContain('Derived from');
+    expect(childHtml).toContain('/ideas/asx-filings-analyst/');
+    expect(parentHtml).toContain('Derived ideas');
+    expect(parentHtml).toContain('/ideas/asx-filings-analyst-for-small-caps/');
+  });
+
+  it('returns 404 when deriving from a missing idea', async () => {
+    const derive = await worker.fetch(
+      new Request('https://fis.test/api/ideas/no-such-idea-xyz/derive', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'forker' },
+        body: JSON.stringify({ title: 'Fork of nothing', summary: 'This should fail because the parent does not exist.' }),
+      }),
+      env(),
+    );
+    expect(derive.status).toBe(404);
+    await expect(derive.json()).resolves.toEqual({ error: 'idea not found' });
   });
 
   it('rejects invalid ids and writes to missing ideas', async () => {

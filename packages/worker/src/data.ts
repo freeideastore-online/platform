@@ -81,6 +81,15 @@ export async function ideaById(env: Env, ideaId: string) {
     .first<IdeaRow>();
 }
 
+export async function derivedIdeas(env: Env, parentId: string) {
+  const rows = await env.DB.prepare(
+    `SELECT id, title FROM ideas WHERE parent_id = ? AND status != 'removed' ORDER BY updated_at DESC LIMIT 20`,
+  )
+    .bind(parentId)
+    .all<{ id: string; title: string }>();
+  return rows.results || [];
+}
+
 export async function ideaBody(env: Env, idea: IdeaRow) {
   if (idea.body_key && env.IDEA_BUCKET) {
     const object = await env.IDEA_BUCKET.get(idea.body_key);

@@ -87,6 +87,7 @@ MCP provisioning follows the same cheap path through `packages/mcp`:
 - `list_idea_skills`, `get_idea_skill`, and `apply_idea_skill` expose the published interviewing, critique, competitor-finding, research, refinement, pivot, and Pro assessment playbooks.
 - `get_idea` reads an existing idea body, metadata, and optional contribution history.
 - `create_free_idea` creates a D1/R2-backed idea page.
+- `derive_idea` forks a new idea from an existing one, seeded with the parent body and linked back to the source (open to anyone; you own the fork).
 - `add_idea_contribution` records evidence, risk, pivot, prototype, refinement, or kill-signal notes.
 - `propose_idea_refinement` records a structured section-level refinement proposal without overwriting the canonical body.
 - `publish_idea_update` replaces the authenticated owner's canonical public idea document after refinement.
@@ -130,6 +131,7 @@ Claude/Codex user flow:
 - `POST /api/ideas`
 - `GET /api/ideas/:id`
 - `PATCH /api/ideas/:id`
+- `POST /api/ideas/:id/derive`
 - `POST /api/ideas/:id/promote`
 - `GET /api/ideas/:id/contributions`
 - `POST /api/ideas/:id/contributions`

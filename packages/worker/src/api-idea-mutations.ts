@@ -49,6 +49,58 @@ export async function createIdea(request: Request, env: Env) {
   return json({ idea: ideaId, url: `/ideas/${ideaId}/` }, { status: 201 });
 }
 
+export async function deriveIdea(request: Request, env: Env, rawParentId: string) {
+  const parentId = pathId(rawParentId);
+  if (!parentId) return bad('invalid idea id', 400);
+  const parent = await ideaById(env, parentId);
+  if (!parent) return bad('idea not found', 404);
+
+  const input = await bodyJson(request);
+  const title = String(input.title || `${parent.title} (derived)`).trim();
+  if (title.length < 3) return bad('title is required');
+  if (title.length > 80) return bad('title must be 80 characters or fewer — use summary for detail');
+  const summary = String(input.summary || parent.summary).trim();
+  if (summary.length < 10) return bad('summary is required');
+
+  const profileId = await profileFor(request, env);
+  const ideaId = await uniqueIdeaId(env, title);
+  // Seed the fork with the parent body unless a non-empty override is supplied.
+  // (`??` alone would keep an explicit empty string and make a blank fork.)
+  const bodyOverride = typeof input.body === 'string' && input.body.trim() ? input.body : null;
+  const seedBody = String(bodyOverride ?? (await ideaBody(env, parent))).slice(0, 24000);
+  const bodyKey = `ideas/${ideaId}/body.md`;
+  const renderKey = `ideas/${ideaId}/rendered.html`;
+  if (seedBody && env.IDEA_BUCKET) {
+    await env.IDEA_BUCKET.put(bodyKey, seedBody, { httpMetadata: { contentType: 'text/markdown;charset=UTF-8' } });
+  }
+  const parentPath = `/ideas/${parent.id}/`;
+  await env.DB.prepare(
+    `INSERT INTO ideas
+     (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by, parent_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      ideaId,
+      title.slice(0, 80),
+      summary.slice(0, 1000),
+      String(input.preview || parent.preview || summary).slice(0, 1000),
+      String(input.signal || '').slice(0, 1000),
+      env.IDEA_BUCKET ? '' : seedBody,
+      env.IDEA_BUCKET && seedBody ? bodyKey : '',
+      env.IDEA_BUCKET && seedBody ? renderKey : '',
+      String(input.sourceUrl || input.source_url || `${new URL(request.url).origin}${parentPath}`).slice(0, 500),
+      enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
+      enumValue(input.stage, IDEA_STAGES, 'raw'),
+      String(input.category || parent.category || 'uncategorized').slice(0, 60),
+      String(input.nextStep || input.next_step || '').slice(0, 500),
+      String(input.risk || '').slice(0, 500),
+      profileId,
+      parent.id,
+    )
+    .run();
+  return json({ idea: ideaId, url: `/ideas/${ideaId}/`, parent: parent.id, parentUrl: parentPath }, { status: 201 });
+}
+
 export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) {
   const ideaId = pathId(rawIdeaId);
   if (!ideaId) return bad('invalid idea id', 400);

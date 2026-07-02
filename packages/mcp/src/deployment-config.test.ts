@@ -25,7 +25,7 @@ describe("MCP deployment config", () => {
   });
 
   it("advertises the canonical skill and document publishing tools", () => {
-    expect(ideaSkills).toContain("const TOOL_COUNT = 16");
+    expect(ideaSkills).toContain("const TOOL_COUNT = 17");
     expect(skillTools).toContain('"list_idea_skills"');
     expect(skillTools).toContain('"get_idea_skill"');
     expect(skillTools).toContain('"apply_idea_skill"');

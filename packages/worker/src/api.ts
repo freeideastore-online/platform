@@ -1,5 +1,5 @@
 import { authUserFor, hasBearerAuth, isApiMutation, isSameOriginMutation, registeredProfileFor } from './auth';
-import { createIdea, deleteIdea, promoteIdea, updateIdea } from './api-idea-mutations';
+import { createIdea, deleteIdea, deriveIdea, promoteIdea, updateIdea } from './api-idea-mutations';
 import { contributorByHandle, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, bodyJson, clampInt, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS } from './http';
 import type { Env } from './types';
@@ -71,6 +71,11 @@ export async function handleApi(request: Request, env: Env, url: URL) {
 
   if (ideaMatch && (request.method === 'PATCH' || request.method === 'PUT')) {
     return updateIdea(request, env, ideaMatch[1] || '');
+  }
+
+  const deriveMatch = url.pathname.match(/^\/api\/ideas\/([^/]+)\/derive$/);
+  if (deriveMatch && request.method === 'POST') {
+    return deriveIdea(request, env, deriveMatch[1] || '');
   }
 
   const promoteMatch = url.pathname.match(/^\/api\/ideas\/([^/]+)\/promote$/);

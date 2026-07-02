@@ -71,6 +71,56 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
   );
 
   server.tool(
+    "derive_idea",
+    "Fork a new FreeIdeaStore idea from an existing one. Seeds the new idea with the parent's body as a starting draft, links it back to the parent, and credits the source. Use this to take an idea in a different direction instead of editing someone else's canonical page — you own the derived idea and can publish_idea_update on it.",
+    {
+      idea_id: z.string().min(2).describe("The parent idea to derive from."),
+      title: z.string().min(3).max(80).optional().describe("Title for the fork. Defaults to the parent title plus '(derived)'."),
+      summary: z.string().min(10).max(1000).optional(),
+      body: z.string().max(24000).optional().describe("Optional replacement body. Defaults to a copy of the parent body."),
+      stage: z.enum(STAGES).optional(),
+      category: z.string().max(60).optional(),
+      contributor_handle: z.string().optional().describe("Optional profile handle to attribute the derived idea. This handle owns the fork."),
+    },
+    async (input) => {
+      const props = getProps();
+      const publicBase = env.PUBLIC_BASE || "https://freeideastore.online";
+      const payload: Record<string, unknown> = {
+        title: input.title,
+        summary: input.summary,
+        body: input.body,
+        stage: input.stage,
+        category: input.category,
+      };
+      for (const [key, value] of Object.entries(payload)) {
+        if (value === undefined) delete payload[key];
+      }
+      const res = await fisApi<{ idea: string; url: string; parent: string; parentUrl: string }>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/derive`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+          contributorHandle: input.contributor_handle,
+          token: props.token,
+        },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error deriving idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify({
+        ok: true,
+        idea: res.data.idea,
+        url: `${publicBase}${res.data.url}`,
+        derived_from: res.data.parent,
+        parent_url: `${publicBase}${res.data.parentUrl}`,
+        owner: input.contributor_handle || "fis-mcp",
+        note: "New idea forked from the parent. You own this derived idea — iterate on it with publish_idea_update. The parent page now links to it.",
+      }, null, 2));
+    },
+  );
+
+  server.tool(
     "add_idea_contribution",
     "Add a signed contribution to an existing FreeIdeaStore idea: evidence, risk, pivot, refinement, prototype note, or kill signal.",
     {

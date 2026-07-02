@@ -44,6 +44,10 @@
           "description": "Create a D1-backed FreeIdeaStore idea page."
         },
         {
+          "name": "derive_idea",
+          "description": "Fork a new idea from an existing one, seeded with the parent body and linked back to the source."
+        },
+        {
           "name": "add_idea_contribution",
           "description": "Record evidence, risk, pivot, prototype, refinement, or kill-signal notes on an idea."
         },

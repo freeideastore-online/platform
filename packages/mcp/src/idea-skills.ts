@@ -11,7 +11,7 @@ export const IDEA_SKILL_IDS = [
   "prototype-planner",
   "pro-candidate-assessor",
 ] as const;
-export const TOOL_COUNT = 16;
+export const TOOL_COUNT = 17;
 
 import { IDEA_SKILLS as CATALOG_IDEA_SKILLS, type IdeaSkill as CatalogIdeaSkill } from "./idea-skill-catalog.js";
 
