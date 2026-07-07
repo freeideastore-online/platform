@@ -1,6 +1,6 @@
 {
   "version": "0.44.0",
-  "timestamp": "2026-07-07T09:53:37.340Z",
+  "timestamp": "2026-07-07T09:58:57.846Z",
   "score": 78,
   "grade": "B",
   "checks": [
@@ -32,7 +32,7 @@
           "rule": "low-test-ratio"
         }
       ],
-      "duration": 3
+      "duration": 11
     },
     {
       "name": "lint",
@@ -54,7 +54,7 @@
         "ok": true
       },
       "issues": [],
-      "duration": 1662
+      "duration": 1471
     },
     {
       "name": "type-safety",
@@ -85,18 +85,18 @@
           "rule": "large-file"
         }
       ],
-      "duration": 8
+      "duration": 7
     },
     {
       "name": "complexity",
-      "score": 65,
+      "score": 70,
       "grade": "C",
       "details": {
         "totalFiles": 31,
-        "totalLines": 4554,
-        "longFunctions": 11,
-        "complexFunctions": 12,
-        "functionCount": 131
+        "totalLines": 4625,
+        "longFunctions": 10,
+        "complexFunctions": 11,
+        "functionCount": 142
       },
       "issues": [
         {
@@ -178,20 +178,6 @@
         },
         {
           "severity": "warning",
-          "message": "handleApi: 159 lines (max 60)",
-          "file": "packages/worker/src/api.ts",
-          "line": 7,
-          "rule": "long-function"
-        },
-        {
-          "severity": "warning",
-          "message": "handleApi: complexity 57 (max 15)",
-          "file": "packages/worker/src/api.ts",
-          "line": 7,
-          "rule": "high-complexity"
-        },
-        {
-          "severity": "warning",
           "message": "handleAuth: complexity 22 (max 15)",
           "file": "packages/worker/src/auth.ts",
           "line": 159,
@@ -261,7 +247,7 @@
           "rule": "high-complexity"
         }
       ],
-      "duration": 7
+      "duration": 9
     },
     {
       "name": "duplication",
@@ -269,7 +255,7 @@
       "grade": "A",
       "details": {
         "filesScanned": 31,
-        "totalSourceLines": 4554,
+        "totalSourceLines": 4625,
         "duplicateBlocks": 7,
         "duplicationPct": "1.5%",
         "tool": "built-in"
@@ -319,13 +305,13 @@
         },
         {
           "severity": "warning",
-          "message": "Duplicate (7 lines): if (url.pathname === '/api/me/activity' && request.method === 'GET') {",
-          "file": "packages/worker/src/api.ts:35 ↔ packages/worker/src/api.ts:25",
+          "message": "Duplicate (7 lines): async function handleMeActivity(request: Request, env: Env, url: URL) {",
+          "file": "packages/worker/src/api.ts:27 ↔ packages/worker/src/api.ts:17",
           "rule": "duplicate-code",
-          "snippet": "if (url.pathname === '/api/me/activity' && request.method === 'GET') {"
+          "snippet": "async function handleMeActivity(request: Request, env: Env, url: URL) {"
         }
       ],
-      "duration": 141
+      "duration": 129
     },
     {
       "name": "error-handling",
@@ -403,7 +389,7 @@
           "rule": "no-changelog"
         }
       ],
-      "duration": 2
+      "duration": 3
     },
     {
       "name": "best-practices",
@@ -500,7 +486,7 @@
         "patterns": 0
       },
       "issues": [],
-      "duration": 2
+      "duration": 3
     },
     {
       "name": "testing",
@@ -571,7 +557,7 @@
           "rule": "untested-file"
         }
       ],
-      "duration": 512
+      "duration": 493
     },
     {
       "name": "secrets",
@@ -582,7 +568,7 @@
         "tool": "gitleaks"
       },
       "issues": [],
-      "duration": 637
+      "duration": 420
     },
     {
       "name": "security",
@@ -673,7 +659,7 @@
           "rule": "outdated-package"
         }
       ],
-      "duration": 1125
+      "duration": 1400
     },
     {
       "name": "architecture",
@@ -1095,7 +1081,7 @@
           "rule": "high-fan-out"
         }
       ],
-      "duration": 83
+      "duration": 88
     },
     {
       "name": "performance",
@@ -1191,7 +1177,7 @@
           "rule": "large-import"
         }
       ],
-      "duration": 1526
+      "duration": 1266
     },
     {
       "name": "container-health",
@@ -1241,7 +1227,7 @@
           "rule": "ambiguous-abbreviation"
         }
       ],
-      "duration": 6
+      "duration": 5
     },
     {
       "name": "context",
@@ -1249,8 +1235,8 @@
       "grade": "B",
       "details": {
         "filesScanned": 31,
-        "totalTokens": 65401,
-        "avgTokensPerFile": 2110,
+        "totalTokens": 65762,
+        "avgTokensPerFile": 2121,
         "avgImportsPerFile": 2.6,
         "highTokenFiles": 3,
         "heavyImportFiles": 0,
@@ -1283,7 +1269,7 @@
           "rule": "context-sink"
         }
       ],
-      "duration": 3
+      "duration": 2
     },
     {
       "name": "doc-coherence",
@@ -1312,11 +1298,11 @@
         "reason": "Set VCQA_PRO_KEY to enable LLM-powered analysis",
         "filesAnalyzed": 31,
         "totalExports": 105,
-        "totalFunctions": 134,
+        "totalFunctions": 145,
         "description": "Detects internal contradictions: inconsistent validation, conflicting defaults, naming drift, and behavioral mismatches."
       },
       "issues": [],
-      "duration": 1
+      "duration": 2
     },
     {
       "name": "comment-staleness",
@@ -1630,7 +1616,7 @@
         "reason": "no component files found"
       },
       "issues": [],
-      "duration": 1
+      "duration": 2
     },
     {
       "name": "dead-patterns",
@@ -1688,7 +1674,7 @@
   "meta": {
     "cwd": "/Users/serge-ivo/dev/stores/fis",
     "node": "v26.0.0",
-    "duration": 7160,
+    "duration": 6632,
     "stack": {
       "language": "typescript",
       "framework": "none",
