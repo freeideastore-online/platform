@@ -1,7 +1,7 @@
 {
   "version": "0.44.0",
-  "timestamp": "2026-06-11T23:05:04.190Z",
-  "score": 80,
+  "timestamp": "2026-07-07T09:23:59.418Z",
+  "score": 78,
   "grade": "B",
   "checks": [
     {
@@ -18,9 +18,9 @@
           "lockfile"
         ],
         "missing": [],
-        "srcFiles": 28,
-        "testFiles": 5,
-        "testRatio": "18%",
+        "srcFiles": 31,
+        "testFiles": 6,
+        "testRatio": "19%",
         "monorepo": true,
         "workspaceTool": "pnpm",
         "packages": 2
@@ -28,11 +28,11 @@
       "issues": [
         {
           "severity": "warning",
-          "message": "Low test-to-source ratio: 5 tests for 28 source files (18%)",
+          "message": "Low test-to-source ratio: 6 tests for 31 source files (19%)",
           "rule": "low-test-ratio"
         }
       ],
-      "duration": 3
+      "duration": 9
     },
     {
       "name": "lint",
@@ -54,42 +54,49 @@
         "ok": true
       },
       "issues": [],
-      "duration": 3118
+      "duration": 1579
     },
     {
       "name": "type-safety",
       "score": 100,
       "grade": "A",
       "details": {
-        "filesScanned": 28,
+        "filesScanned": 31,
         "totalUnsafe": 0
       },
       "issues": [],
-      "duration": 10
+      "duration": 6
     },
     {
       "name": "standards",
-      "score": 100,
+      "score": 97,
       "grade": "A",
       "details": {
-        "filesScanned": 28,
+        "filesScanned": 31,
         "codeSmells": 0,
-        "largeFiles": 0,
+        "largeFiles": 1,
         "namingViolations": 0
       },
-      "issues": [],
-      "duration": 12
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "505 lines — consider splitting (penalty grows exponentially above 300)",
+          "file": "packages/worker/src/console-page.ts",
+          "rule": "large-file"
+        }
+      ],
+      "duration": 6
     },
     {
       "name": "complexity",
-      "score": 66,
+      "score": 65,
       "grade": "C",
       "details": {
-        "totalFiles": 28,
-        "totalLines": 3846,
-        "longFunctions": 10,
-        "complexFunctions": 10,
-        "functionCount": 119
+        "totalFiles": 31,
+        "totalLines": 4554,
+        "longFunctions": 11,
+        "complexFunctions": 12,
+        "functionCount": 131
       },
       "issues": [
         {
@@ -108,14 +115,14 @@
         },
         {
           "severity": "warning",
-          "message": "registerCollaborationTools: 175 lines (max 60)",
+          "message": "registerCollaborationTools: 225 lines (max 60)",
           "file": "packages/mcp/src/register-collaboration-tools.ts",
           "line": 6,
           "rule": "long-function"
         },
         {
           "severity": "warning",
-          "message": "registerCollaborationTools: complexity 31 (max 15)",
+          "message": "registerCollaborationTools: complexity 40 (max 15)",
           "file": "packages/mcp/src/register-collaboration-tools.ts",
           "line": 6,
           "rule": "high-complexity"
@@ -129,35 +136,56 @@
         },
         {
           "severity": "warning",
-          "message": "createIdea: complexity 16 (max 15)",
+          "message": "handleAiProxy: 86 lines (max 60)",
+          "file": "packages/worker/src/ai-proxy.ts",
+          "line": 36,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "handleAiProxy: complexity 17 (max 15)",
+          "file": "packages/worker/src/ai-proxy.ts",
+          "line": 36,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "createIdea: complexity 17 (max 15)",
           "file": "packages/worker/src/api-idea-mutations.ts",
           "line": 9,
           "rule": "high-complexity"
         },
         {
           "severity": "warning",
-          "message": "updateIdea: 61 lines (max 60)",
+          "message": "deriveIdea: complexity 21 (max 15)",
           "file": "packages/worker/src/api-idea-mutations.ts",
-          "line": 87,
-          "rule": "long-function"
-        },
-        {
-          "severity": "warning",
-          "message": "updateIdea: complexity 20 (max 15)",
-          "file": "packages/worker/src/api-idea-mutations.ts",
-          "line": 87,
+          "line": 58,
           "rule": "high-complexity"
         },
         {
           "severity": "warning",
-          "message": "handleApi: 146 lines (max 60)",
+          "message": "updateIdea: 67 lines (max 60)",
+          "file": "packages/worker/src/api-idea-mutations.ts",
+          "line": 152,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "updateIdea: complexity 22 (max 15)",
+          "file": "packages/worker/src/api-idea-mutations.ts",
+          "line": 152,
+          "rule": "high-complexity"
+        },
+        {
+          "severity": "warning",
+          "message": "handleApi: 159 lines (max 60)",
           "file": "packages/worker/src/api.ts",
           "line": 7,
           "rule": "long-function"
         },
         {
           "severity": "warning",
-          "message": "handleApi: complexity 51 (max 15)",
+          "message": "handleApi: complexity 57 (max 15)",
           "file": "packages/worker/src/api.ts",
           "line": 7,
           "rule": "high-complexity"
@@ -166,35 +194,35 @@
           "severity": "warning",
           "message": "handleAuth: complexity 22 (max 15)",
           "file": "packages/worker/src/auth.ts",
-          "line": 184,
+          "line": 159,
           "rule": "high-complexity"
         },
         {
           "severity": "warning",
-          "message": "consoleScript: 204 lines (max 60)",
+          "message": "streamChat: 90 lines (max 60)",
           "file": "packages/worker/src/console-page.ts",
-          "line": 18,
+          "line": 293,
           "rule": "long-function"
         },
         {
           "severity": "warning",
-          "message": "consoleScript: complexity 52 (max 15)",
+          "message": "streamChat: complexity 20 (max 15)",
           "file": "packages/worker/src/console-page.ts",
-          "line": 18,
+          "line": 293,
           "rule": "high-complexity"
         },
         {
           "severity": "warning",
-          "message": "renderConsolePage: 77 lines (max 60)",
+          "message": "renderConsolePage: 105 lines (max 60)",
           "file": "packages/worker/src/console-page.ts",
-          "line": 222,
+          "line": 400,
           "rule": "long-function"
         },
         {
           "severity": "warning",
-          "message": "renderIdeaChapterPage: 118 lines (max 60)",
+          "message": "renderIdeaChapterPage: 113 lines (max 60)",
           "file": "packages/worker/src/idea-chapter-page.ts",
-          "line": 12,
+          "line": 11,
           "rule": "long-function"
         },
         {
@@ -206,60 +234,53 @@
         },
         {
           "severity": "warning",
-          "message": "renderIdeaPage: complexity 42 (max 15)",
+          "message": "renderIdeaPage: complexity 44 (max 15)",
           "file": "packages/worker/src/idea-home-page.ts",
           "line": 13,
           "rule": "high-complexity"
         },
         {
           "severity": "warning",
-          "message": "fetch: 81 lines (max 60)",
+          "message": "fetch: 89 lines (max 60)",
           "file": "packages/worker/src/index.ts",
-          "line": 13,
+          "line": 14,
           "rule": "long-function"
         },
         {
           "severity": "warning",
-          "message": "fetch: complexity 32 (max 15)",
+          "message": "fetch: complexity 27 (max 15)",
           "file": "packages/worker/src/index.ts",
-          "line": 13,
+          "line": 14,
           "rule": "high-complexity"
         },
         {
           "severity": "warning",
-          "message": "ideaChapters: complexity 16 (max 15)",
+          "message": "ideaChapters: complexity 17 (max 15)",
           "file": "packages/worker/src/markdown.ts",
-          "line": 112,
+          "line": 162,
           "rule": "high-complexity"
         }
       ],
-      "duration": 11
+      "duration": 7
     },
     {
       "name": "duplication",
       "score": 100,
       "grade": "A",
       "details": {
-        "filesScanned": 28,
-        "totalSourceLines": 3846,
-        "duplicateBlocks": 13,
-        "duplicationPct": "3.3%",
+        "filesScanned": 31,
+        "totalSourceLines": 4554,
+        "duplicateBlocks": 7,
+        "duplicationPct": "1.5%",
         "tool": "built-in"
       },
       "issues": [
         {
           "severity": "warning",
-          "message": "Duplicate (19 lines): const SECURITY_HEADERS: Record<string, string> = {",
-          "file": "packages/worker/src/contributor-pages.ts:4 ↔ packages/worker/src/account-page.ts:5",
+          "message": "Duplicate (18 lines): ],",
+          "file": "packages/worker/src/ai-proxy.ts:104 ↔ packages/worker/src/ai-proxy.ts:71",
           "rule": "duplicate-code",
-          "snippet": "const SECURITY_HEADERS: Record<string, string> = {"
-        },
-        {
-          "severity": "warning",
-          "message": "Duplicate (17 lines): const SECURITY_HEADERS: Record<string, string> = {",
-          "file": "packages/worker/src/console-page.ts:2 ↔ packages/worker/src/account-page.ts:5",
-          "rule": "duplicate-code",
-          "snippet": "const SECURITY_HEADERS: Record<string, string> = {"
+          "snippet": "],"
         },
         {
           "severity": "warning",
@@ -270,59 +291,31 @@
         },
         {
           "severity": "warning",
-          "message": "Duplicate (11 lines): }",
-          "file": "packages/worker/src/contributor-pages.ts:29 ↔ packages/worker/src/account-page.ts:21",
-          "rule": "duplicate-code",
-          "snippet": "}"
-        },
-        {
-          "severity": "warning",
           "message": "Duplicate (10 lines): export async function updateIdea(request: Request, env: Env, rawIdeaId: string) {",
-          "file": "packages/worker/src/api-idea-mutations.ts:87 ↔ packages/worker/src/api-idea-mutations.ts:51",
+          "file": "packages/worker/src/api-idea-mutations.ts:152 ↔ packages/worker/src/api-idea-mutations.ts:116",
           "rule": "duplicate-code",
           "snippet": "export async function updateIdea(request: Request, env: Env, rawIdeaId: string) {"
         },
         {
           "severity": "warning",
           "message": "Duplicate (10 lines): export async function promoteIdea(request: Request, env: Env, rawIdeaId: string) {",
-          "file": "packages/worker/src/api-idea-mutations.ts:149 ↔ packages/worker/src/api-idea-mutations.ts:51",
+          "file": "packages/worker/src/api-idea-mutations.ts:220 ↔ packages/worker/src/api-idea-mutations.ts:116",
           "rule": "duplicate-code",
           "snippet": "export async function promoteIdea(request: Request, env: Env, rawIdeaId: string) {"
         },
         {
           "severity": "warning",
           "message": "Duplicate (10 lines): );",
-          "file": "packages/worker/src/contributor-pages.ts:48 ↔ packages/worker/src/account-page.ts:28",
+          "file": "packages/worker/src/contributor-pages.ts:32 ↔ packages/worker/src/account-page.ts:12",
           "rule": "duplicate-code",
           "snippet": ");"
         },
         {
           "severity": "warning",
-          "message": "Duplicate (10 lines): function escapeHtml(value: unknown) {",
-          "file": "packages/worker/src/markdown.ts:11 ↔ packages/worker/src/account-page.ts:14",
+          "message": "Duplicate (9 lines): function initials(value: string) {",
+          "file": "packages/worker/src/contributor-pages.ts:15 ↔ packages/worker/src/account-page.ts:7",
           "rule": "duplicate-code",
-          "snippet": "function escapeHtml(value: unknown) {"
-        },
-        {
-          "severity": "warning",
-          "message": "Duplicate (9 lines): export function slug(input: string) {",
-          "file": "packages/worker/src/http.ts:43 ↔ packages/worker/src/auth.ts:23",
-          "rule": "duplicate-code",
-          "snippet": "export function slug(input: string) {"
-        },
-        {
-          "severity": "warning",
-          "message": "Duplicate (9 lines): function slug(input: string) {",
-          "file": "packages/worker/src/markdown.ts:3 ↔ packages/worker/src/auth.ts:23",
-          "rule": "duplicate-code",
-          "snippet": "function slug(input: string) {"
-        },
-        {
-          "severity": "warning",
-          "message": "Duplicate (8 lines): export function escapeHtml(value: unknown) {",
-          "file": "packages/worker/src/http.ts:60 ↔ packages/worker/src/account-page.ts:14",
-          "rule": "duplicate-code",
-          "snippet": "export function escapeHtml(value: unknown) {"
+          "snippet": "function initials(value: string) {"
         },
         {
           "severity": "warning",
@@ -330,23 +323,16 @@
           "file": "packages/worker/src/api.ts:35 ↔ packages/worker/src/api.ts:25",
           "rule": "duplicate-code",
           "snippet": "if (url.pathname === '/api/me/activity' && request.method === 'GET') {"
-        },
-        {
-          "severity": "warning",
-          "message": "Duplicate (7 lines): function slug(input: string) {",
-          "file": "packages/worker/src/data.ts:6 ↔ packages/worker/src/auth.ts:23",
-          "rule": "duplicate-code",
-          "snippet": "function slug(input: string) {"
         }
       ],
-      "duration": 275
+      "duration": 128
     },
     {
       "name": "error-handling",
-      "score": 93,
-      "grade": "A",
+      "score": 87,
+      "grade": "B",
       "details": {
-        "emptyCatch": 1,
+        "emptyCatch": 2,
         "throwString": 0,
         "floatingPromises": 0,
         "jsonParseUnsafe": 0,
@@ -358,208 +344,19 @@
         {
           "severity": "error",
           "message": "Empty catch block",
-          "file": "packages/worker/src/reader-settings.ts",
-          "line": 12,
+          "file": "packages/worker/src/console-page.ts",
+          "line": 358,
           "rule": "empty-catch"
         },
         {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 19,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 20,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 21,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 22,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 31,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 32,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 33,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 34,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 39,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 40,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 41,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 42,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 50,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 51,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 52,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 53,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 62,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 63,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 64,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 65,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 70,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 71,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 72,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 73,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 81,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 82,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 83,
-          "rule": "error-info-leak"
-        },
-        {
-          "severity": "info",
-          "message": "Catch block may expose error details to caller — consider logging and returning a safe message",
-          "file": "packages/worker/src/index.ts",
-          "line": 84,
-          "rule": "error-info-leak"
+          "severity": "error",
+          "message": "Empty catch block",
+          "file": "packages/worker/src/theme.ts",
+          "line": 16,
+          "rule": "empty-catch"
         }
       ],
-      "duration": 15
+      "duration": 9
     },
     {
       "name": "react",
@@ -581,15 +378,15 @@
         "reason": "no JSX/TSX/Vue/Svelte files"
       },
       "issues": [],
-      "duration": 2
+      "duration": 1
     },
     {
       "name": "docs",
       "score": 46,
       "grade": "D",
       "details": {
-        "readmeLines": 138,
-        "totalExports": 73,
+        "readmeLines": 140,
+        "totalExports": 77,
         "documentedExports": 1,
         "documentedPct": "1%",
         "hasChangelog": false
@@ -597,7 +394,7 @@
       "issues": [
         {
           "severity": "warning",
-          "message": "Only 1% of exports have documentation (1/73)",
+          "message": "Only 1% of exports have documentation (1/77)",
           "rule": "undocumented-exports"
         },
         {
@@ -669,7 +466,7 @@
           "rule": "conventional-commits"
         }
       ],
-      "duration": 2
+      "duration": 1
     },
     {
       "name": "env-validation",
@@ -698,12 +495,12 @@
       "score": 100,
       "grade": "A",
       "details": {
-        "totalFiles": 28,
+        "totalFiles": 31,
         "affectedFiles": 0,
         "patterns": 0
       },
       "issues": [],
-      "duration": 5
+      "duration": 3
     },
     {
       "name": "testing",
@@ -713,16 +510,16 @@
         "pyramid": {
           "unit": 5,
           "integration": 0,
-          "component": 0,
+          "component": 1,
           "e2e": 0
         },
         "layersPresent": "1/2",
         "e2eTool": "playwright",
-        "testFiles": 5,
-        "srcFiles": 28,
-        "pairing": "12%",
+        "testFiles": 6,
+        "srcFiles": 31,
+        "pairing": "14%",
         "quality": {
-          "assertionsPerTest": 5.4,
+          "assertionsPerTest": 5.1,
           "mockRatio": 0,
           "snapshotRatio": 0
         }
@@ -735,7 +532,7 @@
         },
         {
           "severity": "warning",
-          "message": "Only 12% of source files have matching test files",
+          "message": "Only 14% of source files have matching test files",
           "rule": "low-test-pairing"
         },
         {
@@ -770,11 +567,11 @@
         },
         {
           "severity": "info",
-          "message": "...and 17 more untested files",
+          "message": "...and 19 more untested files",
           "rule": "untested-file"
         }
       ],
-      "duration": 781
+      "duration": 480
     },
     {
       "name": "secrets",
@@ -782,18 +579,17 @@
       "grade": "A",
       "details": {
         "secretsFound": 0,
-        "tool": "secretlint",
-        "suggestion": "Install gitleaks for deeper secret detection (800+ patterns): brew install gitleaks"
+        "tool": "gitleaks"
       },
       "issues": [],
-      "duration": 75
+      "duration": 400
     },
     {
       "name": "security",
       "score": 96,
       "grade": "A",
       "details": {
-        "filesScanned": 28,
+        "filesScanned": 31,
         "patterns": 4,
         "cweCategories": 2,
         "errors": 0,
@@ -812,45 +608,45 @@
           "severity": "info",
           "message": "Cookie may be missing Secure flag — can be sent over HTTP",
           "file": "packages/worker/src/auth.ts",
-          "line": 82,
+          "line": 55,
           "rule": "CWE-614"
         },
         {
           "severity": "info",
           "message": "Cookie may be missing Secure flag — can be sent over HTTP",
           "file": "packages/worker/src/auth.ts",
-          "line": 225,
+          "line": 200,
           "rule": "CWE-614"
         },
         {
           "severity": "info",
           "message": "Cookie may be missing Secure flag — can be sent over HTTP",
           "file": "packages/worker/src/auth.ts",
-          "line": 232,
+          "line": 207,
           "rule": "CWE-614"
         },
         {
           "severity": "warning",
           "message": "Set-Cookie without Cache-Control: no-store",
           "file": "packages/worker/src/auth.ts",
-          "line": 232,
+          "line": 207,
           "rule": "CWE-525"
         }
       ],
-      "duration": 26
+      "duration": 18
     },
     {
       "name": "dependencies",
-      "score": 84,
-      "grade": "B",
+      "score": 54,
+      "grade": "D",
       "details": {
         "vulnerabilities": {
           "critical": 0,
-          "high": 0,
-          "moderate": 8,
-          "low": 4
+          "high": 8,
+          "moderate": 12,
+          "low": 10
         },
-        "outdated": 1,
+        "outdated": 3,
         "majorOutdated": 1,
         "licenses": {
           "copyleft": 0,
@@ -859,8 +655,12 @@
       },
       "issues": [
         {
+          "severity": "error",
+          "message": "8 high vulnerabilities"
+        },
+        {
           "severity": "warning",
-          "message": "8 moderate vulnerabilities"
+          "message": "12 moderate vulnerabilities"
         },
         {
           "severity": "warning",
@@ -873,18 +673,18 @@
           "rule": "outdated-package"
         }
       ],
-      "duration": 1475
+      "duration": 1017
     },
     {
       "name": "architecture",
-      "score": 100,
+      "score": 97,
       "grade": "A",
       "details": {
-        "totalModules": 28,
+        "totalModules": 31,
         "circularDeps": 0,
         "godModules": 0,
         "orphans": 0,
-        "highFanOut": 0,
+        "highFanOut": 1,
         "connectors": 0,
         "graph": {
           "packages/mcp/src/fis-api.ts": {
@@ -1025,6 +825,18 @@
             "imports": [
               "packages/worker/src/data.ts",
               "packages/worker/src/auth.ts",
+              "packages/worker/src/http.ts",
+              "packages/worker/src/theme.ts",
+              "packages/worker/src/types.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/ai-proxy.ts": {
+            "imports": [
+              "packages/worker/src/http.ts",
               "packages/worker/src/types.ts"
             ],
             "importedBy": [
@@ -1059,6 +871,7 @@
           },
           "packages/worker/src/auth.ts": {
             "imports": [
+              "packages/worker/src/http.ts",
               "packages/worker/src/types.ts"
             ],
             "importedBy": [
@@ -1071,7 +884,10 @@
             "dir": "packages/worker/src"
           },
           "packages/worker/src/console-page.ts": {
-            "imports": [],
+            "imports": [
+              "packages/worker/src/http.ts",
+              "packages/worker/src/theme.ts"
+            ],
             "importedBy": [
               "packages/worker/src/index.ts"
             ],
@@ -1080,6 +896,8 @@
           "packages/worker/src/contributor-pages.ts": {
             "imports": [
               "packages/worker/src/data.ts",
+              "packages/worker/src/http.ts",
+              "packages/worker/src/theme.ts",
               "packages/worker/src/types.ts"
             ],
             "importedBy": [
@@ -1089,6 +907,7 @@
           },
           "packages/worker/src/data.ts": {
             "imports": [
+              "packages/worker/src/http.ts",
               "packages/worker/src/markdown.ts",
               "packages/worker/src/types.ts"
             ],
@@ -1106,12 +925,19 @@
           "packages/worker/src/http.ts": {
             "imports": [],
             "importedBy": [
+              "packages/worker/src/account-page.ts",
+              "packages/worker/src/ai-proxy.ts",
               "packages/worker/src/api-idea-mutations.ts",
               "packages/worker/src/api.ts",
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/console-page.ts",
+              "packages/worker/src/contributor-pages.ts",
+              "packages/worker/src/data.ts",
               "packages/worker/src/idea-catalog-page.ts",
               "packages/worker/src/idea-chapter-page.ts",
               "packages/worker/src/idea-home-page.ts",
-              "packages/worker/src/index.ts"
+              "packages/worker/src/index.ts",
+              "packages/worker/src/markdown.ts"
             ],
             "dir": "packages/worker/src"
           },
@@ -1120,6 +946,7 @@
               "packages/worker/src/data.ts",
               "packages/worker/src/http.ts",
               "packages/worker/src/markdown.ts",
+              "packages/worker/src/theme.ts",
               "packages/worker/src/types.ts"
             ],
             "importedBy": [
@@ -1140,11 +967,19 @@
             ],
             "dir": "packages/worker/src"
           },
+          "packages/worker/src/idea-diagrams.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/worker/src/idea-home-page.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
           "packages/worker/src/idea-home-page.ts": {
             "imports": [
               "packages/worker/src/auth.ts",
               "packages/worker/src/data.ts",
               "packages/worker/src/http.ts",
+              "packages/worker/src/idea-diagrams.ts",
               "packages/worker/src/markdown.ts",
               "packages/worker/src/reader-settings.ts",
               "packages/worker/src/types.ts"
@@ -1156,6 +991,7 @@
           },
           "packages/worker/src/index.ts": {
             "imports": [
+              "packages/worker/src/ai-proxy.ts",
               "packages/worker/src/api.ts",
               "packages/worker/src/console-page.ts",
               "packages/worker/src/types.ts",
@@ -1172,6 +1008,7 @@
           },
           "packages/worker/src/markdown.ts": {
             "imports": [
+              "packages/worker/src/http.ts",
               "packages/worker/src/types.ts"
             ],
             "importedBy": [
@@ -1183,10 +1020,23 @@
             "dir": "packages/worker/src"
           },
           "packages/worker/src/reader-settings.ts": {
-            "imports": [],
+            "imports": [
+              "packages/worker/src/theme.ts"
+            ],
             "importedBy": [
               "packages/worker/src/idea-chapter-page.ts",
               "packages/worker/src/idea-home-page.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/theme.ts": {
+            "imports": [],
+            "importedBy": [
+              "packages/worker/src/account-page.ts",
+              "packages/worker/src/console-page.ts",
+              "packages/worker/src/contributor-pages.ts",
+              "packages/worker/src/idea-catalog-page.ts",
+              "packages/worker/src/reader-settings.ts"
             ],
             "dir": "packages/worker/src"
           },
@@ -1194,6 +1044,7 @@
             "imports": [],
             "importedBy": [
               "packages/worker/src/account-page.ts",
+              "packages/worker/src/ai-proxy.ts",
               "packages/worker/src/api-idea-mutations.ts",
               "packages/worker/src/api.ts",
               "packages/worker/src/auth.ts",
@@ -1236,15 +1087,22 @@
         },
         "tool": "built-in"
       },
-      "issues": [],
-      "duration": 837
+      "issues": [
+        {
+          "severity": "warning",
+          "message": "High fan-out: imports 11 modules — hard to test in isolation",
+          "file": "packages/worker/src/index.ts",
+          "rule": "high-fan-out"
+        }
+      ],
+      "duration": 72
     },
     {
       "name": "performance",
       "score": 100,
       "grade": "A",
       "details": {
-        "filesScanned": 28,
+        "filesScanned": 31,
         "barrelImports": 0,
         "heavyDeps": 0,
         "dynamicOpportunities": 0,
@@ -1301,6 +1159,13 @@
           "severity": "info",
           "message": "Large destructured import — if from a barrel, only imported items should be bundled",
           "file": "packages/worker/src/api.ts",
+          "line": 2,
+          "rule": "large-import"
+        },
+        {
+          "severity": "info",
+          "message": "Large destructured import — if from a barrel, only imported items should be bundled",
+          "file": "packages/worker/src/api.ts",
           "line": 3,
           "rule": "large-import"
         },
@@ -1326,7 +1191,7 @@
           "rule": "large-import"
         }
       ],
-      "duration": 4987
+      "duration": 1505
     },
     {
       "name": "container-health",
@@ -1341,14 +1206,14 @@
     },
     {
       "name": "confusion",
-      "score": 64,
+      "score": 68,
       "grade": "C",
       "details": {
         "fileConfusability": 0,
         "genericNames": 0,
         "exportCollisions": 2,
         "ambiguousAbbrevs": 2,
-        "filesScanned": 28
+        "filesScanned": 31
       },
       "issues": [
         {
@@ -1376,18 +1241,18 @@
           "rule": "ambiguous-abbreviation"
         }
       ],
-      "duration": 7
+      "duration": 5
     },
     {
       "name": "context",
-      "score": 86,
+      "score": 82,
       "grade": "B",
       "details": {
-        "filesScanned": 28,
-        "totalTokens": 54382,
-        "avgTokensPerFile": 1942,
-        "avgImportsPerFile": 2.4,
-        "highTokenFiles": 2,
+        "filesScanned": 31,
+        "totalTokens": 65409,
+        "avgTokensPerFile": 2110,
+        "avgImportsPerFile": 2.6,
+        "highTokenFiles": 3,
         "heavyImportFiles": 0,
         "circularDeps": 0,
         "contextSinks": 1
@@ -1395,24 +1260,30 @@
       "issues": [
         {
           "severity": "warning",
-          "message": "~5250 tokens (>4000) — large context cost for LLMs",
+          "message": "~7708 tokens (>4000) — large context cost for LLMs",
           "file": "packages/worker/src/console-page.ts",
           "rule": "high-token-count"
         },
         {
           "severity": "warning",
-          "message": "~6075 tokens (>4000) — large context cost for LLMs",
+          "message": "~4433 tokens (>4000) — large context cost for LLMs",
+          "file": "packages/worker/src/idea-diagrams.ts",
+          "rule": "high-token-count"
+        },
+        {
+          "severity": "warning",
+          "message": "~5939 tokens (>4000) — large context cost for LLMs",
           "file": "packages/worker/src/idea-home-page.ts",
           "rule": "high-token-count"
         },
         {
           "severity": "warning",
-          "message": "10 imports but only 1 export — hard to understand in isolation",
+          "message": "11 imports but only 1 export — hard to understand in isolation",
           "file": "packages/worker/src/index.ts",
           "rule": "context-sink"
         }
       ],
-      "duration": 4
+      "duration": 2
     },
     {
       "name": "doc-coherence",
@@ -1429,7 +1300,7 @@
         "description": "Detects contradictions between documentation and code. Finds stale README claims, incorrect JSDoc, and misleading comments."
       },
       "issues": [],
-      "duration": 3
+      "duration": 1
     },
     {
       "name": "code-coherence",
@@ -1439,13 +1310,13 @@
         "premium": true,
         "comingSoon": true,
         "reason": "Set VCQA_PRO_KEY to enable LLM-powered analysis",
-        "filesAnalyzed": 28,
-        "totalExports": 98,
-        "totalFunctions": 131,
+        "filesAnalyzed": 31,
+        "totalExports": 105,
+        "totalFunctions": 134,
         "description": "Detects internal contradictions: inconsistent validation, conflicting defaults, naming drift, and behavioral mismatches."
       },
       "issues": [],
-      "duration": 2
+      "duration": 1
     },
     {
       "name": "comment-staleness",
@@ -1458,7 +1329,7 @@
         "description": "Detects stale comments: TODOs older than 6 months, numeric mismatches, commented-out code, semantic contradictions (LLM-powered)."
       },
       "issues": [],
-      "duration": 2
+      "duration": 1
     },
     {
       "name": "html-quality",
@@ -1737,7 +1608,7 @@
           "rule": "broken-link"
         }
       ],
-      "duration": 11
+      "duration": 5
     },
     {
       "name": "frontend-health",
@@ -1815,9 +1686,9 @@
     }
   ],
   "meta": {
-    "cwd": "/Users/serge/dev/stores/freeideastore/platform",
-    "node": "v22.21.1",
-    "duration": 13592,
+    "cwd": "/Users/serge-ivo/dev/stores/fis",
+    "node": "v26.0.0",
+    "duration": 6559,
     "stack": {
       "language": "typescript",
       "framework": "none",
@@ -1852,7 +1723,7 @@
         "packages/worker/src"
       ]
     },
-    "repoUrl": "https://github.com/freeideastore-online/platform",
+    "repoUrl": "git@github-personal:freeideastore-online/platform",
     "branch": "main"
   }
 }

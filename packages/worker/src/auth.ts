@@ -129,6 +129,8 @@ export function isApiMutation(request: Request) {
 
 export async function profileFor(request: Request, env: Env) {
   const authUser = await authUserFor(request);
+  // Only trust x-idea-handle when unauthenticated (anonymous idea creation).
+  // When authenticated, always use the verified handle to prevent attribution spoofing.
   const raw = authUser?.handle || request.headers.get('x-idea-handle') || 'guest';
   const handle = slug(raw) || 'guest';
   const profileId = `profile-${handle}`;

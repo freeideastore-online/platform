@@ -18,10 +18,16 @@ export async function createIdea(request: Request, env: Env) {
   const body = String(input.body || input.body_md || '').trim().slice(0, 24000);
   const bodyKey = `ideas/${ideaId}/body.md`;
   const renderKey = `ideas/${ideaId}/rendered.html`;
+  let storedInR2 = false;
   if (body && env.IDEA_BUCKET) {
-    await env.IDEA_BUCKET.put(bodyKey, body, {
-      httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
-    });
+    try {
+      await env.IDEA_BUCKET.put(bodyKey, body, {
+        httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
+      });
+      storedInR2 = true;
+    } catch {
+      // Fall back to storing body inline in D1 if R2 write fails.
+    }
   }
   await env.DB.prepare(
     `INSERT INTO ideas
@@ -34,9 +40,9 @@ export async function createIdea(request: Request, env: Env) {
       summary.slice(0, 1000),
       String(input.preview || '').slice(0, 1000),
       String(input.signal || '').slice(0, 1000),
-      env.IDEA_BUCKET ? '' : body,
-      env.IDEA_BUCKET && body ? bodyKey : '',
-      env.IDEA_BUCKET && body ? renderKey : '',
+      storedInR2 ? '' : body,
+      storedInR2 ? bodyKey : '',
+      storedInR2 ? renderKey : '',
       String(input.sourceUrl || input.source_url || '').slice(0, 500),
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
@@ -70,8 +76,14 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   const seedBody = String(bodyOverride ?? (await ideaBody(env, parent))).slice(0, 24000);
   const bodyKey = `ideas/${ideaId}/body.md`;
   const renderKey = `ideas/${ideaId}/rendered.html`;
+  let storedInR2 = false;
   if (seedBody && env.IDEA_BUCKET) {
-    await env.IDEA_BUCKET.put(bodyKey, seedBody, { httpMetadata: { contentType: 'text/markdown;charset=UTF-8' } });
+    try {
+      await env.IDEA_BUCKET.put(bodyKey, seedBody, { httpMetadata: { contentType: 'text/markdown;charset=UTF-8' } });
+      storedInR2 = true;
+    } catch {
+      // Fall back to storing body inline in D1 if R2 write fails.
+    }
   }
   const parentPath = `/ideas/${parent.id}/`;
   await env.DB.prepare(
@@ -85,9 +97,9 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
       summary.slice(0, 1000),
       String(input.preview || parent.preview || summary).slice(0, 1000),
       String(input.signal || '').slice(0, 1000),
-      env.IDEA_BUCKET ? '' : seedBody,
-      env.IDEA_BUCKET && seedBody ? bodyKey : '',
-      env.IDEA_BUCKET && seedBody ? renderKey : '',
+      storedInR2 ? '' : seedBody,
+      storedInR2 ? bodyKey : '',
+      storedInR2 ? renderKey : '',
       String(input.sourceUrl || input.source_url || `${new URL(request.url).origin}${parentPath}`).slice(0, 500),
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
@@ -114,8 +126,8 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
 
   const input = await bodyJson(request);
   const confirmTitle = String(input.confirmTitle || input.confirm_title || '').trim();
-  if (confirmTitle && confirmTitle !== idea.title && confirmTitle !== idea.id) {
-    return bad('confirmation does not match idea title or id', 400);
+  if (!confirmTitle || (confirmTitle !== idea.title && confirmTitle !== idea.id)) {
+    return bad('confirmation does not match idea title or id — send confirmTitle or confirm_title', 400);
   }
 
   await env.DB.prepare(
@@ -153,11 +165,17 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   const body = typeof bodyInput === 'string' ? bodyInput.trim().slice(0, 24000) : await ideaBody(env, idea);
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
   const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
+  let storedInR2 = false;
   if (env.IDEA_BUCKET) {
-    await env.IDEA_BUCKET.put(bodyKey, body, {
-      httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
-    });
-    await env.IDEA_BUCKET.delete(renderKey).catch(() => undefined);
+    try {
+      await env.IDEA_BUCKET.put(bodyKey, body, {
+        httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
+      });
+      storedInR2 = true;
+      await env.IDEA_BUCKET.delete(renderKey).catch(() => undefined);
+    } catch {
+      // Fall back to storing body inline in D1 if R2 write fails.
+    }
   }
 
   await env.DB.prepare(
@@ -183,9 +201,9 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
       String(input.summary || idea.summary).trim().slice(0, 1000),
       String(input.preview ?? idea.preview ?? '').slice(0, 1000),
       String(input.signal ?? idea.signal ?? '').slice(0, 1000),
-      env.IDEA_BUCKET ? '' : body,
-      env.IDEA_BUCKET ? bodyKey : '',
-      env.IDEA_BUCKET ? renderKey : '',
+      storedInR2 ? '' : body,
+      storedInR2 ? bodyKey : '',
+      storedInR2 ? renderKey : '',
       String(input.sourceUrl || input.source_url || idea.source_url || '').slice(0, 500),
       enumValue(input.visibility ?? idea.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage ?? idea.stage, IDEA_STAGES, idea.stage || 'raw'),
