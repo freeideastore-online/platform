@@ -67,7 +67,7 @@ async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContex
       // Tool handlers will still fall back to unsigned/public behavior.
     }
   }
-  if (!auth.token && request.method !== "OPTIONS" && request.method !== "GET" && env.SESSION_SIGNING_KEY) {
+  if (!auth.token && request.method !== "OPTIONS" && env.SESSION_SIGNING_KEY) {
     return createAuthChallenge({ issuer });
   }
   return FisMcp.serve("/mcp").fetch(request, env, ctx);

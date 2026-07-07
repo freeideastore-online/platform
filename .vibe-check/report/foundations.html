@@ -369,7 +369,7 @@ h3{font-size:0.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:
 <div class="cat-head"><span style="color:#22c55e;font-size:1.8rem;font-weight:900">98</span><span style="color:#22c55e">/100</span><span style="color:var(--muted);margin-left:0.5rem">Foundations</span></div>
 <div class="bar2"><div class="bf2" style="width:98%;background:#22c55e"></div></div>
 <section class="check-section" id="structure">
-<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Project Structure</b><span class="ch-s">95/100 · weight 6% · 9ms · 1 issues</span></div><span class="pri" style="color:#f97316">high</span></div>
+<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Project Structure</b><span class="ch-s">95/100 · weight 6% · 3ms · 1 issues</span></div><span class="pri" style="color:#f97316">high</span></div>
 <div class="info-panel"><div class="ip-row"><span class="ip-label">What</span><span>Checks for standard project files: package.json, tsconfig.json, LICENSE, README, .gitignore, lockfile. Verifies test-to-source file ratio and that essential scripts (test, build) exist.</span></div><div class="ip-row"><span class="ip-label">Risk</span><span>Missing config files cause build failures in CI. Missing LICENSE makes the project legally ambiguous. No lockfile means non-reproducible builds — a dependency update can break production silently.</span></div><div class="ip-row"><span class="ip-label">Fix</span><span>Ensure every project has package.json, tsconfig.json, LICENSE, .gitignore, and a lockfile. Add &#39;test&#39; and &#39;build&#39; scripts. Aim for at least one test file per source file.</span></div></div>
 
 
@@ -387,7 +387,7 @@ h3{font-size:0.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:
 
 <p style="color:var(--muted);font-size:0.8rem;margin-top:1rem">No issues found.</p>
 </section><section class="check-section" id="types">
-<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Type Check</b><span class="ch-s">100/100 · weight 6% · 1579ms · 0 issues</span></div><span class="pri" style="color:#ef4444">critical</span></div>
+<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Type Check</b><span class="ch-s">100/100 · weight 6% · 1662ms · 0 issues</span></div><span class="pri" style="color:#ef4444">critical</span></div>
 <div class="info-panel"><div class="ip-row"><span class="ip-label">What</span><span>Runs tsc --noEmit to find TypeScript compilation errors. Type errors mean the code may crash at runtime in ways the compiler could have prevented.</span></div><div class="ip-row"><span class="ip-label">Risk</span><span>Type errors are bugs. Every unresolved type error is a potential runtime crash. TypeScript&#39;s type system exists to prevent entire categories of bugs — ignoring it negates its value.</span></div><div class="ip-row"><span class="ip-label">Fix</span><span>Fix all type errors. If you&#39;re migrating from JavaScript, enable strict mode gradually — start with &#39;strict: true&#39; and fix errors file by file.</span></div></div>
 
 
@@ -405,7 +405,7 @@ h3{font-size:0.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:
 <div class="kvs"><div class="kv"><span class="k">filesScanned</span><span class="v">31</span></div><div class="kv"><span class="k">totalUnsafe</span><span class="v">0</span></div></div>
 <p style="color:var(--muted);font-size:0.8rem;margin-top:1rem">No issues found.</p>
 </section><section class="check-section" id="standards">
-<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Code Standards</b><span class="ch-s">97/100 · weight 3% · 6ms · 1 issues</span></div><span class="pri" style="color:#f97316">high</span></div>
+<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Code Standards</b><span class="ch-s">97/100 · weight 3% · 8ms · 1 issues</span></div><span class="pri" style="color:#f97316">high</span></div>
 <div class="info-panel"><div class="ip-row"><span class="ip-label">What</span><span>Checks coding conventions: file naming (PascalCase for components, kebab-case for modules), file size limits (&gt;250 lines warning, &gt;400 error), code smells (console.log, var, ==, eval, innerHTML, TODO/FIXME), config hygiene (strict mode), and framework best practices.</span></div><div class="ip-row"><span class="ip-label">Risk</span><span>Large files are hard to review and test — AI-generated code accumulates in monolithic files that become impossible to refactor. console.log in production leaks internal data. var causes hoisting bugs. == causes type coercion surprises. Inconsistent naming makes the codebase harder to navigate.</span></div><div class="ip-row"><span class="ip-label">Fix</span><span>Split files over 300 lines. Replace console.log with a proper logger or remove it. Use const/let, ===, and safe DOM APIs. Enable TypeScript strict mode.</span></div></div>
 
 

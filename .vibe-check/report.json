@@ -1,6 +1,6 @@
 {
   "version": "0.44.0",
-  "timestamp": "2026-07-07T09:23:59.418Z",
+  "timestamp": "2026-07-07T09:53:37.340Z",
   "score": 78,
   "grade": "B",
   "checks": [
@@ -32,7 +32,7 @@
           "rule": "low-test-ratio"
         }
       ],
-      "duration": 9
+      "duration": 3
     },
     {
       "name": "lint",
@@ -54,7 +54,7 @@
         "ok": true
       },
       "issues": [],
-      "duration": 1579
+      "duration": 1662
     },
     {
       "name": "type-safety",
@@ -85,7 +85,7 @@
           "rule": "large-file"
         }
       ],
-      "duration": 6
+      "duration": 8
     },
     {
       "name": "complexity",
@@ -325,7 +325,7 @@
           "snippet": "if (url.pathname === '/api/me/activity' && request.method === 'GET') {"
         }
       ],
-      "duration": 128
+      "duration": 141
     },
     {
       "name": "error-handling",
@@ -403,7 +403,7 @@
           "rule": "no-changelog"
         }
       ],
-      "duration": 3
+      "duration": 2
     },
     {
       "name": "best-practices",
@@ -500,7 +500,7 @@
         "patterns": 0
       },
       "issues": [],
-      "duration": 3
+      "duration": 2
     },
     {
       "name": "testing",
@@ -571,7 +571,7 @@
           "rule": "untested-file"
         }
       ],
-      "duration": 480
+      "duration": 512
     },
     {
       "name": "secrets",
@@ -582,7 +582,7 @@
         "tool": "gitleaks"
       },
       "issues": [],
-      "duration": 400
+      "duration": 637
     },
     {
       "name": "security",
@@ -633,7 +633,7 @@
           "rule": "CWE-525"
         }
       ],
-      "duration": 18
+      "duration": 16
     },
     {
       "name": "dependencies",
@@ -673,7 +673,7 @@
           "rule": "outdated-package"
         }
       ],
-      "duration": 1017
+      "duration": 1125
     },
     {
       "name": "architecture",
@@ -1095,7 +1095,7 @@
           "rule": "high-fan-out"
         }
       ],
-      "duration": 72
+      "duration": 83
     },
     {
       "name": "performance",
@@ -1191,7 +1191,7 @@
           "rule": "large-import"
         }
       ],
-      "duration": 1505
+      "duration": 1526
     },
     {
       "name": "container-health",
@@ -1241,7 +1241,7 @@
           "rule": "ambiguous-abbreviation"
         }
       ],
-      "duration": 5
+      "duration": 6
     },
     {
       "name": "context",
@@ -1249,7 +1249,7 @@
       "grade": "B",
       "details": {
         "filesScanned": 31,
-        "totalTokens": 65409,
+        "totalTokens": 65401,
         "avgTokensPerFile": 2110,
         "avgImportsPerFile": 2.6,
         "highTokenFiles": 3,
@@ -1283,7 +1283,7 @@
           "rule": "context-sink"
         }
       ],
-      "duration": 2
+      "duration": 3
     },
     {
       "name": "doc-coherence",
@@ -1608,7 +1608,7 @@
           "rule": "broken-link"
         }
       ],
-      "duration": 5
+      "duration": 6
     },
     {
       "name": "frontend-health",
@@ -1619,7 +1619,7 @@
         "reason": "no component files found"
       },
       "issues": [],
-      "duration": 2
+      "duration": 1
     },
     {
       "name": "styling",
@@ -1688,7 +1688,7 @@
   "meta": {
     "cwd": "/Users/serge-ivo/dev/stores/fis",
     "node": "v26.0.0",
-    "duration": 6559,
+    "duration": 7160,
     "stack": {
       "language": "typescript",
       "framework": "none",

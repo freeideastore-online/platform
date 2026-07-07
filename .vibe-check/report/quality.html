@@ -516,7 +516,7 @@ Check: complexity
 
 Analyze the code, explain the issue, and provide the fix." title="Copy fix prompt with source context">Copy fix prompt</button></div></div></div></div>
 </section><section class="check-section" id="duplication">
-<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Duplication</b><span class="ch-s">100/100 · weight 3% · 128ms · 7 issues</span></div><span class="pri" style="color:#eab308">medium</span></div>
+<div class="ch-head"><span class="ch-g" style="color:#22c55e">A</span><div><b>Duplication</b><span class="ch-s">100/100 · weight 3% · 141ms · 7 issues</span></div><span class="pri" style="color:#eab308">medium</span></div>
 <div class="info-panel"><div class="ip-row"><span class="ip-label">What</span><span>Detects copy-pasted code blocks of 6+ lines across source files. Duplication is measured as a percentage of total source lines involved in duplicate blocks.</span></div><div class="ip-row"><span class="ip-label">Risk</span><span>Duplicated code means bugs must be fixed in multiple places. Miss one copy and the bug persists. DRY (Don&#39;t Repeat Yourself) violations increase maintenance cost linearly with each copy.</span></div><div class="ip-row"><span class="ip-label">Fix</span><span>Extract duplicated logic into shared functions or modules. If two files share the same pattern, create a helper. If the duplication is across repos, consider vendoring a shared module.</span></div><div class="ip-row"><span class="ip-label">Go deeper</span><span class="deeper-tools"><code>jscpd</code> <code>SonarQube</code></span></div></div>
 
 
@@ -578,7 +578,7 @@ Analyze the code, explain the issue, and provide the fix." title="Copy fix promp
 
 <p style="color:var(--muted);font-size:0.8rem;margin-top:1rem">No issues found.</p>
 </section><section class="check-section" id="docs">
-<div class="ch-head"><span class="ch-g" style="color:#f97316">D</span><div><b>Documentation</b><span class="ch-s">46/100 · weight 3% · 3ms · 2 issues</span></div><span class="pri" style="color:#6b7280">low</span></div>
+<div class="ch-head"><span class="ch-g" style="color:#f97316">D</span><div><b>Documentation</b><span class="ch-s">46/100 · weight 3% · 2ms · 2 issues</span></div><span class="pri" style="color:#6b7280">low</span></div>
 <div class="info-panel"><div class="ip-row"><span class="ip-label">What</span><span>Checks README quality (existence, length, sections) and JSDoc coverage (what percentage of exported functions/classes have documentation comments).</span></div><div class="ip-row"><span class="ip-label">Risk</span><span>Undocumented code is hard to onboard to and easy to misuse. Missing README means new contributors can&#39;t get started. Undocumented exports become tribal knowledge that leaves when people leave.</span></div><div class="ip-row"><span class="ip-label">Fix</span><span>Write a README with: what it does, how to install, how to run, how to develop. Add JSDoc comments to all public exports — even a one-line description helps.</span></div></div>
 
 

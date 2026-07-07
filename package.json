@@ -17,7 +17,7 @@
     "mcp:oauth:smoke": "pnpm --filter @fis/mcp oauth:smoke",
     "mcp:smoke": "pnpm --filter @fis/mcp smoke",
     "skills:validate": "node scripts/validate-skills.mjs",
-    "test": "pnpm docs:build && pnpm skills:validate && pnpm --filter @fis/worker test && pnpm --filter @fis/mcp test",
+    "test": "pnpm skills:validate && pnpm --filter @fis/worker test && pnpm --filter @fis/mcp test",
     "test:e2e": "playwright test",
     "typecheck": "pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
     "db:migrate:local": "pnpm --filter @fis/worker db:migrate:local",

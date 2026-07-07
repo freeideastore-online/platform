@@ -19,12 +19,19 @@ https://freeideastore.online
 ```bash
 pnpm install
 pnpm typecheck
-pnpm docs:build
+pnpm test
 pnpm db:migrate:local
-doppler run --project pas --config prd -- pnpm --filter @fis/worker exec wrangler r2 bucket create freeideastore-ideas
-doppler run --project pas --config prd -- pnpm db:migrate:prod
-doppler run --project pas --config prd -- pnpm --filter @fis/worker exec wrangler deploy
-doppler run --project pas --config prd -- pnpm --filter @fis/mcp exec wrangler deploy
+pnpm --filter @fis/worker exec wrangler d1 migrations apply freeideastore --remote
+pnpm --filter @fis/worker exec wrangler deploy
+pnpm --filter @fis/mcp exec wrangler deploy
+```
+
+Wrangler reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the environment. If those are set (e.g. via shell profile or CI secrets), no Doppler wrapper is needed.
+
+Legacy Doppler path (no longer active — the `pas` project was removed from the workspace):
+
+```bash
+# doppler run --project pas --config prd -- pnpm --filter @fis/worker exec wrangler deploy
 ```
 
 The current Doppler Cloudflare token can deploy Workers and run D1 migrations, but does not have R2 bucket permissions. Until that token is expanded, leave the `IDEA_BUCKET` binding out of `packages/worker/wrangler.toml`; the Worker stores free idea bodies in D1. After R2 is available, add:
@@ -73,4 +80,4 @@ The `workers.dev` URL may still exist as a fallback, but product links, sitemap,
 
 ## Doppler
 
-The Doppler workspace is currently at the 10-project limit, so there is no dedicated `fis` project yet. Deployment currently uses the existing Cloudflare credentials from the `pas` Doppler project.
+Doppler is no longer required. The `pas` project that held the Cloudflare token was removed from the workspace. Deployment credentials are provided via environment variables (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) set in shell profiles or CI secrets.

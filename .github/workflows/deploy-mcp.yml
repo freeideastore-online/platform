@@ -31,6 +31,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm --filter @fis/mcp typecheck
+      - name: Test
+        run: pnpm --filter @fis/mcp test
       - name: Deploy MCP Worker
         working-directory: packages/mcp
         run: pnpm exec wrangler deploy
