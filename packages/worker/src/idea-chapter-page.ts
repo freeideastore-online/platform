@@ -1,6 +1,6 @@
 import { ideaBody, ideaById } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS } from './http';
-import { ideaChapterById, ideaChapters, markdownHeadings, markdownToHtml } from './markdown';
+import { ideaChapterById, ideaChapters, MARKDOWN_CSS, markdownHeadings, markdownToHtml } from './markdown';
 import {
   readerSettingsBootScript,
   readerSettingsCss,
@@ -69,6 +69,7 @@ footer{max-width:920px;margin:1.8rem auto 0;border-top:1px solid var(--line);pad
 @media(max-width:1180px){.book-shell{grid-template-columns:280px minmax(0,1fr)}.toc-rail{display:none}.mobile-page-toc{display:block}}
 @media(max-width:860px){.top-brand strong{max-width:min(55vw,280px)}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body{padding:.9rem}.chapter-nav{grid-template-columns:1fr}.chapter-nav .next{text-align:left}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
 ${navCss(860)}
+${MARKDOWN_CSS}
 ${readerSettingsCss()}
 </style>
 </head>

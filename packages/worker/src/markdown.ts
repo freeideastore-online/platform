@@ -1,68 +1,126 @@
+import MarkdownIt from 'markdown-it';
 import { escapeHtml, slug } from './http';
 import type { IdeaRow } from './types';
 
-function externalHref(value: string) {
-  const url = value.trim();
-  if (!/^https?:\/\//i.test(url)) return '';
-  return url;
+/**
+ * Idea bodies are CommonMark, rendered by markdown-it.
+ *
+ * This replaced a hand-rolled line renderer that supported only headings,
+ * lists, `**bold**`, links and images. Everything else — `*italic*`, `code`,
+ * blockquotes, tables — reached the page as literal punctuation.
+ *
+ * The parser is configured to keep the security posture of the old renderer,
+ * which escaped everything it did not explicitly emit:
+ *
+ * - `html: false` escapes raw HTML in the source instead of passing it through,
+ *   so agent- and contributor-authored bodies cannot inject markup. This is why
+ *   markdown-it is used rather than marked, which passes raw HTML through and
+ *   would need a DOM sanitizer.
+ * - `validateLink` allows only http(s), so `javascript:` / `data:` URLs never
+ *   become links.
+ * - `breaks: true` keeps a single newline as a line break. Existing idea bodies
+ *   were written under the old renderer, where every line was its own
+ *   paragraph; strict CommonMark would silently merge those into run-on
+ *   paragraphs.
+ *
+ * Heading ids come from `slug()` on the raw heading source, which is what
+ * `markdownHeadings()` below also does — the two must agree or every in-page
+ * anchor and the Signals table of contents breaks.
+ */
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: true,
+  typographer: false,
+});
+
+const HTTP_URL = /^https?:\/\//i;
+const HTTPS_URL = /^https:\/\//i;
+
+md.validateLink = (url) => HTTP_URL.test(url.trim());
+
+/** `#`/`##` render as h2 and anything deeper as h3, matching the page styles. */
+function headingTag(tag: string) {
+  return tag === 'h1' || tag === 'h2' ? 'h2' : 'h3';
 }
 
-function externalLink(label: string, url: string) {
-  const href = externalHref(url);
-  if (!href) return escapeHtml(label);
-  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+md.renderer.rules.heading_open = (tokens, idx) => {
+  const title = tokens[idx + 1]?.content || '';
+  return `<${headingTag(tokens[idx]?.tag || 'h2')} id="${escapeHtml(slug(title) || 'section')}">`;
+};
+
+md.renderer.rules.heading_close = (tokens, idx) => `</${headingTag(tokens[idx]?.tag || 'h2')}>`;
+
+md.renderer.rules.link_open = (tokens, idx, options, _env, self) => {
+  const token = tokens[idx];
+  token?.attrSet('target', '_blank');
+  token?.attrSet('rel', 'noopener noreferrer');
+  return self.renderToken(tokens, idx, options);
+};
+
+md.renderer.rules.image = (tokens, idx, options, _env, self) => {
+  const token = tokens[idx];
+  if (!token) return '';
+  const src = token.attrGet('src') || '';
+  const alt = token.content || '';
+  // Non-https images degrade to their alt text rather than loading over http.
+  if (!HTTPS_URL.test(src)) return escapeHtml(alt);
+  token.attrSet('alt', alt);
+  token.attrSet('loading', 'lazy');
+  token.attrSet('style', 'max-width:100%;height:auto;border-radius:8px;margin:.5rem 0');
+  return self.renderToken(tokens, idx, options);
+};
+
+export function markdownToHtml(markdown: string) {
+  return md.render(markdown || '');
 }
 
-function splitTrailingUrlPunctuation(url: string) {
-  const match = url.match(/^(.+?)([),.;:!?]+)?$/);
-  return {
-    href: match?.[1] || url,
-    trailing: match?.[2] || '',
-  };
-}
+/**
+ * Styles for the elements the parser can now emit. The previous renderer could
+ * only produce headings, paragraphs, lists, links and images, so the book pages
+ * had no rules for blockquotes, code, tables or rules.
+ */
+export const MARKDOWN_CSS = `
+.chapter-body a{color:var(--accent-strong);font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.chapter-body em{font-style:italic}.chapter-body del{opacity:.7}
+.chapter-body blockquote{border-left:4px solid var(--accent);border-radius:0 8px 8px 0;background:var(--panel-alt);margin:.95rem 0;padding:.7rem .95rem;max-width:760px}
+.chapter-body blockquote>*:first-child{margin-top:0}.chapter-body blockquote>*:last-child{margin-bottom:0}
+.chapter-body code{border:1px solid var(--line);border-radius:4px;background:var(--mark);padding:.08em .34em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;overflow-wrap:anywhere}
+.chapter-body pre{border:1px solid var(--line);border-radius:8px;background:var(--panel-alt);margin:.95rem 0;padding:.85rem;max-width:100%;overflow-x:auto}
+.chapter-body pre code{border:0;border-radius:0;background:none;padding:0;font-size:.84rem;line-height:1.55}
+.chapter-body table{display:block;border-collapse:collapse;margin:.95rem 0;max-width:100%;overflow-x:auto;font-size:.88rem}
+.chapter-body th,.chapter-body td{border:1px solid var(--line);padding:.5rem .6rem;text-align:left;vertical-align:top}
+.chapter-body th{background:var(--panel-alt);font-weight:900}
+.chapter-body hr{border:0;border-top:1px solid var(--line);margin:1.4rem 0}
+.chapter-body img{max-width:100%;height:auto}
+`;
 
-function renderInline(value: string): string {
-  let html = '';
-  let index = 0;
-  while (index < value.length) {
-    const rest = value.slice(index);
-    const markdownImage = rest.match(/^!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)/i);
-    if (markdownImage) {
-      const alt = escapeHtml(markdownImage[1] || '');
-      const src = escapeHtml(markdownImage[2] || '');
-      html += `<img src="${src}" alt="${alt}" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:.5rem 0">`;
-      index += markdownImage[0].length;
-      continue;
-    }
+/**
+ * Markdown reduced to readable prose, for excerpts and previews. Walking the
+ * token stream drops syntax the old regex stripper left behind — single
+ * asterisks, backticks, blockquote markers.
+ */
+function plainText(markdown: string) {
+  const parts: string[] = [];
 
-    const markdownLink = rest.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/i);
-    if (markdownLink) {
-      html += externalLink(markdownLink[1] || '', markdownLink[2] || '');
-      index += markdownLink[0].length;
-      continue;
-    }
-
-    if (rest.startsWith('**')) {
-      const close = rest.indexOf('**', 2);
-      if (close > 2) {
-        html += `<strong>${renderInline(rest.slice(2, close))}</strong>`;
-        index += close + 2;
-        continue;
+  const walk = (tokens: ReturnType<typeof md.parse>) => {
+    for (const token of tokens) {
+      if (token.type === 'text' || token.type === 'code_inline') {
+        parts.push(token.content);
+      } else if (token.type === 'softbreak' || token.type === 'hardbreak') {
+        parts.push(' ');
+      } else if (token.type === 'fence' || token.type === 'code_block') {
+        parts.push(token.content);
+      } else if (token.children?.length) {
+        walk(token.children);
       }
+      if (token.block) parts.push(' ');
     }
+  };
 
-    const bareUrl = rest.match(/^https?:\/\/[^\s<]+/i);
-    if (bareUrl) {
-      const { href, trailing } = splitTrailingUrlPunctuation(bareUrl[0]);
-      html += externalLink(href, href) + escapeHtml(trailing);
-      index += bareUrl[0].length;
-      continue;
-    }
-
-    html += escapeHtml(value[index]);
-    index += 1;
-  }
-  return html;
+  // Headings are shown separately from the excerpt, so drop them first.
+  walk(md.parse(markdown.replace(/^#{1,6}\s+.+$/gm, ''), {}));
+  return parts.join('').replace(/\s+/g, ' ').trim();
 }
 
 export type IdeaChapter = {
@@ -72,60 +130,6 @@ export type IdeaChapter = {
   excerpt: string;
   aliases: string[];
 };
-
-export function markdownToHtml(markdown: string) {
-  const lines = markdown.split(/\r?\n/);
-  const html: string[] = [];
-  let listType: 'ul' | 'ol' | null = null;
-
-  const closeList = () => {
-    if (listType) {
-      html.push(`</${listType}>`);
-      listType = null;
-    }
-  };
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      closeList();
-      continue;
-    }
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (heading) {
-      closeList();
-      const marker = heading[1] || '';
-      const title = heading[2] || 'Section';
-      const tag = marker.length <= 2 ? 'h2' : 'h3';
-      html.push(`<${tag} id="${escapeHtml(slug(title) || 'section')}">${escapeHtml(title)}</${tag}>`);
-      continue;
-    }
-    const listItem = trimmed.match(/^[-*]\s+(.+)$/);
-    if (listItem) {
-      if (listType !== 'ul') {
-        closeList();
-        html.push('<ul>');
-        listType = 'ul';
-      }
-      html.push(`<li>${renderInline(listItem[1] || '')}</li>`);
-      continue;
-    }
-    const orderedItem = trimmed.match(/^\d+\.\s+(.+)$/);
-    if (orderedItem) {
-      if (listType !== 'ol') {
-        closeList();
-        html.push('<ol>');
-        listType = 'ol';
-      }
-      html.push(`<li>${renderInline(orderedItem[1] || '')}</li>`);
-      continue;
-    }
-    closeList();
-    html.push(`<p>${renderInline(trimmed)}</p>`);
-  }
-  closeList();
-  return html.join('\n');
-}
 
 export function markdownHeadings(markdown: string) {
   return markdown
@@ -148,15 +152,7 @@ export function chapterId(title: string) {
 }
 
 function excerpt(markdown: string) {
-  return markdown
-    .replace(/^#{1,3}\s+.+$/gm, '')
-    .replace(/\[([^\]]+)\]\(https?:\/\/[^)\s]+\)/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/[-*]\s+/g, '')
-    .replace(/\d+\.\s+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 180);
+  return plainText(markdown).slice(0, 180);
 }
 
 export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
