@@ -1,7 +1,7 @@
 {
   "version": "0.44.0",
-  "timestamp": "2026-07-07T09:58:57.846Z",
-  "score": 78,
+  "timestamp": "2026-07-07T10:51:37.605Z",
+  "score": 79,
   "grade": "B",
   "checks": [
     {
@@ -18,9 +18,9 @@
           "lockfile"
         ],
         "missing": [],
-        "srcFiles": 31,
+        "srcFiles": 33,
         "testFiles": 6,
-        "testRatio": "19%",
+        "testRatio": "18%",
         "monorepo": true,
         "workspaceTool": "pnpm",
         "packages": 2
@@ -28,11 +28,11 @@
       "issues": [
         {
           "severity": "warning",
-          "message": "Low test-to-source ratio: 6 tests for 31 source files (19%)",
+          "message": "Low test-to-source ratio: 6 tests for 33 source files (18%)",
           "rule": "low-test-ratio"
         }
       ],
-      "duration": 11
+      "duration": 7
     },
     {
       "name": "lint",
@@ -43,7 +43,7 @@
         "reason": "no linter detected"
       },
       "issues": [],
-      "duration": 0
+      "duration": 1
     },
     {
       "name": "types",
@@ -54,25 +54,25 @@
         "ok": true
       },
       "issues": [],
-      "duration": 1471
+      "duration": 1195
     },
     {
       "name": "type-safety",
       "score": 100,
       "grade": "A",
       "details": {
-        "filesScanned": 31,
+        "filesScanned": 33,
         "totalUnsafe": 0
       },
       "issues": [],
-      "duration": 6
+      "duration": 5
     },
     {
       "name": "standards",
       "score": 97,
       "grade": "A",
       "details": {
-        "filesScanned": 31,
+        "filesScanned": 33,
         "codeSmells": 0,
         "largeFiles": 1,
         "namingViolations": 0
@@ -85,18 +85,18 @@
           "rule": "large-file"
         }
       ],
-      "duration": 7
+      "duration": 6
     },
     {
       "name": "complexity",
-      "score": 70,
+      "score": 69,
       "grade": "C",
       "details": {
-        "totalFiles": 31,
-        "totalLines": 4625,
-        "longFunctions": 10,
+        "totalFiles": 33,
+        "totalLines": 4636,
+        "longFunctions": 11,
         "complexFunctions": 11,
-        "functionCount": 142
+        "functionCount": 144
       },
       "issues": [
         {
@@ -213,16 +213,23 @@
         },
         {
           "severity": "warning",
-          "message": "renderIdeaPage: 254 lines (max 60)",
+          "message": "renderIdeaPage: 82 lines (max 60)",
           "file": "packages/worker/src/idea-home-page.ts",
-          "line": 13,
+          "line": 11,
           "rule": "long-function"
         },
         {
           "severity": "warning",
-          "message": "renderIdeaPage: complexity 44 (max 15)",
-          "file": "packages/worker/src/idea-home-page.ts",
-          "line": 13,
+          "message": "ideaHomeScripts: 150 lines (max 60)",
+          "file": "packages/worker/src/idea-home-scripts.ts",
+          "line": 4,
+          "rule": "long-function"
+        },
+        {
+          "severity": "warning",
+          "message": "ideaHomeScripts: complexity 35 (max 15)",
+          "file": "packages/worker/src/idea-home-scripts.ts",
+          "line": 4,
           "rule": "high-complexity"
         },
         {
@@ -247,15 +254,15 @@
           "rule": "high-complexity"
         }
       ],
-      "duration": 9
+      "duration": 6
     },
     {
       "name": "duplication",
       "score": 100,
       "grade": "A",
       "details": {
-        "filesScanned": 31,
-        "totalSourceLines": 4625,
+        "filesScanned": 33,
+        "totalSourceLines": 4636,
         "duplicateBlocks": 7,
         "duplicationPct": "1.5%",
         "tool": "built-in"
@@ -311,11 +318,11 @@
           "snippet": "async function handleMeActivity(request: Request, env: Env, url: URL) {"
         }
       ],
-      "duration": 129
+      "duration": 118
     },
     {
       "name": "error-handling",
-      "score": 87,
+      "score": 88,
       "grade": "B",
       "details": {
         "emptyCatch": 2,
@@ -342,7 +349,7 @@
           "rule": "empty-catch"
         }
       ],
-      "duration": 9
+      "duration": 8
     },
     {
       "name": "react",
@@ -372,7 +379,7 @@
       "grade": "D",
       "details": {
         "readmeLines": 140,
-        "totalExports": 77,
+        "totalExports": 79,
         "documentedExports": 1,
         "documentedPct": "1%",
         "hasChangelog": false
@@ -380,7 +387,7 @@
       "issues": [
         {
           "severity": "warning",
-          "message": "Only 1% of exports have documentation (1/77)",
+          "message": "Only 1% of exports have documentation (1/79)",
           "rule": "undocumented-exports"
         },
         {
@@ -389,7 +396,7 @@
           "rule": "no-changelog"
         }
       ],
-      "duration": 3
+      "duration": 2
     },
     {
       "name": "best-practices",
@@ -481,12 +488,12 @@
       "score": 100,
       "grade": "A",
       "details": {
-        "totalFiles": 31,
+        "totalFiles": 33,
         "affectedFiles": 0,
         "patterns": 0
       },
       "issues": [],
-      "duration": 3
+      "duration": 2
     },
     {
       "name": "testing",
@@ -502,8 +509,8 @@
         "layersPresent": "1/2",
         "e2eTool": "playwright",
         "testFiles": 6,
-        "srcFiles": 31,
-        "pairing": "14%",
+        "srcFiles": 33,
+        "pairing": "13%",
         "quality": {
           "assertionsPerTest": 5.1,
           "mockRatio": 0,
@@ -518,7 +525,7 @@
         },
         {
           "severity": "warning",
-          "message": "Only 14% of source files have matching test files",
+          "message": "Only 13% of source files have matching test files",
           "rule": "low-test-pairing"
         },
         {
@@ -553,11 +560,11 @@
         },
         {
           "severity": "info",
-          "message": "...and 19 more untested files",
+          "message": "...and 21 more untested files",
           "rule": "untested-file"
         }
       ],
-      "duration": 493
+      "duration": 389
     },
     {
       "name": "secrets",
@@ -568,14 +575,14 @@
         "tool": "gitleaks"
       },
       "issues": [],
-      "duration": 420
+      "duration": 320
     },
     {
       "name": "security",
-      "score": 96,
+      "score": 97,
       "grade": "A",
       "details": {
-        "filesScanned": 31,
+        "filesScanned": 33,
         "patterns": 4,
         "cweCategories": 2,
         "errors": 0,
@@ -619,7 +626,7 @@
           "rule": "CWE-525"
         }
       ],
-      "duration": 16
+      "duration": 13
     },
     {
       "name": "dependencies",
@@ -659,14 +666,14 @@
           "rule": "outdated-package"
         }
       ],
-      "duration": 1400
+      "duration": 901
     },
     {
       "name": "architecture",
-      "score": 97,
+      "score": 98,
       "grade": "A",
       "details": {
-        "totalModules": 31,
+        "totalModules": 33,
         "circularDeps": 0,
         "godModules": 0,
         "orphans": 0,
@@ -865,6 +872,7 @@
               "packages/worker/src/api-idea-mutations.ts",
               "packages/worker/src/api.ts",
               "packages/worker/src/idea-home-page.ts",
+              "packages/worker/src/idea-home-scripts.ts",
               "packages/worker/src/index.ts"
             ],
             "dir": "packages/worker/src"
@@ -966,12 +974,33 @@
               "packages/worker/src/data.ts",
               "packages/worker/src/http.ts",
               "packages/worker/src/idea-diagrams.ts",
+              "packages/worker/src/idea-home-scripts.ts",
+              "packages/worker/src/idea-home-styles.ts",
               "packages/worker/src/markdown.ts",
               "packages/worker/src/reader-settings.ts",
               "packages/worker/src/types.ts"
             ],
             "importedBy": [
               "packages/worker/src/index.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/idea-home-scripts.ts": {
+            "imports": [
+              "packages/worker/src/auth.ts",
+              "packages/worker/src/reader-settings.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/idea-home-page.ts"
+            ],
+            "dir": "packages/worker/src"
+          },
+          "packages/worker/src/idea-home-styles.ts": {
+            "imports": [
+              "packages/worker/src/reader-settings.ts"
+            ],
+            "importedBy": [
+              "packages/worker/src/idea-home-page.ts"
             ],
             "dir": "packages/worker/src"
           },
@@ -1011,7 +1040,9 @@
             ],
             "importedBy": [
               "packages/worker/src/idea-chapter-page.ts",
-              "packages/worker/src/idea-home-page.ts"
+              "packages/worker/src/idea-home-page.ts",
+              "packages/worker/src/idea-home-scripts.ts",
+              "packages/worker/src/idea-home-styles.ts"
             ],
             "dir": "packages/worker/src"
           },
@@ -1081,14 +1112,14 @@
           "rule": "high-fan-out"
         }
       ],
-      "duration": 88
+      "duration": 65
     },
     {
       "name": "performance",
       "score": 100,
       "grade": "A",
       "details": {
-        "filesScanned": 31,
+        "filesScanned": 33,
         "barrelImports": 0,
         "heavyDeps": 0,
         "dynamicOpportunities": 0,
@@ -1177,7 +1208,7 @@
           "rule": "large-import"
         }
       ],
-      "duration": 1266
+      "duration": 1017
     },
     {
       "name": "container-health",
@@ -1192,14 +1223,14 @@
     },
     {
       "name": "confusion",
-      "score": 68,
+      "score": 70,
       "grade": "C",
       "details": {
         "fileConfusability": 0,
         "genericNames": 0,
         "exportCollisions": 2,
         "ambiguousAbbrevs": 2,
-        "filesScanned": 31
+        "filesScanned": 33
       },
       "issues": [
         {
@@ -1227,21 +1258,21 @@
           "rule": "ambiguous-abbreviation"
         }
       ],
-      "duration": 5
+      "duration": 3
     },
     {
       "name": "context",
-      "score": 82,
+      "score": 85,
       "grade": "B",
       "details": {
-        "filesScanned": 31,
-        "totalTokens": 65762,
-        "avgTokensPerFile": 2121,
+        "filesScanned": 33,
+        "totalTokens": 65874,
+        "avgTokensPerFile": 1996,
         "avgImportsPerFile": 2.6,
-        "highTokenFiles": 3,
+        "highTokenFiles": 2,
         "heavyImportFiles": 0,
         "circularDeps": 0,
-        "contextSinks": 1
+        "contextSinks": 2
       },
       "issues": [
         {
@@ -1258,9 +1289,9 @@
         },
         {
           "severity": "warning",
-          "message": "~5939 tokens (>4000) — large context cost for LLMs",
+          "message": "9 imports but only 1 export — hard to understand in isolation",
           "file": "packages/worker/src/idea-home-page.ts",
-          "rule": "high-token-count"
+          "rule": "context-sink"
         },
         {
           "severity": "warning",
@@ -1296,13 +1327,13 @@
         "premium": true,
         "comingSoon": true,
         "reason": "Set VCQA_PRO_KEY to enable LLM-powered analysis",
-        "filesAnalyzed": 31,
-        "totalExports": 105,
-        "totalFunctions": 145,
+        "filesAnalyzed": 33,
+        "totalExports": 107,
+        "totalFunctions": 147,
         "description": "Detects internal contradictions: inconsistent validation, conflicting defaults, naming drift, and behavioral mismatches."
       },
       "issues": [],
-      "duration": 2
+      "duration": 1
     },
     {
       "name": "comment-staleness",
@@ -1594,7 +1625,7 @@
           "rule": "broken-link"
         }
       ],
-      "duration": 6
+      "duration": 5
     },
     {
       "name": "frontend-health",
@@ -1616,7 +1647,7 @@
         "reason": "no component files found"
       },
       "issues": [],
-      "duration": 2
+      "duration": 1
     },
     {
       "name": "dead-patterns",
@@ -1674,7 +1705,7 @@
   "meta": {
     "cwd": "/Users/serge-ivo/dev/stores/fis",
     "node": "v26.0.0",
-    "duration": 6632,
+    "duration": 5113,
     "stack": {
       "language": "typescript",
       "framework": "none",

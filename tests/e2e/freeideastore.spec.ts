@@ -4,11 +4,18 @@ test('homepage loads idea cards and navigates to a dynamic idea page', async ({ 
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Ideas in progress.' })).toBeVisible();
-  if (!isMobile) {
-    await expect(page.locator('nav').getByRole('link', { name: 'About', exact: true })).toBeVisible();
-    await expect(page.locator('nav').getByRole('link', { name: 'Docs', exact: true })).toBeVisible();
-    await expect(page.locator('nav').getByRole('link', { name: 'Contributors', exact: true })).toBeVisible();
-    await expect(page.locator('nav').getByRole('link', { name: 'Console', exact: true })).toBeVisible();
+  if (isMobile) {
+    // Mobile reaches the same nav through the hamburger.
+    await expect(page.locator('#site-nav')).toBeHidden();
+    await page.locator('.nav-toggle').click();
+  }
+  await expect(page.locator('#site-nav').getByRole('link', { name: 'About', exact: true })).toBeVisible();
+  await expect(page.locator('#site-nav').getByRole('link', { name: 'Docs', exact: true })).toBeVisible();
+  await expect(page.locator('#site-nav').getByRole('link', { name: 'Contributors', exact: true })).toBeVisible();
+  await expect(page.locator('#site-nav').getByRole('link', { name: 'Console', exact: true })).toBeVisible();
+  if (isMobile) {
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#site-nav')).toBeHidden();
   }
   await expect(page.getByLabel('Search')).toBeVisible();
   await page.getByLabel('Type').selectOption('pro');

@@ -1055,3 +1055,40 @@ describe('FreeIdeaStore worker', () => {
     expect(await missingReaction.json()).toEqual({ error: 'idea not found' });
   });
 });
+
+describe('mobile navigation', () => {
+  const surfaces = [
+    ['idea home', 'https://fis.test/ideas/asx-filings-analyst/'],
+    ['idea chapter', 'https://fis.test/ideas/asx-filings-analyst/snapshot/'],
+    ['idea catalog', 'https://fis.test/ideas/'],
+    ['console', 'https://fis.test/console/'],
+    ['contributors', 'https://fis.test/contributors/'],
+    ['account', 'https://fis.test/profile/'],
+  ] as const;
+
+  for (const [name, url] of surfaces) {
+    it(`gives the ${name} page a hamburger that opens the site nav`, async () => {
+      const response = await worker.fetch(new Request(url), env());
+      const html = await response.text();
+
+      expect(response.status).toBe(200);
+      // Button, the nav it controls, and the script that connects them.
+      expect(html).toContain('class="nav-toggle"');
+      expect(html).toContain('aria-controls="site-nav"');
+      expect(html).toContain('id="site-nav"');
+      expect(html).toContain('.site-nav.open{display:flex}');
+      expect(html).toContain("document.querySelector('.nav-toggle')");
+      // The nav must no longer simply vanish below the mobile breakpoint.
+      expect(html).not.toContain('nav{display:none}');
+      expect(html).not.toContain('.topbar-nav{display:none}');
+      expect(html).not.toContain('nav a:not(.account-avatar){display:none}');
+    });
+  }
+
+  it('keeps the account slot outside the drawer so signed-in state stays visible', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/console/'), env());
+    const html = await response.text();
+
+    expect(html).toContain('</nav><span id="account-slot"></span>');
+  });
+});

@@ -1,6 +1,7 @@
 import { listIdeas } from './data';
 import { escapeHtml, htmlResponse } from './http';
 import { chapterId } from './markdown';
+import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
 import { THEME_BOOT, THEME_CSS, THEME_SCRIPT } from './theme';
 import type { Env } from './types';
 
@@ -33,11 +34,12 @@ nav{display:flex;align-items:center;gap:.9rem;color:var(--muted);font-size:.8rem
 .shell{max-width:1120px;margin:0 auto;padding:2rem 1.25rem 4rem}.crumb{color:var(--accent-strong);font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem}
 h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.4rem);line-height:.96;margin-bottom:.75rem}.lead{max-width:760px;color:var(--muted)}
 .chapter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.8rem;margin-top:1.3rem}.chapter-card{display:grid;gap:.4rem;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:.9rem;min-height:160px}.chapter-card small{color:var(--accent-strong);font-size:.68rem;font-weight:900;text-transform:uppercase}.chapter-card strong{font-size:1rem}.chapter-card span{color:var(--muted);font-size:.82rem}.chapter-card em{color:var(--muted);font-size:.72rem;font-style:normal;font-weight:800}
-@media(max-width:820px){nav{display:none}.shell{padding-top:1.35rem}}
+@media(max-width:820px){.shell{padding-top:1.35rem}}
+${navCss(820)}
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button></header>
+<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
 <main class="shell">
   <div class="crumb">Dynamic publications</div>
   <h1>Idea publications.</h1>
@@ -45,6 +47,7 @@ h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.4rem);line-height:.96
   <div class="chapter-grid">${cards}</div>
 </main>
 ${THEME_SCRIPT}
+${NAV_SCRIPT}
 </body>
 </html>`;
   return htmlResponse(page);

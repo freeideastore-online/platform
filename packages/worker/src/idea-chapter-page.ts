@@ -6,6 +6,7 @@ import {
   readerSettingsCss,
   readerSettingsScript,
 } from './reader-settings';
+import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
 import type { Env } from './types';
 
 export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: string, requestedChapterId: string) {
@@ -66,15 +67,17 @@ p{color:var(--body-text);margin:.78rem 0;max-width:760px}ul,ol{display:grid;gap:
 .toc-rail{position:sticky;top:52px;height:calc(100vh - 52px);overflow:auto;border-left:1px solid var(--line);background:var(--panel-alt);padding:1.1rem .95rem}.toc-box{display:grid;gap:.32rem}.toc-title{color:var(--title-text);font-size:.68rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.35rem}.toc-box a{display:block;border-left:2px solid transparent;color:var(--title-text);font-size:.78rem;font-weight:900;line-height:1.35;padding:.28rem 0 .28rem .55rem}.toc-box a:hover{border-left-color:var(--accent);color:var(--accent-strong);background:var(--mark)}.toc-empty{color:var(--muted);font-size:.78rem}
 footer{max-width:920px;margin:1.8rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
 @media(max-width:1180px){.book-shell{grid-template-columns:280px minmax(0,1fr)}.toc-rail{display:none}.mobile-page-toc{display:block}}
-@media(max-width:860px){.top-brand strong{max-width:min(55vw,280px)}.topbar-nav{display:none}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body{padding:.9rem}.chapter-nav{grid-template-columns:1fr}.chapter-nav .next{text-align:left}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
+@media(max-width:860px){.top-brand strong{max-width:min(55vw,280px)}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body{padding:.9rem}.chapter-nav{grid-template-columns:1fr}.chapter-nav .next{text-align:left}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
+${navCss(860)}
 ${readerSettingsCss()}
 </style>
 </head>
 <body>
 <header class="book-topbar">
   <div class="top-brand"><a href="/" class="logo" aria-label="Home">FI</a><a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
-  <nav class="topbar-nav"><a href="/">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a></nav>
+  <nav id="site-nav" class="topbar-nav site-nav"><a href="/">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a></nav>
   <button class="theme-toggle" type="button" data-reader-theme-toggle aria-label="Toggle theme" title="Toggle theme">&#9790;</button>
+  ${NAV_TOGGLE}
 </header>
 <details class="mobile-book-nav">
   <summary>Chapters</summary>
@@ -116,6 +119,7 @@ if (filter) filter.oninput = () => {
 };
 </script>
 ${readerSettingsScript()}
+${NAV_SCRIPT}
 </body>
 </html>`;
 
