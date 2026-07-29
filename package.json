@@ -9,7 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "docs:build": "python3 -m zensical build",
+    "docs:build": "zensical build",
     "dev": "pnpm --filter @fis/worker dev",
     "deploy": "pnpm --filter @fis/worker run deploy",
     "mcp:dev": "pnpm --filter @fis/mcp dev",
