@@ -148,6 +148,22 @@ reactionButtons.forEach((button) => {
     reactionButtons.forEach((item) => item.disabled = false);
   };
 });
+// Research entries are collapsed <details>. A shared link to one would otherwise
+// scroll to a closed box and look broken, so open whatever the fragment targets.
+function openTargetedResearch() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return;
+  const target = document.getElementById(hash);
+  if (!target) return;
+  const item = target.closest ? target.closest('details') : null;
+  if (item) {
+    item.open = true;
+    item.scrollIntoView({ block: 'start' });
+  }
+}
+window.addEventListener('hashchange', openTargetedResearch);
+openTargetedResearch();
+
 loadCommentSession();
 loadComments();
 </script>

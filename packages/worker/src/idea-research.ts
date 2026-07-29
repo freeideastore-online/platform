@@ -8,6 +8,13 @@ import type { IdeaContributionRow } from './types';
  */
 const COMMENT_KIND = 'comment';
 
+/**
+ * Cap on contributions fetched for the page. Bodies are inlined, so this bounds
+ * both the D1 read and the HTML size on a public route. When the cap is hit the
+ * section says so and points at the JSON API for the remainder.
+ */
+export const RESEARCH_RENDER_CAP = 100;
+
 const KIND_GROUPS: Array<{ kind: string; title: string; blurb: string }> = [
   { kind: 'evidence', title: 'Evidence', blurb: 'Sources, findings, and competitor scans.' },
   { kind: 'risk', title: 'Risks', blurb: 'Reasons this could fail.' },
@@ -88,9 +95,12 @@ function renderGroup(kind: string, items: IdeaContributionRow[]) {
     </section>`;
 }
 
-export function researchSection(contributions: IdeaContributionRow[]) {
+export function researchSection(contributions: IdeaContributionRow[], ideaId?: string) {
   const { research } = splitContributions(contributions);
   if (!research.length) return '';
+  // We fetched at most RESEARCH_RENDER_CAP rows; if we got exactly that many there
+  // are probably older ones we are not showing. Say so rather than imply completeness.
+  const truncated = contributions.length >= RESEARCH_RENDER_CAP;
 
   const groups = new Map<string, IdeaContributionRow[]>();
   for (const item of research) {
@@ -106,9 +116,10 @@ export function researchSection(contributions: IdeaContributionRow[]) {
     return rankA === rankB ? a.localeCompare(b) : rankA - rankB;
   });
 
+  const moreLink = ideaId ? ` <a href="/api/ideas/${escapeHtml(ideaId)}/contributions">See all via the API</a>.` : '';
   return `<section class="research" id="research">
       <h2>Research &amp; evidence</h2>
-      <p class="research-intro">${research.length} recorded ${research.length === 1 ? 'entry' : 'entries'} behind this idea, oldest first. Open one to read it in full.</p>
+      <p class="research-intro">${truncated ? `Showing the ${research.length} most recent of a longer record` : `${research.length} recorded ${research.length === 1 ? 'entry' : 'entries'}`} behind this idea, oldest first. Open one to read it in full.${truncated ? moreLink : ''}</p>
       ${orderedKinds.map((kind) => renderGroup(kind, groups.get(kind) || [])).join('\n      ')}
     </section>`;
 }

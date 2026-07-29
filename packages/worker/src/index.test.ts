@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
+import { RESEARCH_RENDER_CAP, researchSection } from './idea-research';
 
 type QueryHandler = {
   all?: (binds: unknown[]) => unknown;
@@ -530,6 +531,53 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('<a href="#comments">1 comment</a>');
     // The old label promised risks and evidence links the page never rendered.
     expect(html).not.toContain('notes, critiques, risks, or evidence links');
+  });
+
+  it('orders research entries oldest-first within a kind, and groups by kind', () => {
+    // Rows arrive newest-first from D1; the section must reverse them per group
+    // because the log reads forward and entries reference earlier ones.
+    const rows = [
+      { id: 'c3', kind: 'evidence', body: 'Newest evidence marker.', created_at: '2026-06-20 03:00:00', handle: 'a', display_name: 'A' },
+      { id: 'c2', kind: 'risk', body: 'A risk.', created_at: '2026-06-10 03:00:00', handle: 'a', display_name: 'A' },
+      { id: 'c1', kind: 'evidence', body: 'Oldest evidence marker.', created_at: '2026-06-01 03:00:00', handle: 'a', display_name: 'A' },
+      { id: 'c0', kind: 'comment', body: 'Just chatter.', created_at: '2026-06-05 03:00:00', handle: 'a', display_name: 'A' },
+    ];
+
+    const html = researchSection(rows, 'demo-idea');
+
+    expect(html.indexOf('Oldest evidence marker.')).toBeLessThan(html.indexOf('Newest evidence marker.'));
+    // Evidence group precedes the risk group, per the fixed kind order.
+    expect(html.indexOf('Newest evidence marker.')).toBeLessThan(html.indexOf('A risk.'));
+    // Comments never appear in the research section.
+    expect(html).not.toContain('Just chatter.');
+    expect(html).toContain('3 recorded entries');
+  });
+
+  it('flags truncation when the render cap is hit instead of implying completeness', () => {
+    const many = Array.from({ length: RESEARCH_RENDER_CAP }, (_, i) => ({
+      id: `c${i}`,
+      kind: 'evidence',
+      body: `Entry ${i}.`,
+      created_at: `2026-06-${String((i % 28) + 1).padStart(2, '0')} 03:00:00`,
+      handle: 'a',
+      display_name: 'A',
+    }));
+
+    const html = researchSection(many, 'demo-idea');
+
+    expect(html).toContain('most recent of a longer record');
+    expect(html).toContain('/api/ideas/demo-idea/contributions');
+    expect(researchSection(many.slice(0, 3), 'demo-idea')).not.toContain('most recent of a longer record');
+  });
+
+  it('opens a research entry targeted by the URL fragment', async () => {
+    const html = await (await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), env())).text();
+
+    // Each entry is individually addressable, and the script must open a
+    // collapsed <details> the fragment points at — otherwise the link looks broken.
+    expect(html).toContain('id="contribution-contribution-evidence-1"');
+    expect(html).toContain('openTargetedResearch');
+    expect(html).toContain("addEventListener('hashchange'");
   });
 
   it('omits the research section from an idea with no research contributions', async () => {

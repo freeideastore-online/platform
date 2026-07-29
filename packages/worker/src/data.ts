@@ -158,14 +158,21 @@ export async function ideasByProfile(env: Env, profileId: string, limit = 500) {
   return rows.results || [];
 }
 
-export async function contributionsByIdea(env: Env, ideaId: string) {
+/**
+ * `limit` bounds the work done on the public page-render path — bodies are up to
+ * 2000 chars each and every one is inlined into the HTML, so an idea that
+ * accumulates hundreds of contributions would otherwise grow the page without
+ * bound. Callers that need the full set (the JSON API) pass no limit.
+ */
+export async function contributionsByIdea(env: Env, ideaId: string, limit?: number) {
   const rows = await env.DB.prepare(
     `SELECT c.id, c.kind, c.body, c.created_at, p.handle, p.display_name
      FROM contributions c JOIN profiles p ON p.id = c.profile_id
      WHERE c.idea_id = ?
-     ORDER BY c.created_at DESC`,
+     ORDER BY c.created_at DESC
+     ${limit ? 'LIMIT ?' : ''}`,
   )
-    .bind(ideaId)
+    .bind(...(limit ? [ideaId, limit] : [ideaId]))
     .all<IdeaContributionRow>();
   return rows.results || [];
 }

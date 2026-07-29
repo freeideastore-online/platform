@@ -4,7 +4,7 @@ import { escapeHtml, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { ideaHomeScripts } from './idea-home-scripts';
 import { ideaHomeStyles } from './idea-home-styles';
-import { researchSection, splitContributions } from './idea-research';
+import { RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
 import { ideaChapters, markdownHeadings, markdownToHtml } from './markdown';
 import { readerSettingsBootScript } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE } from './site-nav';
@@ -21,7 +21,7 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
         .first<{ id: string; title: string }>()
     : null;
   const derived = await derivedIdeas(env, idea.id);
-  const contributions = await contributionsByIdea(env, idea.id);
+  const contributions = await contributionsByIdea(env, idea.id, RESEARCH_RENDER_CAP);
   const { research, comments } = splitContributions(contributions);
   const headings = markdownHeadings(body);
   const chapters = ideaChapters(body, idea.title);
@@ -65,7 +65,7 @@ ${ideaHomeStyles()}
       ${ideaDiagram(idea.id)}
       <div class="chapter-body">${markdownToHtml(body)}</div>
     </article>
-    ${researchSection(contributions)}
+    ${researchSection(contributions, idea.id)}
     <section class="comments" id="comments" data-idea-id="${escapeHtml(idea.id)}">
       <h2>Comments</h2>
       <div id="comment-list" class="comment-list"><p class="comment-empty">Loading comments...</p></div>
