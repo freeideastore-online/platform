@@ -1,6 +1,6 @@
 import { authUserFor, hasBearerAuth, isApiMutation, isSameOriginMutation, registeredProfileFor } from './auth';
 import { createIdea, deleteIdea, deriveIdea, promoteIdea, updateIdea } from './api-idea-mutations';
-import { contributorByHandle, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
+import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, bodyJson, clampInt, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS } from './http';
 import type { Env } from './types';
 
@@ -56,15 +56,7 @@ async function handleGetContributions(env: Env, ideaParam: string) {
   const ideaId = pathId(ideaParam);
   if (!ideaId) return bad('invalid idea id', 400);
   if (!(await ideaById(env, ideaId))) return bad('idea not found', 404);
-  const rows = await env.DB.prepare(
-    `SELECT c.id, c.kind, c.body, c.created_at, p.handle, p.display_name
-     FROM contributions c JOIN profiles p ON p.id = c.profile_id
-     WHERE c.idea_id = ?
-     ORDER BY c.created_at DESC`,
-  )
-    .bind(ideaId)
-    .all();
-  return json({ contributions: rows.results || [] });
+  return json({ contributions: await contributionsByIdea(env, ideaId) });
 }
 
 async function handleCreateContribution(request: Request, env: Env, ideaParam: string) {

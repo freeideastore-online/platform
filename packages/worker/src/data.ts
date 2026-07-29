@@ -1,6 +1,6 @@
 import { id, slug } from './http';
 import { defaultIdeaBody } from './markdown';
-import type { ContributorRow, Env, IdeaRow, ProfileContributionRow, ProfileIdeaRow } from './types';
+import type { ContributorRow, Env, IdeaContributionRow, IdeaRow, ProfileContributionRow, ProfileIdeaRow } from './types';
 
 const HIDDEN_HANDLES = ['system', 'risk-finder', 'pivot-maker', 'evidence-hunter', 'cloudflare-smoke'] as const;
 const HIDDEN_HANDLES_PLACEHOLDERS = HIDDEN_HANDLES.map(() => '?').join(',');
@@ -155,6 +155,18 @@ export async function ideasByProfile(env: Env, profileId: string, limit = 500) {
   )
     .bind(profileId, limit)
     .all<ProfileIdeaRow>();
+  return rows.results || [];
+}
+
+export async function contributionsByIdea(env: Env, ideaId: string) {
+  const rows = await env.DB.prepare(
+    `SELECT c.id, c.kind, c.body, c.created_at, p.handle, p.display_name
+     FROM contributions c JOIN profiles p ON p.id = c.profile_id
+     WHERE c.idea_id = ?
+     ORDER BY c.created_at DESC`,
+  )
+    .bind(ideaId)
+    .all<IdeaContributionRow>();
   return rows.results || [];
 }
 

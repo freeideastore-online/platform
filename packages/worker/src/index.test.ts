@@ -507,6 +507,40 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('/contributions');
   });
 
+  it('renders non-comment contributions as a server-side research section', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), env());
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('<section class="research" id="research">');
+    expect(html).toContain('Research &amp; evidence');
+    expect(html).toContain('<span class="research-kind">evidence</span>');
+    expect(html).toContain('Seed evidence note.');
+    // The comment stays in the comment thread and is not duplicated into research.
+    expect(html).not.toContain('<span class="research-kind">comment</span>');
+    const researchOnly = html.slice(html.indexOf('id="research"'), html.indexOf('class="comments"'));
+    expect(researchOnly).not.toContain('needs strong disclaimers');
+  });
+
+  it('counts research entries and comments separately in the signals rail', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), env());
+    const html = await response.text();
+
+    expect(html).toContain('<a href="#research">1 research entry</a>');
+    expect(html).toContain('<a href="#comments">1 comment</a>');
+    // The old label promised risks and evidence links the page never rendered.
+    expect(html).not.toContain('notes, critiques, risks, or evidence links');
+  });
+
+  it('omits the research section from an idea with no research contributions', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), env());
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).not.toContain('id="research"');
+    expect(html).toContain('No research entries yet');
+  });
+
   it('links from dynamic idea pages to Worker-rendered book chapters', async () => {
     const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), env());
     const html = await response.text();

@@ -68,3 +68,12 @@ export type ProfileContributionRow = {
   idea_id: string;
   idea_title: string;
 };
+
+export type IdeaContributionRow = {
+  id: string;
+  kind: string;
+  body: string;
+  created_at: string;
+  handle: string;
+  display_name: string;
+};

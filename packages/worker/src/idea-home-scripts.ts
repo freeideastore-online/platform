@@ -80,6 +80,8 @@ async function loadComments() {
     return;
   }
   const data = await response.json();
+  // Only conversation lands here. Evidence, risks, pivots and refinements are
+  // rendered server-side in the "Research & evidence" section above.
   const comments = (data.contributions || []).filter((item) => item.kind === 'comment');
   if (!comments.length) emptyComment('No comments yet. Be the first to sharpen this idea.');
   else commentList.replaceChildren(...comments.map(commentElement));
