@@ -832,6 +832,69 @@ describe('FreeIdeaStore worker', () => {
     expect(data.body).toContain('## Research');
   });
 
+  it('rejects an oversized contribution instead of silently truncating it', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const body = 'x'.repeat(8001);
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'evidence', body }),
+      }),
+      testEnv,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'contribution body is 8001 characters; the limit is 8000',
+    });
+
+    // Nothing was written, so no half-saved contribution is left behind.
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions'), testEnv);
+    const data = (await list.json()) as { contributions: Array<{ body: string }> };
+    expect(data.contributions.some((item) => item.body.startsWith('xxx'))).toBe(false);
+  });
+
+  it('stores a long contribution whole, up to the raised limit', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    // Previously anything over 2000 chars lost its tail without warning.
+    const body = `${'e'.repeat(3000)}END`;
+    const create = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'evidence', body }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions'), testEnv);
+    const data = (await list.json()) as { contributions: Array<{ body: string }> };
+
+    expect(create.status).toBe(201);
+    const stored = data.contributions.find((item) => item.body.startsWith('eee'));
+    expect(stored?.body).toHaveLength(3003);
+    expect(stored?.body.endsWith('END')).toBe(true);
+  });
+
+  it('rejects oversized idea fields on update instead of truncating them', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ nextStep: 'n'.repeat(501) }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'next step is 501 characters; the limit is 500',
+    });
+  });
+
   it('requires sign-in for blog-style comments on ideas', async () => {
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {

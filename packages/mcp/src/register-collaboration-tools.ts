@@ -126,7 +126,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
     {
       idea_id: z.string().min(2),
       kind: z.enum(CONTRIBUTION_KINDS).optional(),
-      body: z.string().min(3).max(2000),
+      body: z.string().min(3).max(8000),
       contributor_handle: z.string().optional().describe("Optional profile handle to attribute the contribution through the current API fallback."),
     },
     async (input) => {
@@ -162,8 +162,8 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
     {
       idea_id: z.string().min(2),
       section: z.enum(["snapshot", "signal", "next_step", "risk", "research", "design", "prototype", "validation", "body"]),
-      proposal: z.string().min(10).max(1600),
-      rationale: z.string().optional(),
+      proposal: z.string().min(10).max(6000),
+      rationale: z.string().max(1500).optional().describe("Kept within the contribution body limit alongside the proposal."),
       contributor_handle: z.string().optional().describe("Optional profile handle to attribute the refinement through the current API fallback."),
     },
     async (input) => {

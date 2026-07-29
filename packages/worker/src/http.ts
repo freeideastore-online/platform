@@ -36,6 +36,41 @@ export function bad(message: string, status = 400) {
   return json({ error: message }, { status });
 }
 
+/**
+ * Field length limits.
+ *
+ * These are enforced by rejecting the write, never by truncating it. Silent
+ * `.slice()` on the way into D1 destroyed the tail of four contributions on the
+ * gapfill idea — the writes returned 201 and the text was unrecoverable.
+ */
+export const FIELD_LIMITS = {
+  title: 80,
+  summary: 1000,
+  preview: 1000,
+  signal: 1000,
+  sourceUrl: 500,
+  category: 60,
+  nextStep: 500,
+  risk: 500,
+  body: 24000,
+  contribution: 8000,
+  contributionKind: 40,
+} as const;
+
+/**
+ * Returns a message describing the first over-limit field, or null when every
+ * field fits. Callers pass the caller-facing field name so the error tells the
+ * author what to shorten and by how much.
+ */
+export function tooLong(fields: Array<[name: string, value: string, limit: number]>) {
+  for (const [name, value, limit] of fields) {
+    if (value.length > limit) {
+      return `${name} is ${value.length} characters; the limit is ${limit}`;
+    }
+  }
+  return null;
+}
+
 export function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
 }

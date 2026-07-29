@@ -1,7 +1,7 @@
 import { authUserFor, hasBearerAuth, isApiMutation, isSameOriginMutation, registeredProfileFor } from './auth';
 import { createIdea, deleteIdea, deriveIdea, promoteIdea, updateIdea } from './api-idea-mutations';
 import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
-import { bad, bodyJson, clampInt, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS } from './http';
+import { bad, bodyJson, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import type { Env } from './types';
 
 async function handleHealth(env: Env) {
@@ -73,10 +73,15 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
   const body = String(input.body || '').trim();
   const kind = String(input.kind || 'comment').trim();
   if (body.length < 3) return bad('contribution body is required');
+  const overflow = tooLong([
+    ['contribution body', body, FIELD_LIMITS.contribution],
+    ['contribution kind', kind, FIELD_LIMITS.contributionKind],
+  ]);
+  if (overflow) return bad(overflow);
   await env.DB.prepare(
     'INSERT INTO contributions (id, idea_id, profile_id, kind, body) VALUES (?, ?, ?, ?, ?)',
   )
-    .bind(id('contribution'), ideaId, registered.profileId, kind.slice(0, 40), body.slice(0, 2000))
+    .bind(id('contribution'), ideaId, registered.profileId, kind, body)
     .run();
   await env.DB.prepare('UPDATE ideas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .bind(ideaId)

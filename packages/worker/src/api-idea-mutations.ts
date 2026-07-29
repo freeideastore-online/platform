@@ -1,6 +1,6 @@
 import { authUserFor, profileFor } from './auth';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
-import { bad, bodyJson, enumValue, json, pathId } from './http';
+import { bad, bodyJson, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
 import type { Env } from './types';
 
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
@@ -13,9 +13,27 @@ export async function createIdea(request: Request, env: Env) {
   if (title.length < 3 || summary.length < 10) return bad('title and summary are required');
   if (title.length > 80) return bad('title must be 80 characters or fewer — use summary for detail');
 
+  const body = String(input.body || input.body_md || '').trim();
+  const preview = String(input.preview || '');
+  const signal = String(input.signal || '');
+  const sourceUrl = String(input.sourceUrl || input.source_url || '');
+  const category = String(input.category || 'uncategorized');
+  const nextStep = String(input.nextStep || '');
+  const risk = String(input.risk || '');
+  const overflow = tooLong([
+    ['summary', summary, FIELD_LIMITS.summary],
+    ['preview', preview, FIELD_LIMITS.preview],
+    ['signal', signal, FIELD_LIMITS.signal],
+    ['body', body, FIELD_LIMITS.body],
+    ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
+    ['category', category, FIELD_LIMITS.category],
+    ['next step', nextStep, FIELD_LIMITS.nextStep],
+    ['risk', risk, FIELD_LIMITS.risk],
+  ]);
+  if (overflow) return bad(overflow);
+
   const ideaId = await uniqueIdeaId(env, title);
   const profileId = await profileFor(request, env);
-  const body = String(input.body || input.body_md || '').trim().slice(0, 24000);
   const bodyKey = `ideas/${ideaId}/body.md`;
   const renderKey = `ideas/${ideaId}/rendered.html`;
   let storedInR2 = false;
@@ -36,19 +54,19 @@ export async function createIdea(request: Request, env: Env) {
   )
     .bind(
       ideaId,
-      title.slice(0, 80),
-      summary.slice(0, 1000),
-      String(input.preview || '').slice(0, 1000),
-      String(input.signal || '').slice(0, 1000),
+      title,
+      summary,
+      preview,
+      signal,
       storedInR2 ? '' : body,
       storedInR2 ? bodyKey : '',
       storedInR2 ? renderKey : '',
-      String(input.sourceUrl || input.source_url || '').slice(0, 500),
+      sourceUrl,
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
-      String(input.category || 'uncategorized').slice(0, 60),
-      String(input.nextStep || '').slice(0, 500),
-      String(input.risk || '').slice(0, 500),
+      category,
+      nextStep,
+      risk,
       profileId,
     )
     .run();
@@ -73,7 +91,27 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   // Seed the fork with the parent body unless a non-empty override is supplied.
   // (`??` alone would keep an explicit empty string and make a blank fork.)
   const bodyOverride = typeof input.body === 'string' && input.body.trim() ? input.body : null;
-  const seedBody = String(bodyOverride ?? (await ideaBody(env, parent))).slice(0, 24000);
+  const seedBody = String(bodyOverride ?? (await ideaBody(env, parent)));
+  const parentPath = `/ideas/${parent.id}/`;
+  const preview = String(input.preview || parent.preview || summary);
+  const signal = String(input.signal || '');
+  const sourceUrl = String(
+    input.sourceUrl || input.source_url || `${new URL(request.url).origin}${parentPath}`,
+  );
+  const category = String(input.category || parent.category || 'uncategorized');
+  const nextStep = String(input.nextStep || input.next_step || '');
+  const risk = String(input.risk || '');
+  const overflow = tooLong([
+    ['summary', summary, FIELD_LIMITS.summary],
+    ['preview', preview, FIELD_LIMITS.preview],
+    ['signal', signal, FIELD_LIMITS.signal],
+    ['body', seedBody, FIELD_LIMITS.body],
+    ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
+    ['category', category, FIELD_LIMITS.category],
+    ['next step', nextStep, FIELD_LIMITS.nextStep],
+    ['risk', risk, FIELD_LIMITS.risk],
+  ]);
+  if (overflow) return bad(overflow);
   const bodyKey = `ideas/${ideaId}/body.md`;
   const renderKey = `ideas/${ideaId}/rendered.html`;
   let storedInR2 = false;
@@ -85,7 +123,6 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
       // Fall back to storing body inline in D1 if R2 write fails.
     }
   }
-  const parentPath = `/ideas/${parent.id}/`;
   await env.DB.prepare(
     `INSERT INTO ideas
      (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by, parent_id)
@@ -93,19 +130,19 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   )
     .bind(
       ideaId,
-      title.slice(0, 80),
-      summary.slice(0, 1000),
-      String(input.preview || parent.preview || summary).slice(0, 1000),
-      String(input.signal || '').slice(0, 1000),
+      title,
+      summary,
+      preview,
+      signal,
       storedInR2 ? '' : seedBody,
       storedInR2 ? bodyKey : '',
       storedInR2 ? renderKey : '',
-      String(input.sourceUrl || input.source_url || `${new URL(request.url).origin}${parentPath}`).slice(0, 500),
+      sourceUrl,
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
-      String(input.category || parent.category || 'uncategorized').slice(0, 60),
-      String(input.nextStep || input.next_step || '').slice(0, 500),
-      String(input.risk || '').slice(0, 500),
+      category,
+      nextStep,
+      risk,
       profileId,
       parent.id,
     )
@@ -162,7 +199,29 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
 
   const input = await bodyJson(request);
   const bodyInput = input.body ?? input.body_md;
-  const body = typeof bodyInput === 'string' ? bodyInput.trim().slice(0, 24000) : await ideaBody(env, idea);
+  const body = typeof bodyInput === 'string' ? bodyInput.trim() : await ideaBody(env, idea);
+  const title = String(input.title || idea.title).trim();
+  const summary = String(input.summary || idea.summary).trim();
+  const preview = String(input.preview ?? idea.preview ?? '');
+  const signal = String(input.signal ?? idea.signal ?? '');
+  const sourceUrl = String(input.sourceUrl || input.source_url || idea.source_url || '');
+  const category = String(input.category || idea.category || 'uncategorized');
+  const nextStep = String(input.nextStep || input.next_step || idea.next_step || '');
+  const risk = String(input.risk || idea.risk || '');
+  if (title.length > FIELD_LIMITS.title) {
+    return bad('title must be 80 characters or fewer — use summary for detail');
+  }
+  const overflow = tooLong([
+    ['summary', summary, FIELD_LIMITS.summary],
+    ['preview', preview, FIELD_LIMITS.preview],
+    ['signal', signal, FIELD_LIMITS.signal],
+    ['body', body, FIELD_LIMITS.body],
+    ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
+    ['category', category, FIELD_LIMITS.category],
+    ['next step', nextStep, FIELD_LIMITS.nextStep],
+    ['risk', risk, FIELD_LIMITS.risk],
+  ]);
+  if (overflow) return bad(overflow);
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
   const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
   let storedInR2 = false;
@@ -197,19 +256,19 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
      WHERE id = ?`,
   )
     .bind(
-      String(input.title || idea.title).trim().slice(0, 80),
-      String(input.summary || idea.summary).trim().slice(0, 1000),
-      String(input.preview ?? idea.preview ?? '').slice(0, 1000),
-      String(input.signal ?? idea.signal ?? '').slice(0, 1000),
+      title,
+      summary,
+      preview,
+      signal,
       storedInR2 ? '' : body,
       storedInR2 ? bodyKey : '',
       storedInR2 ? renderKey : '',
-      String(input.sourceUrl || input.source_url || idea.source_url || '').slice(0, 500),
+      sourceUrl,
       enumValue(input.visibility ?? idea.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage ?? idea.stage, IDEA_STAGES, idea.stage || 'raw'),
-      String(input.category || idea.category || 'uncategorized').slice(0, 60),
-      String(input.nextStep || input.next_step || idea.next_step || '').slice(0, 500),
-      String(input.risk || idea.risk || '').slice(0, 500),
+      category,
+      nextStep,
+      risk,
       idea.id,
     )
     .run();
