@@ -162,17 +162,43 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
   let sawHeading = false;
   let ignoredDocumentTitle = false;
 
+  /**
+   * Every id and alias handed out so far.
+   *
+   * `chapterId()` maps titles onto canonical ids by keyword, so two headings
+   * can want the same one — "Prototype plan" and "Prototype risks" both wanted
+   * `/prototype/`. The second chapter used to be listed in the sidebar with a
+   * link that opened the first, with no error anywhere.
+   */
+  const claimed = new Set<string>();
+
   const push = () => {
     const body = currentLines.join('\n').trim();
     if (!body && !sawHeading) return;
-    const id = chapterId(currentTitle);
-    const rawSlug = slug(currentTitle) || id;
+    const canonical = chapterId(currentTitle);
+    // `slug()` truncates at 64 chars, so long titles can collide here too.
+    const rawSlug = slug(currentTitle) || canonical;
+
+    // The first chapter to claim an id keeps it, so already-published URLs
+    // never move. Later collisions fall back to their own slug, then to a
+    // numbered suffix.
+    const preferred = [canonical, rawSlug];
+    let id = preferred.find((candidate) => !claimed.has(candidate));
+    if (!id) {
+      let n = 2;
+      while (claimed.has(`${rawSlug}-${n}`)) n += 1;
+      id = `${rawSlug}-${n}`;
+    }
+    // Only advertise the aliases no earlier chapter already answers to.
+    const aliases = [id, ...preferred.filter((candidate) => candidate !== id && !claimed.has(candidate))];
+    for (const alias of aliases) claimed.add(alias);
+
     chapters.push({
       id,
       title: currentTitle,
       markdown: `## ${currentTitle}\n\n${body}`.trim(),
       excerpt: excerpt(body) || 'Open this chapter.',
-      aliases: Array.from(new Set([id, rawSlug])),
+      aliases: Array.from(new Set(aliases)),
     });
   };
 

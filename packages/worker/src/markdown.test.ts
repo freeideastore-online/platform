@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ideaChapters, markdownHeadings, markdownToHtml } from './markdown';
+import { ideaChapterById, ideaChapters, markdownHeadings, markdownToHtml } from './markdown';
 
 describe('markdownToHtml', () => {
   it('renders markdown links and bare URLs as safe new-tab links', () => {
@@ -131,6 +131,52 @@ describe('ideaChapters', () => {
     expect(chapters[0]?.markdown).toContain('### Snapshot');
     expect(chapters[0]?.markdown).toContain('### Status');
     expect(chapters[1]?.markdown).toContain('### Cheapest Test');
+  });
+
+  it('gives colliding canonical ids distinct URLs instead of shadowing one', () => {
+    const chapters = ideaChapters([
+      '## Prototype plan',
+      'Build the thin slice.',
+      '',
+      '## Prototype risks',
+      'It may not hold up.',
+      '',
+      '## Validation approach',
+      'Test the riskiest assumption.',
+      '',
+      '## Validation metrics',
+      'Thresholds for success.',
+    ].join('\n'));
+
+    const ids = chapters.map((chapter) => chapter.id);
+    expect(ids).toHaveLength(4);
+    expect(new Set(ids).size).toBe(4);
+
+    // The first claimant keeps the canonical id so published URLs do not move.
+    expect(ids[0]).toBe('prototype');
+    expect(ids[2]).toBe('validation');
+
+    // Every chapter is reachable, and each URL resolves to its own chapter.
+    for (const chapter of chapters) {
+      expect(ideaChapterById(chapters, chapter.id)?.title).toBe(chapter.title);
+    }
+  });
+
+  it('does not let an alias point at a chapter that did not claim it', () => {
+    const chapters = ideaChapters([
+      '## Prototype plan',
+      'First.',
+      '',
+      '## Prototype',
+      'Second wants the same canonical id and the same slug.',
+    ].join('\n'));
+
+    expect(chapters).toHaveLength(2);
+    expect(chapters[0]?.id).toBe('prototype');
+    expect(chapters[1]?.id).toBe('prototype-2');
+    expect(chapters[1]?.aliases).not.toContain('prototype');
+    expect(ideaChapterById(chapters, 'prototype')?.title).toBe('Prototype plan');
+    expect(ideaChapterById(chapters, 'prototype-2')?.title).toBe('Prototype');
   });
 
   it('strips markdown syntax from chapter excerpts before truncating', () => {
