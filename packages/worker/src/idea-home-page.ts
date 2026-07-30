@@ -2,10 +2,12 @@ import { AUTH_PREFIX } from './auth';
 import { contributionsByIdea, derivedIdeas, ideaBody, ideaById } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
+import { sourcesSection } from './idea-sources-section';
 import { ideaHomeScripts } from './idea-home-scripts';
 import { ideaHomeStyles } from './idea-home-styles';
 import { RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
 import { openRefinementCount } from './refinements';
+import { listIdeaSources } from './sources';
 import { ideaChapters, isPaginated, markdownHeadings, markdownToHtml } from './markdown';
 import { readerSettingsBootScript } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE } from './site-nav';
@@ -26,6 +28,8 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   const { research, comments } = splitContributions(contributions);
   // A queued proposal that nobody can see never gets merged.
   const pendingRefinements = await openRefinementCount(env, idea.id);
+  // What the idea rests on, gathered from the document and its research.
+  const sources = await listIdeaSources(env, idea.id);
   const headings = markdownHeadings(body);
   const chapters = ideaChapters(body, idea.title);
   // Short documents read as one page: the body is rendered inline below, so
@@ -79,6 +83,7 @@ ${
       <div class="chapter-body">${markdownToHtml(body)}</div>
     </article>
     ${researchSection(contributions, idea.id)}
+    ${sourcesSection(sources)}
     <section class="comments" id="comments" data-idea-id="${escapeHtml(idea.id)}">
       <h2>Comments</h2>
       <div id="comment-list" class="comment-list"><p class="comment-empty">Loading comments...</p></div>
@@ -93,7 +98,7 @@ ${
   <aside class="toc-rail">
     <div class="toc-title">Signals</div>
     <div class="signal-box">
-      <div><strong>Sections</strong><nav class="toc-box">${headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('')}${research.length ? '<a href="#research">Research &amp; evidence</a>' : ''}<a href="#comments">Comments</a></nav></div>
+      <div><strong>Sections</strong><nav class="toc-box">${headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('')}${research.length ? '<a href="#research">Research &amp; evidence</a>' : ''}${sources.length ? '<a href="#sources">Sources</a>' : ''}<a href="#comments">Comments</a></nav></div>
       <div><strong>Reactions</strong><span><span id="support-count">${escapeHtml(idea.support)}</span> supports / <span id="trash-count">${escapeHtml(idea.trash)}</span> trash / <span id="pivot-count">${escapeHtml(idea.pivot)}</span> pivots</span><div class="reaction-buttons" aria-label="React to idea"><button class="react-button" type="button" data-reaction="support">&#128077; Support</button><button class="react-button" type="button" data-reaction="trash">&#128465; Trash</button><button class="react-button" type="button" data-reaction="pivot">&#128260; Pivot</button></div><p id="reaction-status" class="reaction-status">Sign in to react.</p></div>
       <div><strong>Contributions</strong><span>${research.length ? `<a href="#research">${research.length} research ${research.length === 1 ? 'entry' : 'entries'}</a>` : 'No research entries yet'} / <a href="#comments">${comments} ${comments === 1 ? 'comment' : 'comments'}</a></span></div>
       ${pendingRefinements ? `<div><strong>Awaiting merge</strong><span><a href="#research">${pendingRefinements} proposed ${pendingRefinements === 1 ? 'refinement' : 'refinements'}</a> not yet in the document</span></div>` : ''}

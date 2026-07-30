@@ -54,6 +54,8 @@ class FakeD1 {
   private readonly profiles = new Map<string, Record<string, unknown>>();
   private readonly contributions: Array<Record<string, unknown>> = [];
   readonly revisions: Array<Record<string, unknown>> = [];
+  readonly sources: Array<Record<string, unknown>> = [];
+  readonly sourceLinks: Array<Record<string, unknown>> = [];
 
   constructor() {
     this.profiles.set('profile-system', {
@@ -303,6 +305,84 @@ class FakeD1 {
               badges_json: '[]',
             });
           }
+        },
+      });
+    }
+    if (sql.includes('INSERT OR IGNORE INTO sources')) {
+      return new FakeStatement({
+        run: ([sourceId, url, host]) => {
+          if (!this.sources.some((source) => source.url === url)) {
+            this.sources.push({ id: sourceId, url, host, status: 0, last_checked: '' });
+          }
+        },
+      });
+    }
+    if (sql.includes('SELECT id FROM sources WHERE url = ?')) {
+      return new FakeStatement({
+        first: ([url]) => {
+          const found = this.sources.find((source) => source.url === url);
+          return found ? { id: found.id } : null;
+        },
+      });
+    }
+    if (sql.includes('INSERT OR IGNORE INTO source_links')) {
+      return new FakeStatement({
+        run: ([linkId, sourceId, ideaId, section, contributionId]) => {
+          const exists = this.sourceLinks.some(
+            (link) =>
+              link.source_id === sourceId &&
+              link.idea_id === ideaId &&
+              link.section === section &&
+              link.contribution_id === contributionId,
+          );
+          if (!exists) {
+            this.sourceLinks.push({
+              id: linkId,
+              source_id: sourceId,
+              idea_id: ideaId,
+              section,
+              contribution_id: contributionId,
+            });
+          }
+        },
+      });
+    }
+    if (sql.includes('DELETE FROM source_links')) {
+      return new FakeStatement({
+        run: ([ideaId]) => {
+          for (let index = this.sourceLinks.length - 1; index >= 0; index -= 1) {
+            const link = this.sourceLinks[index];
+            if (link && link.idea_id === ideaId && link.contribution_id === '') {
+              this.sourceLinks.splice(index, 1);
+            }
+          }
+        },
+      });
+    }
+    if (sql.includes('FROM source_links l JOIN sources s')) {
+      return new FakeStatement({
+        all: ([ideaId]) => {
+          const grouped = new Map<string, Record<string, unknown>>();
+          for (const link of this.sourceLinks.filter((item) => item.idea_id === ideaId)) {
+            const source = this.sources.find((item) => item.id === link.source_id);
+            if (!source) continue;
+            const existing = grouped.get(String(source.id)) || {
+              ...source,
+              sections: [] as string[],
+              contribution_citations: 1,
+            };
+            if (link.section) (existing.sections as string[]).push(String(link.section));
+            if (link.contribution_id) {
+              existing.contribution_citations = Number(existing.contribution_citations) + 1;
+            }
+            grouped.set(String(source.id), existing);
+          }
+          return {
+            results: [...grouped.values()].map((row) => ({
+              ...row,
+              sections: (row.sections as string[]).join(','),
+            })),
+          };
         },
       });
     }
@@ -1018,6 +1098,122 @@ describe('FreeIdeaStore worker', () => {
     const data = (await list.json()) as { refinements: Array<{ id: string; section: string; proposal: string }> };
     return data.refinements[0];
   }
+
+  it('indexes the sources a document cites, per section', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          body: [
+            '## Snapshot',
+            'Grouping comes from [ISO 13006](https://www.iso.org/standard/63406.html).',
+            '',
+            '## Research',
+            'Bare cite https://matrixify.app/ and the standard again',
+            'https://www.iso.org/standard/63406.html#scope for good measure.',
+          ].join('\n'),
+        }),
+      }),
+      testEnv,
+    );
+    const response = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/sources'), testEnv);
+    const data = (await response.json()) as {
+      sources: Array<{ url: string; host: string; sections: string[] }>;
+    };
+
+    expect(response.status).toBe(200);
+    // The standard is cited twice, in two sections, but is one source.
+    const iso = data.sources.find((source) => source.host === 'www.iso.org');
+    expect(data.sources).toHaveLength(2);
+    expect(iso?.url).toBe('https://www.iso.org/standard/63406.html');
+    expect(iso?.sections.sort()).toEqual(['research', 'snapshot']);
+  });
+
+  it('stops listing a source once the document stops citing it', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ body: '## Snapshot\nCite https://example.com/gone' }),
+      }),
+      testEnv,
+    );
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ body: '## Snapshot\nNo citations any more.' }),
+      }),
+      testEnv,
+    );
+    const response = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/sources'), testEnv);
+    const data = (await response.json()) as { sources: unknown[] };
+
+    expect(data.sources).toHaveLength(0);
+  });
+
+  it('keeps a contribution citation even when the document drops the link', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          kind: 'evidence',
+          body: 'Recorded from the standard.',
+          source_url: 'https://www.iso.org/standard/63406.html',
+        }),
+      }),
+      testEnv,
+    );
+    // A document rewrite re-indexes document links only; history keeps its own.
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ body: '## Snapshot\nNo citations in the document.' }),
+      }),
+      testEnv,
+    );
+    const response = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/sources'), testEnv);
+    const data = (await response.json()) as {
+      sources: Array<{ host: string; sections: string[]; contribution_citations: number }>;
+    };
+
+    expect(data.sources).toHaveLength(1);
+    expect(data.sources[0]?.host).toBe('www.iso.org');
+    expect(data.sources[0]?.sections).toEqual([]);
+    expect(data.sources[0]?.contribution_citations).toBe(1);
+  });
+
+  it('renders the sources section on the idea page', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '## Snapshot\nSee https://www.iso.org/standard/63406.html' }),
+      }),
+      testEnv,
+    );
+    const page = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), testEnv);
+    const html = await page.text();
+
+    expect(html).toContain('id="sources"');
+    expect(html).toContain('www.iso.org');
+    expect(html).toContain('1 distinct source');
+    // And it is reachable from the Signals rail.
+    expect(html).toContain('href="#sources"');
+  });
 
   it('says what is wrong with a malformed request body', async () => {
     const notJson = await worker.fetch(

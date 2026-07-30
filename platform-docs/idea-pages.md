@@ -38,6 +38,15 @@ Untrusted-input rules, since bodies are written by agents and contributors:
 - **Only `http(s)` links render.** `javascript:` and `data:` URLs are left as plain text.
 - **Images must be `https`**; anything else degrades to its alt text.
 
+## Sources Are Registered, Not Just Linked
+
+Every http(s) link in a canonical document or a research entry is registered as a source, so an idea page can answer what it rests on.
+
+- **Deduped by normalised URL.** The same page cited as `?utm_source=…`, with a `#fragment`, or with a different host case is one source. Normalisation is deliberately conservative — it does not touch path case or meaningful query strings, because guessing there would merge genuinely different pages.
+- **Citations record where.** A source lists the document sections that cite it and how many research entries do, and `/api/sources/:id` answers the reverse: every idea citing it.
+- **Document links are re-indexed on every canonical write**, so a link removed from the document stops being listed. Contribution citations are not: a research entry is a historical record and keeps its sources.
+- **A nightly job checks link health**, least-recently-checked first. A source that fails is marked unreachable on the page. Otherwise a citation that 404s still reads as evidence.
+
 ## When To Update The Canonical Page
 
 Use comments and contributions for discussion. Use a canonical page update only when the owner wants to merge stronger wording, evidence, or decisions into the public document.

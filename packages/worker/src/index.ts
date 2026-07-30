@@ -9,8 +9,20 @@ import { renderIdeasCatalogPage } from './idea-catalog-page';
 import { renderIdeaChapterPage } from './idea-chapter-page';
 import { renderIdeaPage } from './idea-home-page';
 import { json, pathId, SECURITY_HEADERS } from './http';
+import { checkSources } from './sources';
 
 export default {
+  /**
+   * Nightly link check over the source registry.
+   *
+   * A research corpus decays silently: a citation that 404s still reads as
+   * evidence on the page. Bounded per run so the job stays cheap; sources are
+   * checked least-recently-first, so the whole registry is covered over time.
+   */
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(checkSources(env).then(() => undefined));
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 

@@ -10,6 +10,7 @@ import {
   RESOLUTION_VALUES,
 } from './refinements';
 import { recordRevision, revisionBody, revisionById, type RevisionSource } from './revisions';
+import { syncDocumentSources } from './sources';
 import type { Env, IdeaRow } from './types';
 
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
@@ -278,6 +279,8 @@ async function writeCanonicalBody(
       idea.id,
     )
     .run();
+  // Re-index after the write so the registry reflects the document as published.
+  await syncDocumentSources(env, idea, body);
   return { ...metrics, revisionId };
 }
 
@@ -444,6 +447,7 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     )
     .run();
 
+  await syncDocumentSources(env, idea, body);
   return json({ ok: true, idea: idea.id, url: `/ideas/${idea.id}/` });
 }
 

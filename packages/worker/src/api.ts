@@ -16,6 +16,7 @@ import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, path
 import { ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
 import { REFINEMENT_KIND } from './refinements';
+import { listIdeaSources, sourceCitations, syncContributionSources } from './sources';
 import { diffSummary, listRevisions, revisionBody, revisionById } from './revisions';
 import type { Env } from './types';
 
@@ -131,6 +132,22 @@ async function handleGetRevisionDiff(env: Env, ideaParam: string, revisionParam:
   return json({ idea: idea.id, revision: revision.id, from: 'revision', to: 'current', ...diffSummary(before, after) });
 }
 
+
+async function handleGetIdeaSources(env: Env, ideaParam: string) {
+  const ideaId = pathId(ideaParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  return json({ idea: idea.id, sources: await listIdeaSources(env, idea.id) });
+}
+
+/** Reverse index: everything that cites one source, across ideas. */
+async function handleGetSource(env: Env, sourceParam: string) {
+  const found = await sourceCitations(env, sourceParam);
+  if (!found) return bad('source not found', 404);
+  return json(found);
+}
+
 async function handleCreateContribution(request: Request, env: Env, ideaParam: string) {
   const ideaId = pathId(ideaParam);
   if (!ideaId) return bad('invalid idea id', 400);
@@ -201,13 +218,14 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
     if (!target) return bad('supersedes must reference an existing contribution on this idea', 404);
   }
 
+  const contributionId = id('contribution');
   await env.DB.prepare(
     `INSERT INTO contributions
      (id, idea_id, profile_id, kind, body, claim, source_url, accessed_at, provenance, confidence, supersedes, section)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
-      id('contribution'),
+      contributionId,
       ideaId,
       registered.profileId,
       kind,
@@ -221,6 +239,7 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
       section,
     )
     .run();
+  await syncContributionSources(env, ideaId, contributionId, { sourceUrl, body });
   await env.DB.prepare('UPDATE ideas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .bind(ideaId)
     .run();
@@ -318,6 +337,18 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/promote$/,
     methods: {
       POST: (request, env, __, match) => promoteIdea(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/sources$/,
+    methods: {
+      GET: (_, env, __, match) => handleGetIdeaSources(env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/sources\/([^/]+)$/,
+    methods: {
+      GET: (_, env, __, match) => handleGetSource(env, match![1] || ''),
     },
   },
   {

@@ -400,6 +400,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sources-are-registered-not-just-linked" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Sources Are Registered, Not Just Linked
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#when-to-update-the-canonical-page" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -544,6 +555,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sources-are-registered-not-just-linked" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Sources Are Registered, Not Just Linked
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#when-to-update-the-canonical-page" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -602,6 +624,14 @@
 <li><strong>Raw HTML is escaped, not rendered</strong> (<code>html: false</code>). Pasting <code>&lt;script&gt;</code> into an idea body puts visible text on the page, never markup.</li>
 <li><strong>Only <code>http(s)</code> links render.</strong> <code>javascript:</code> and <code>data:</code> URLs are left as plain text.</li>
 <li><strong>Images must be <code>https</code></strong>; anything else degrades to its alt text.</li>
+</ul>
+<h2 id="sources-are-registered-not-just-linked">Sources Are Registered, Not Just Linked<a class="headerlink" href="#sources-are-registered-not-just-linked" title="Permanent link">&para;</a></h2>
+<p>Every http(s) link in a canonical document or a research entry is registered as a source, so an idea page can answer what it rests on.</p>
+<ul>
+<li><strong>Deduped by normalised URL.</strong> The same page cited as <code>?utm_source=…</code>, with a <code>#fragment</code>, or with a different host case is one source. Normalisation is deliberately conservative — it does not touch path case or meaningful query strings, because guessing there would merge genuinely different pages.</li>
+<li><strong>Citations record where.</strong> A source lists the document sections that cite it and how many research entries do, and <code>/api/sources/:id</code> answers the reverse: every idea citing it.</li>
+<li><strong>Document links are re-indexed on every canonical write</strong>, so a link removed from the document stops being listed. Contribution citations are not: a research entry is a historical record and keeps its sources.</li>
+<li><strong>A nightly job checks link health</strong>, least-recently-checked first. A source that fails is marked unreachable on the page. Otherwise a citation that 404s still reads as evidence.</li>
 </ul>
 <h2 id="when-to-update-the-canonical-page">When To Update The Canonical Page<a class="headerlink" href="#when-to-update-the-canonical-page" title="Permanent link">&para;</a></h2>
 <p>Use comments and contributions for discussion. Use a canonical page update only when the owner wants to merge stronger wording, evidence, or decisions into the public document.</p>
