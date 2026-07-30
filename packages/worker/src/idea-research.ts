@@ -26,11 +26,20 @@ export const PROVENANCE_VALUES = new Set([
 export const CONFIDENCE_VALUES = new Set(['low', 'medium', 'high']);
 
 /**
- * Cap on contributions fetched for the page. Bodies are inlined, so this bounds
- * both the D1 read and the HTML size on a public route. When the cap is hit the
- * section says so and points at the JSON API for the remainder.
+ * How many contributions one page of the research record renders.
+ *
+ * Every body is inlined, so this bounds both the D1 read and the HTML size on a
+ * public route. One idea already carries 42 entries totalling ~79KB; a hard cap
+ * simply hid the rest, so the record is paged instead and every page is a real
+ * URL.
  */
-export const RESEARCH_RENDER_CAP = 100;
+export const RESEARCH_PAGE_SIZE = 20;
+
+/**
+ * Absolute ceiling for `?research=all`. A backstop against a pathological idea,
+ * not an expected limit — the pager is the normal way through a long record.
+ */
+export const RESEARCH_RENDER_CAP = 400;
 
 const KIND_GROUPS: Array<{ kind: string; title: string; blurb: string }> = [
   { kind: 'evidence', title: 'Evidence', blurb: 'Sources, findings, and competitor scans.' },
@@ -137,12 +146,13 @@ function renderGroup(kind: string, items: IdeaContributionRow[]) {
     </section>`;
 }
 
-export function researchSection(contributions: IdeaContributionRow[], ideaId?: string) {
+export function researchSection(
+  contributions: IdeaContributionRow[],
+  ideaId?: string,
+  paging?: { page: number; pageSize: number; total: number; showAll: boolean },
+) {
   const { research } = splitContributions(contributions);
   if (!research.length) return '';
-  // We fetched at most RESEARCH_RENDER_CAP rows; if we got exactly that many there
-  // are probably older ones we are not showing. Say so rather than imply completeness.
-  const truncated = contributions.length >= RESEARCH_RENDER_CAP;
 
   const groups = new Map<string, IdeaContributionRow[]>();
   for (const item of research) {
@@ -158,10 +168,35 @@ export function researchSection(contributions: IdeaContributionRow[], ideaId?: s
     return rankA === rankB ? a.localeCompare(b) : rankA - rankB;
   });
 
-  const moreLink = ideaId ? ` <a href="/api/ideas/${escapeHtml(ideaId)}/contributions">See all via the API</a>.` : '';
+  const pager = paging && ideaId ? renderPager(ideaId, paging) : '';
+  const scope = paging && paging.total > research.length && !paging.showAll
+    ? `Showing ${research.length} of ${paging.total} entries`
+    : `${research.length} recorded ${research.length === 1 ? 'entry' : 'entries'}`;
+
   return `<section class="research" id="research">
       <h2>Research &amp; evidence</h2>
-      <p class="research-intro">${truncated ? `Showing the ${research.length} most recent of a longer record` : `${research.length} recorded ${research.length === 1 ? 'entry' : 'entries'}`} behind this idea, oldest first. Open one to read it in full.${truncated ? moreLink : ''}</p>
+      <p class="research-intro">${scope} behind this idea, oldest first. Open one to read it in full.</p>
       ${orderedKinds.map((kind) => renderGroup(kind, groups.get(kind) || [])).join('\n      ')}
+      ${pager}
     </section>`;
+}
+
+/**
+ * Pager links are plain hrefs, so a long record is navigable and linkable
+ * without JavaScript, and each page is crawlable.
+ */
+function renderPager(ideaId: string, paging: { page: number; pageSize: number; total: number; showAll: boolean }) {
+  const pages = Math.max(1, Math.ceil(paging.total / paging.pageSize));
+  if (paging.showAll) {
+    return `<p class="research-pager"><a href="/ideas/${escapeHtml(ideaId)}/#research">Back to paged view</a> — showing all ${paging.total} entries.</p>`;
+  }
+  if (pages <= 1) return '';
+  const link = (page: number, label: string) =>
+    `<a href="/ideas/${escapeHtml(ideaId)}/?research=${page}#research">${escapeHtml(label)}</a>`;
+  return `<p class="research-pager">
+        ${paging.page > 1 ? link(paging.page - 1, 'Newer') : '<span>Newer</span>'}
+        <span class="research-pager-at">Page ${paging.page} of ${pages}</span>
+        ${paging.page < pages ? link(paging.page + 1, 'Older') : '<span>Older</span>'}
+        <a href="/ideas/${escapeHtml(ideaId)}/?research=all#research">Show all ${paging.total}</a>
+      </p>`;
 }

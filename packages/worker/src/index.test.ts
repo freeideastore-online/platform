@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
-import { RESEARCH_RENDER_CAP, researchSection } from './idea-research';
+import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection } from './idea-research';
 
 /**
  * Filler prose for fixtures that need to clear PUBLICATION_POLICY. Chapter
@@ -595,9 +595,14 @@ class FakeD1 {
     // the broader branch wins on order and drops the kind/status filters.
     if (sql.includes('FROM contributions c JOIN profiles p') && !sql.includes('c.kind = ?')) {
       return new FakeStatement({
-        all: ([ideaId]) => ({
+        all: ([ideaId, limit, offset]) => ({
           results: this.contributions
             .filter((item) => item.idea_id === ideaId)
+            // Mirrors LIMIT ? OFFSET ? so paging is actually exercised.
+            .slice(
+              sql.includes('LIMIT ?') ? Number(offset || 0) : 0,
+              sql.includes('LIMIT ?') ? Number(offset || 0) + Number(limit || 0) : undefined,
+            )
             .map((item) => {
               const profile = this.profiles.get(String(item.profile_id)) || {};
               return {
@@ -643,6 +648,17 @@ class FakeD1 {
                 display_name: profile.display_name || profile.handle || 'Guest',
               };
             }),
+        }),
+      });
+    }
+    if (sql.includes('SELECT COUNT(*) AS n FROM contributions') && !sql.includes('kind = ?')) {
+      return new FakeStatement({
+        first: ([ideaId]) => ({
+          n: this.contributions.filter(
+            (item) =>
+              item.idea_id === ideaId &&
+              (sql.includes("kind != 'comment'") ? item.kind !== 'comment' : true),
+          ).length,
         }),
       });
     }
@@ -876,8 +892,8 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('3 recorded entries');
   });
 
-  it('flags truncation when the render cap is hit instead of implying completeness', () => {
-    const many = Array.from({ length: RESEARCH_RENDER_CAP }, (_, i) => ({
+  it('pages a long research record rather than hiding the remainder', () => {
+    const page = Array.from({ length: RESEARCH_PAGE_SIZE }, (_, i) => ({
       id: `c${i}`,
       kind: 'evidence',
       body: `Entry ${i}.`,
@@ -886,11 +902,42 @@ describe('FreeIdeaStore worker', () => {
       display_name: 'A',
     }));
 
-    const html = researchSection(many, 'demo-idea');
+    const html = researchSection(page, 'demo-idea', {
+      page: 2,
+      pageSize: RESEARCH_PAGE_SIZE,
+      total: 42,
+      showAll: false,
+    });
 
-    expect(html).toContain('most recent of a longer record');
-    expect(html).toContain('/api/ideas/demo-idea/contributions');
-    expect(researchSection(many.slice(0, 3), 'demo-idea')).not.toContain('most recent of a longer record');
+    // Says what it is showing rather than implying completeness...
+    expect(html).toContain(`Showing ${RESEARCH_PAGE_SIZE} of 42 entries`);
+    // ...and every page is a real, linkable URL.
+    expect(html).toContain('?research=1#research');
+    expect(html).toContain('?research=3#research');
+    expect(html).toContain('?research=all#research');
+    expect(html).toContain('Page 2 of 3');
+  });
+
+  it('offers a way back from the unpaged view', () => {
+    const html = researchSection(
+      [{ id: 'c1', kind: 'evidence', body: 'One.', created_at: '2026-06-01 03:00:00', handle: 'a', display_name: 'A' }],
+      'demo-idea',
+      { page: 1, pageSize: RESEARCH_PAGE_SIZE, total: 42, showAll: true },
+    );
+
+    expect(html).toContain('showing all 42 entries');
+    expect(html).toContain('Back to paged view');
+  });
+
+  it('omits the pager when the whole record fits on one page', () => {
+    const html = researchSection(
+      [{ id: 'c1', kind: 'evidence', body: 'One.', created_at: '2026-06-01 03:00:00', handle: 'a', display_name: 'A' }],
+      'demo-idea',
+      { page: 1, pageSize: RESEARCH_PAGE_SIZE, total: 1, showAll: false },
+    );
+
+    expect(html).not.toContain('research-pager');
+    expect(html).toContain('1 recorded entry');
   });
 
   it('opens a research entry targeted by the URL fragment', async () => {
@@ -1153,6 +1200,78 @@ describe('FreeIdeaStore worker', () => {
     const data = (await list.json()) as { refinements: Array<{ id: string; section: string; proposal: string }> };
     return data.refinements[0];
   }
+
+  it('serves a requested page of the research record', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    // Enough entries to need a second page.
+    for (let index = 0; index < RESEARCH_PAGE_SIZE + 3; index += 1) {
+      await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ kind: 'evidence', body: `Paged entry ${index}.` }),
+        }),
+        testEnv,
+      );
+    }
+
+    const first = await (await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), testEnv)).text();
+    const second = await (
+      await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/?research=2'), testEnv)
+    ).text();
+
+    expect(first).toContain(`Showing ${RESEARCH_PAGE_SIZE} of ${RESEARCH_PAGE_SIZE + 3} entries`);
+    expect(first).toContain('?research=2#research');
+    expect(second).toContain('Page 2 of 2');
+    // The two pages show different entries, so paging actually pages.
+    expect(first).not.toEqual(second);
+  });
+
+  it('pages the contributions API on request but stays unpaged by default', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    for (let index = 0; index < 5; index += 1) {
+      await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ kind: 'evidence', body: `API entry ${index}.` }),
+        }),
+        testEnv,
+      );
+    }
+
+    const paged = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions?limit=2&offset=2'),
+      testEnv,
+    );
+    const data = (await paged.json()) as { contributions: unknown[]; total: number; limit: number; offset: number };
+    const unpaged = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions'),
+      testEnv,
+    );
+    const all = (await unpaged.json()) as { contributions: unknown[]; total?: number };
+
+    expect(data.contributions).toHaveLength(2);
+    expect(data).toMatchObject({ total: 5, limit: 2, offset: 2 });
+    // Existing callers get the whole set and no pager fields.
+    expect(all.contributions).toHaveLength(5);
+    expect(all.total).toBeUndefined();
+  });
+
+  it('recovers a deep link to an entry that is not on the current page', async () => {
+    const html = await (await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), env())).text();
+
+    // Search links straight to #contribution-<id>; if that entry is on a later
+    // page the anchor would be dead, so the page falls through to the full view.
+    expect(html).toContain("hash.startsWith('#contribution-')");
+    expect(html).toContain("url.searchParams.set('research', 'all')");
+    // And it must not loop once already showing everything.
+    expect(html).toContain("url.searchParams.get('research') === 'all'");
+  });
 
   it('finds a claim across ideas and links to where it lives', async () => {
     mockSignedInSerge();

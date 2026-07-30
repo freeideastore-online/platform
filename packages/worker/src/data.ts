@@ -37,7 +37,6 @@ export async function listIdeas(env: Env, options: { stage?: string; limit?: num
          -- live in R2, so body_md is empty for anything written since.
          CASE
            WHEN chapter_count >= ${PUBLICATION_POLICY.minChapters}
-            AND body_words >= ${PUBLICATION_POLICY.minTotalWords}
             AND body_words / chapter_count >= ${PUBLICATION_POLICY.minMeanChapterWords}
            THEN 1
            ELSE 0
@@ -164,12 +163,18 @@ export async function ideasByProfile(env: Env, profileId: string, limit = 500) {
 }
 
 /**
- * `limit` bounds the work done on the public page-render path — bodies are up to
- * 2000 chars each and every one is inlined into the HTML, so an idea that
- * accumulates hundreds of contributions would otherwise grow the page without
- * bound. Callers that need the full set (the JSON API) pass no limit.
+ * Contributions for an idea, newest first.
+ *
+ * `limit`/`offset` page the read path: every body is inlined into the HTML, and
+ * one idea already carries 42 research entries totalling ~79KB, so rendering the
+ * whole record on every page load grows without bound as an idea deepens.
  */
-export async function contributionsByIdea(env: Env, ideaId: string, limit?: number) {
+export async function contributionsByIdea(
+  env: Env,
+  ideaId: string,
+  limit?: number,
+  offset = 0,
+) {
   const rows = await env.DB.prepare(
     `SELECT c.id, c.kind, c.body, c.created_at, c.claim, c.source_url, c.accessed_at,
             c.provenance, c.confidence, c.supersedes, c.section, c.status, c.resolution,
@@ -180,9 +185,9 @@ export async function contributionsByIdea(env: Env, ideaId: string, limit?: numb
      FROM contributions c JOIN profiles p ON p.id = c.profile_id
      WHERE c.idea_id = ?
      ORDER BY c.created_at DESC
-     ${limit ? 'LIMIT ?' : ''}`,
+     ${limit ? 'LIMIT ? OFFSET ?' : ''}`,
   )
-    .bind(...(limit ? [ideaId, limit] : [ideaId]))
+    .bind(...(limit ? [ideaId, limit, offset] : [ideaId]))
     .all<IdeaContributionRow>();
   return rows.results || [];
 }
@@ -199,4 +204,15 @@ export async function contributionsByProfile(env: Env, profileId: string, limit 
     .bind(profileId, limit)
     .all<ProfileContributionRow>();
   return rows.results || [];
+}
+
+/** How many contributions an idea has, for pagers and counts. */
+export async function contributionCount(env: Env, ideaId: string, researchOnly = false) {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM contributions
+     WHERE idea_id = ?${researchOnly ? " AND kind != 'comment'" : ''}`,
+  )
+    .bind(ideaId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
 }

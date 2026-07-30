@@ -396,6 +396,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-research-record-is-paged" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The Research Record Is Paged
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publishing-model" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -599,6 +610,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-research-record-is-paged" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The Research Record Is Paged
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publishing-model" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -702,16 +724,21 @@
 <li>Parked: the idea is intentionally paused, weak, blocked, or waiting for new evidence.</li>
 </ul>
 <h2 id="when-an-idea-gets-chapter-pages">When An Idea Gets Chapter Pages<a class="headerlink" href="#when-an-idea-gets-chapter-pages" title="Permanent link">&para;</a></h2>
-<p>Chapters are earned by content weight, not by heading count. A document is published as chapter pages only when all three hold (<code>PUBLICATION_POLICY</code> in <code>packages/worker/src/markdown.ts</code>):</p>
+<p>Chapters are earned by content weight, not by heading count. A document is published as chapter pages only when both hold (<code>PUBLICATION_POLICY</code> in <code>packages/worker/src/markdown.ts</code>):</p>
 <ul>
-<li>at least 2000 words in total,</li>
 <li>at least 3 chapters,</li>
 <li>at least 300 words per chapter on average.</li>
 </ul>
+<p>A total-word gate was part of this and has been dropped. At 3 chapters averaging 300 words it was already implied, and it was the half that stopped mattering as documents grew: the idea that first motivated the policy now clears 3,168 words but averages 226 words per chapter. The per-chapter floor is what decides whether a chapter deserves a URL.</p>
 <p>Below any of those bars the idea renders as a single page with an in-page table of contents, and chapter deep links <code>302</code> to the matching heading anchor.</p>
 <p>This gate exists because splitting on <code>##</code> alone produced chapters that were not worth a page. Across all 11 published ideas, mean words per chapter ran 38-185, no chapter filled a laptop viewport, and the idea page — which renders the whole body inline — already showed 103% of the combined chapter content. Pagination was navigation wrapped around content the reader could already scroll, and it made the argument harder to critique by spreading it across page loads.</p>
 <p>An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.</p>
 <p>Content before the first <code>##</code> is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence.</p>
+<h2 id="the-research-record-is-paged">The Research Record Is Paged<a class="headerlink" href="#the-research-record-is-paged" title="Permanent link">&para;</a></h2>
+<p>Research entries are inlined into the idea page, so the whole record cannot be rendered on every load — one idea already carries 42 entries totalling ~79KB.</p>
+<p>The record is paged 20 at a time. Pager links are plain URLs (<code>?research=2#research</code>, <code>?research=all#research</code>), so a long record is navigable and linkable without JavaScript and each page is crawlable. The section states what it is showing (<code>Showing 20 of 42 entries</code>) rather than implying completeness.</p>
+<p><code>GET /api/ideas/:id/contributions</code> stays unpaged by default so existing callers keep working; pass <code>limit</code> (and optionally <code>offset</code>) to page, and the response then carries <code>total</code>.</p>
+<p>Search links straight to <code>#contribution-&lt;id&gt;</code>, which may be on a later page. When the targeted entry is not present the page falls through once to the unpaged view so the anchor resolves; the <code>research=all</code> guard stops that looping when the entry is genuinely gone.</p>
 <h2 id="publishing-model">Publishing Model<a class="headerlink" href="#publishing-model" title="Permanent link">&para;</a></h2>
 <p>The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits <code>##</code> headings into chapter URLs, and keeps <code>###</code> headings as sub-sections inside the chapter.</p>
 <p>FreeIdeaStore does not create per-idea GitHub docs, Zensical projects, generated static publication assets, or fallback static pages for free ideas.</p>

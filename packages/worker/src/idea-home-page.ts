@@ -1,11 +1,11 @@
 import { AUTH_PREFIX } from './auth';
-import { contributionsByIdea, derivedIdeas, ideaBody, ideaById } from './data';
+import { contributionCount, contributionsByIdea, derivedIdeas, ideaBody, ideaById } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { sourcesSection } from './idea-sources-section';
 import { ideaHomeScripts } from './idea-home-scripts';
 import { ideaHomeStyles } from './idea-home-styles';
-import { RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
+import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
 import { openRefinementCount } from './refinements';
 import { listIdeaSources } from './sources';
 import { ideaChapters, isPaginated, markdownHeadings, markdownToHtml } from './markdown';
@@ -24,7 +24,18 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
         .first<{ id: string; title: string }>()
     : null;
   const derived = await derivedIdeas(env, idea.id);
-  const contributions = await contributionsByIdea(env, idea.id, RESEARCH_RENDER_CAP);
+  // The research record is paged: bodies are inlined, so rendering all of them
+  // grows the page without bound as an idea deepens.
+  const researchParam = new URL(request.url).searchParams.get('research') || '1';
+  const showAllResearch = researchParam === 'all';
+  const researchPage = showAllResearch ? 1 : Math.max(1, Number.parseInt(researchParam, 10) || 1);
+  const contributionTotal = await contributionCount(env, idea.id);
+  const contributions = await contributionsByIdea(
+    env,
+    idea.id,
+    showAllResearch ? RESEARCH_RENDER_CAP : RESEARCH_PAGE_SIZE,
+    showAllResearch ? 0 : (researchPage - 1) * RESEARCH_PAGE_SIZE,
+  );
   const { research, comments } = splitContributions(contributions);
   // A queued proposal that nobody can see never gets merged.
   const pendingRefinements = await openRefinementCount(env, idea.id);
@@ -82,7 +93,12 @@ ${
       ${ideaDiagram(idea.id)}
       <div class="chapter-body">${markdownToHtml(body)}</div>
     </article>
-    ${researchSection(contributions, idea.id)}
+    ${researchSection(contributions, idea.id, {
+      page: researchPage,
+      pageSize: RESEARCH_PAGE_SIZE,
+      total: contributionTotal,
+      showAll: showAllResearch,
+    })}
     ${sourcesSection(sources)}
     <section class="comments" id="comments" data-idea-id="${escapeHtml(idea.id)}">
       <h2>Comments</h2>

@@ -73,11 +73,12 @@ No. Free ideas should be cheap. Raw ideas can use only the sections that are hon
 
 ## When An Idea Gets Chapter Pages
 
-Chapters are earned by content weight, not by heading count. A document is published as chapter pages only when all three hold (`PUBLICATION_POLICY` in `packages/worker/src/markdown.ts`):
+Chapters are earned by content weight, not by heading count. A document is published as chapter pages only when both hold (`PUBLICATION_POLICY` in `packages/worker/src/markdown.ts`):
 
-- at least 2000 words in total,
 - at least 3 chapters,
 - at least 300 words per chapter on average.
+
+A total-word gate was part of this and has been dropped. At 3 chapters averaging 300 words it was already implied, and it was the half that stopped mattering as documents grew: the idea that first motivated the policy now clears 3,168 words but averages 226 words per chapter. The per-chapter floor is what decides whether a chapter deserves a URL.
 
 Below any of those bars the idea renders as a single page with an in-page table of contents, and chapter deep links `302` to the matching heading anchor.
 
@@ -86,6 +87,16 @@ This gate exists because splitting on `##` alone produced chapters that were not
 An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.
 
 Content before the first `##` is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence.
+
+## The Research Record Is Paged
+
+Research entries are inlined into the idea page, so the whole record cannot be rendered on every load — one idea already carries 42 entries totalling ~79KB.
+
+The record is paged 20 at a time. Pager links are plain URLs (`?research=2#research`, `?research=all#research`), so a long record is navigable and linkable without JavaScript and each page is crawlable. The section states what it is showing (`Showing 20 of 42 entries`) rather than implying completeness.
+
+`GET /api/ideas/:id/contributions` stays unpaged by default so existing callers keep working; pass `limit` (and optionally `offset`) to page, and the response then carries `total`.
+
+Search links straight to `#contribution-<id>`, which may be on a later page. When the targeted entry is not present the page falls through once to the unpaged view so the anchor resolves; the `research=all` guard stops that looping when the entry is genuinely gone.
 
 ## Publishing Model
 

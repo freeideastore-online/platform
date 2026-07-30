@@ -141,12 +141,17 @@ export type IdeaChapter = {
  * combined chapter content. Pagination was navigation over content the reader
  * could already scroll.
  *
- * A document now has to be long enough to be worth paging through *and* carry
- * enough per chapter for a chapter to stand alone. Below either bar the idea is
- * one page with an in-page table of contents.
+ * A chapter has to carry enough to stand alone, and there have to be enough of
+ * them to be worth paging through. Below either bar the idea is one page with an
+ * in-page table of contents.
+ *
+ * A total-word gate was dropped once documents started growing: at 3 chapters
+ * averaging 300 words it was already implied, and it was the redundant half. The
+ * per-chapter floor is what decides whether a chapter deserves a URL — the idea
+ * that first motivated this now clears 3,168 words but averages 226 per chapter,
+ * and thin chapters are exactly what the gate exists to catch.
  */
 export const PUBLICATION_POLICY = {
-  minTotalWords: 2000,
   minMeanChapterWords: 300,
   minChapters: 3,
 } as const;
@@ -177,7 +182,6 @@ export function isPaginated(markdown: string, documentTitle = '') {
   const chapters = ideaChapters(markdown, documentTitle);
   if (chapters.length < PUBLICATION_POLICY.minChapters) return false;
   const total = wordCount(markdown);
-  if (total < PUBLICATION_POLICY.minTotalWords) return false;
   return Math.floor(total / chapters.length) >= PUBLICATION_POLICY.minMeanChapterWords;
 }
 

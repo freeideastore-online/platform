@@ -5,6 +5,19 @@ export function ideaHomeScripts(ideaId: string): string {
   return `<script>
 const ideaId = ${JSON.stringify(ideaId)};
 const commentList = document.querySelector('#comment-list');
+// A deep link from search may target a research entry that is not on this page of
+// the record. Rather than leave the anchor dead, fall through to the unpaged view
+// once; the research=all guard stops it looping if the entry is genuinely gone.
+(() => {
+  const hash = location.hash;
+  if (!hash.startsWith('#contribution-')) return;
+  if (document.getElementById(hash.slice(1))) return;
+  const url = new URL(location.href);
+  if (url.searchParams.get('research') === 'all') return;
+  url.searchParams.set('research', 'all');
+  location.replace(url.toString());
+})();
+
 const commentForm = document.querySelector('#comment-form');
 const commentStatus = document.querySelector('#comment-status');
 const commentAuth = document.querySelector('#comment-auth');

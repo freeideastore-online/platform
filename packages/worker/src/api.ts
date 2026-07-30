@@ -11,7 +11,7 @@ import {
   updateIdea,
   updateIdeaSection,
 } from './api-idea-mutations';
-import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
+import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
@@ -69,11 +69,23 @@ async function handleGetIdea(env: Env, ideaParam: string) {
   return json({ idea, body: await ideaBody(env, idea), url: `/ideas/${idea.id}/` });
 }
 
-async function handleGetContributions(env: Env, ideaParam: string) {
+async function handleGetContributions(env: Env, ideaParam: string, url: URL) {
   const ideaId = pathId(ideaParam);
   if (!ideaId) return bad('invalid idea id', 400);
   if (!(await ideaById(env, ideaId))) return bad('idea not found', 404);
-  return json({ contributions: await contributionsByIdea(env, ideaId) });
+  // Unpaged by default so existing callers keep working; pass limit to page.
+  const limitParam = url.searchParams.get('limit');
+  if (!limitParam) {
+    return json({ contributions: await contributionsByIdea(env, ideaId) });
+  }
+  const limit = clampInt(limitParam, 20, 1, 200);
+  const offset = clampInt(url.searchParams.get('offset'), 0, 0, 100000);
+  return json({
+    contributions: await contributionsByIdea(env, ideaId, limit, offset),
+    total: await contributionCount(env, ideaId),
+    limit,
+    offset,
+  });
 }
 
 async function handleGetSections(env: Env, ideaParam: string) {
@@ -429,7 +441,7 @@ const routes: Route[] = [
   {
     pattern: /^\/api\/ideas\/([^/]+)\/contributions$/,
     methods: {
-      GET: (_, env, __, match) => handleGetContributions(env, match![1] || ''),
+      GET: (_, env, url, match) => handleGetContributions(env, match![1] || '', url),
       POST: (request, env, __, match) => handleCreateContribution(request, env, match![1] || ''),
     },
   },
