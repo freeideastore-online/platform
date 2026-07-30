@@ -29,14 +29,19 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   const researchParam = new URL(request.url).searchParams.get('research') || '1';
   const showAllResearch = researchParam === 'all';
   const researchPage = showAllResearch ? 1 : Math.max(1, Number.parseInt(researchParam, 10) || 1);
-  const contributionTotal = await contributionCount(env, idea.id);
+  // Page over research kinds only. Paging over all contributions and then
+  // filtering would make the pager count one thing and show another, and would
+  // make the comment count depend on which page you were looking at.
+  const researchTotal = await contributionCount(env, idea.id, true);
+  const commentTotal = (await contributionCount(env, idea.id)) - researchTotal;
   const contributions = await contributionsByIdea(
     env,
     idea.id,
     showAllResearch ? RESEARCH_RENDER_CAP : RESEARCH_PAGE_SIZE,
     showAllResearch ? 0 : (researchPage - 1) * RESEARCH_PAGE_SIZE,
+    true,
   );
-  const { research, comments } = splitContributions(contributions);
+  const { research } = splitContributions(contributions);
   // A queued proposal that nobody can see never gets merged.
   const pendingRefinements = await openRefinementCount(env, idea.id);
   // What the idea rests on, gathered from the document and its research.
@@ -96,7 +101,7 @@ ${
     ${researchSection(contributions, idea.id, {
       page: researchPage,
       pageSize: RESEARCH_PAGE_SIZE,
-      total: contributionTotal,
+      total: researchTotal,
       showAll: showAllResearch,
     })}
     ${sourcesSection(sources)}
@@ -114,9 +119,9 @@ ${
   <aside class="toc-rail">
     <div class="toc-title">Signals</div>
     <div class="signal-box">
-      <div><strong>Sections</strong><nav class="toc-box">${headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('')}${research.length ? '<a href="#research">Research &amp; evidence</a>' : ''}${sources.length ? '<a href="#sources">Sources</a>' : ''}<a href="#comments">Comments</a></nav></div>
+      <div><strong>Sections</strong><nav class="toc-box">${headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('')}${researchTotal ? '<a href="#research">Research &amp; evidence</a>' : ''}${sources.length ? '<a href="#sources">Sources</a>' : ''}<a href="#comments">Comments</a></nav></div>
       <div><strong>Reactions</strong><span><span id="support-count">${escapeHtml(idea.support)}</span> supports / <span id="trash-count">${escapeHtml(idea.trash)}</span> trash / <span id="pivot-count">${escapeHtml(idea.pivot)}</span> pivots</span><div class="reaction-buttons" aria-label="React to idea"><button class="react-button" type="button" data-reaction="support">&#128077; Support</button><button class="react-button" type="button" data-reaction="trash">&#128465; Trash</button><button class="react-button" type="button" data-reaction="pivot">&#128260; Pivot</button></div><p id="reaction-status" class="reaction-status">Sign in to react.</p></div>
-      <div><strong>Contributions</strong><span>${research.length ? `<a href="#research">${research.length} research ${research.length === 1 ? 'entry' : 'entries'}</a>` : 'No research entries yet'} / <a href="#comments">${comments} ${comments === 1 ? 'comment' : 'comments'}</a></span></div>
+      <div><strong>Contributions</strong><span>${researchTotal ? `<a href="#research">${researchTotal} research ${researchTotal === 1 ? 'entry' : 'entries'}</a>` : 'No research entries yet'} / <a href="#comments">${commentTotal} ${commentTotal === 1 ? 'comment' : 'comments'}</a></span></div>
       ${pendingRefinements ? `<div><strong>Awaiting merge</strong><span><a href="#research">${pendingRefinements} proposed ${pendingRefinements === 1 ? 'refinement' : 'refinements'}</a> not yet in the document</span></div>` : ''}
       <div><strong>Next step</strong><span>${escapeHtml(idea.next_step || 'Needs a next validation step.')}</span></div>
       <div><strong>Risk</strong><span>${escapeHtml(idea.risk || 'Risk not yet named.')}</span></div>

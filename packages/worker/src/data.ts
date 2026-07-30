@@ -174,6 +174,7 @@ export async function contributionsByIdea(
   ideaId: string,
   limit?: number,
   offset = 0,
+  researchOnly = false,
 ) {
   const rows = await env.DB.prepare(
     `SELECT c.id, c.kind, c.body, c.created_at, c.claim, c.source_url, c.accessed_at,
@@ -183,7 +184,7 @@ export async function contributionsByIdea(
             (SELECT s.id FROM contributions s WHERE s.supersedes = c.id ORDER BY s.created_at DESC LIMIT 1)
               AS superseded_by
      FROM contributions c JOIN profiles p ON p.id = c.profile_id
-     WHERE c.idea_id = ?
+     WHERE c.idea_id = ?${researchOnly ? " AND c.kind != 'comment'" : ''}
      ORDER BY c.created_at DESC
      ${limit ? 'LIMIT ? OFFSET ?' : ''}`,
   )

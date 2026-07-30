@@ -598,6 +598,8 @@ class FakeD1 {
         all: ([ideaId, limit, offset]) => ({
           results: this.contributions
             .filter((item) => item.idea_id === ideaId)
+            // Mirrors the researchOnly filter, so the pager pages what it counts.
+            .filter((item) => (sql.includes("c.kind != 'comment'") ? item.kind !== 'comment' : true))
             // Mirrors LIMIT ? OFFSET ? so paging is actually exercised.
             .slice(
               sql.includes('LIMIT ?') ? Number(offset || 0) : 0,
@@ -1227,6 +1229,41 @@ describe('FreeIdeaStore worker', () => {
     expect(second).toContain('Page 2 of 2');
     // The two pages show different entries, so paging actually pages.
     expect(first).not.toEqual(second);
+  });
+
+  it('counts research and comments from the whole record, not the current page', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    // More research than one page holds, plus comments that must not be paged in.
+    for (let index = 0; index < RESEARCH_PAGE_SIZE + 2; index += 1) {
+      await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ kind: 'evidence', body: `Counted entry ${index}.` }),
+        }),
+        testEnv,
+      );
+    }
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ kind: 'comment', body: 'A comment, not research.' }),
+      }),
+      testEnv,
+    );
+
+    const html = await (await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), testEnv)).text();
+
+    // The pager compares like with like: research shown vs research total.
+    expect(html).toContain(`Showing ${RESEARCH_PAGE_SIZE} of ${RESEARCH_PAGE_SIZE + 2} entries`);
+    // Rail counts come from the whole record, so they do not shift per page.
+    expect(html).toContain(`${RESEARCH_PAGE_SIZE + 2} research entries`);
+    expect(html).toContain('1 comment');
+    // The comment is not rendered as a research entry.
+    expect(html).not.toContain('A comment, not research.');
   });
 
   it('pages the contributions API on request but stays unpaged by default', async () => {
