@@ -9,6 +9,23 @@ import type { IdeaContributionRow } from './types';
 const COMMENT_KIND = 'comment';
 
 /**
+ * How a claim came to be known. Borrowed from the gapfill document, which had to
+ * spell this vocabulary out in prose because the schema could not hold it.
+ *
+ * The distinction is the point: an inferred claim must not be displayed as though
+ * it were confirmed.
+ */
+export const PROVENANCE_VALUES = new Set([
+  'extracted',
+  'derived',
+  'inferred',
+  'human-asserted',
+  'confirmed',
+]);
+
+export const CONFIDENCE_VALUES = new Set(['low', 'medium', 'high']);
+
+/**
  * Cap on contributions fetched for the page. Bodies are inlined, so this bounds
  * both the D1 read and the HTML size on a public route. When the cap is hit the
  * section says so and points at the JSON API for the remainder.
@@ -72,9 +89,31 @@ function renderItem(item: IdeaContributionRow) {
   const byline = item.handle
     ? `<a href="/contributors/${escapeHtml(item.handle)}/">${escapeHtml(author)}</a>`
     : escapeHtml(author);
-  return `<details class="research-item" id="contribution-${escapeHtml(item.id)}">
-        <summary><span class="research-kind">${escapeHtml(kind)}</span><span class="research-excerpt">${escapeHtml(excerpt(item.body))}</span></summary>
-        <p class="research-byline">${byline}${when ? ` <time>${escapeHtml(when)}</time>` : ''}</p>
+
+  // A superseded entry stays readable — the record should show that it was
+  // corrected, not hide that it was ever believed.
+  const superseded = Boolean(item.superseded_by);
+  const badges = [
+    `<span class="research-kind">${escapeHtml(kind)}</span>`,
+    item.provenance ? `<span class="research-tag prov-${escapeHtml(item.provenance)}">${escapeHtml(item.provenance)}</span>` : '',
+    item.confidence ? `<span class="research-tag conf-${escapeHtml(item.confidence)}">${escapeHtml(item.confidence)} confidence</span>` : '',
+    superseded ? '<span class="research-tag superseded">superseded</span>' : '',
+  ].filter(Boolean).join('');
+
+  const headline = item.claim ? escapeHtml(item.claim) : escapeHtml(excerpt(item.body));
+  const source = item.source_url
+    ? `<a class="research-source" href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener noreferrer">source</a>${
+        item.accessed_at ? `<span class="research-accessed">checked ${escapeHtml(item.accessed_at)}</span>` : ''
+      }`
+    : '';
+  const correction = superseded
+    ? `<p class="research-superseded">Corrected by <a href="#contribution-${escapeHtml(String(item.superseded_by))}">a later entry</a>.</p>`
+    : '';
+
+  return `<details class="research-item${superseded ? ' is-superseded' : ''}" id="contribution-${escapeHtml(item.id)}">
+        <summary>${badges}<span class="research-excerpt">${headline}</span></summary>
+        <p class="research-byline">${byline}${when ? ` <time>${escapeHtml(when)}</time>` : ''}${source}</p>
+        ${correction}
         <p class="research-body">${escapeHtml(item.body)}</p>
       </details>`;
 }

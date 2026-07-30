@@ -452,7 +452,11 @@ class FakeD1 {
         },
       });
     }
-    if (sql.includes('SELECT c.id, c.kind, c.body, c.created_at, p.handle, p.display_name')) {
+    // Matched on the FROM clause, not the select list: the column list grows
+    // (migration 0012 added the typed research fields) and an exact-prefix match
+    // silently stops matching, which reads as "no contributions" rather than a
+    // broken fake.
+    if (sql.includes('FROM contributions c JOIN profiles p')) {
       return new FakeStatement({
         all: ([ideaId]) => ({
           results: this.contributions
@@ -464,6 +468,15 @@ class FakeD1 {
                 kind: item.kind,
                 body: item.body,
                 created_at: item.created_at,
+                claim: item.claim || '',
+                source_url: item.source_url || '',
+                accessed_at: item.accessed_at || '',
+                provenance: item.provenance || '',
+                confidence: item.confidence || '',
+                supersedes: item.supersedes || '',
+                // Mirrors the correlated subquery in data.ts.
+                superseded_by:
+                  this.contributions.find((other) => other.supersedes === item.id)?.id ?? null,
                 handle: profile.handle || 'guest',
                 display_name: profile.display_name || profile.handle || 'Guest',
               };
@@ -472,18 +485,32 @@ class FakeD1 {
       });
     }
     if (sql.includes('INSERT INTO contributions')) {
+      const columns = (sql.match(/\(([^)]*)\)\s*VALUES/)?.[1] || '')
+        .split(',')
+        .map((column) => column.trim())
+        .filter(Boolean);
       return new FakeStatement({
-        run: ([id, ideaId, profileId, kind, body]) => {
-          this.contributions.unshift({
-            id,
-            idea_id: ideaId,
-            profile_id: profileId,
-            kind,
-            body,
-            created_at: '2026-06-11 04:00:00',
+        run: (binds) => {
+          const row: Record<string, unknown> = {};
+          columns.forEach((column, index) => {
+            row[column] = binds[index];
           });
-          const idea = this.ideas.get(String(ideaId));
+          this.contributions.unshift({
+            created_at: `2026-06-12 01:00:${String(this.contributions.length).padStart(2, '0')}`,
+            ...row,
+          });
+          const idea = this.ideas.get(String(row.idea_id));
           if (idea) idea.contribution_count = Number(idea.contribution_count || 0) + 1;
+        },
+      });
+    }
+    if (sql.includes('SELECT id FROM contributions WHERE id = ?')) {
+      return new FakeStatement({
+        first: ([contributionId, ideaId]) => {
+          const found = this.contributions.find(
+            (item) => item.id === contributionId && item.idea_id === ideaId,
+          );
+          return found ? { id: found.id } : null;
         },
       });
     }
@@ -917,6 +944,122 @@ describe('FreeIdeaStore worker', () => {
     const data = (await response.json()) as { error: string };
     expect(data.error).toContain('unknown section "not-a-section"');
     expect(data.error).toContain('/sections');
+  });
+
+  it('stores typed research fields and renders provenance on the page', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const create = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'evidence',
+          claim: 'Porcelain is definitionally under 0.5% water absorption.',
+          body: 'ISO 13006 ties absorption to group, so the value is derived rather than asked for.',
+          source_url: 'https://www.iso.org/standard/63406.html',
+          accessed_at: '2026-07-30',
+          provenance: 'derived',
+          confidence: 'high',
+        }),
+      }),
+      testEnv,
+    );
+    const page = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), testEnv);
+    const html = await page.text();
+
+    expect(create.status).toBe(201);
+    // The claim becomes the headline, and provenance/confidence are visible.
+    expect(html).toContain('Porcelain is definitionally under 0.5% water absorption.');
+    expect(html).toContain('prov-derived');
+    expect(html).toContain('conf-high');
+    expect(html).toContain('href="https://www.iso.org/standard/63406.html"');
+    expect(html).toContain('checked 2026-07-30');
+  });
+
+  it('rejects a provenance or confidence value outside the vocabulary', async () => {
+    mockSignedInSerge();
+    const badProvenance = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'evidence', body: 'A finding.', provenance: 'vibes' }),
+      }),
+      env(),
+    );
+    const badSource = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'evidence', body: 'A finding.', source_url: 'javascript:alert(1)' }),
+      }),
+      env(),
+    );
+
+    expect(badProvenance.status).toBe(400);
+    expect((await badProvenance.json() as { error: string }).error).toContain('provenance must be one of');
+    expect(badSource.status).toBe(400);
+    expect((await badSource.json() as { error: string }).error).toContain('http(s)');
+  });
+
+  it('marks a corrected entry as superseded instead of showing peers', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const first = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'evidence', claim: 'Matrixify is a direct competitor.', body: 'Initial scan.' }),
+      }),
+      testEnv,
+    );
+    expect(first.status).toBe(201);
+
+    const list = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions'),
+      testEnv,
+    );
+    const listed = (await list.json()) as { contributions: Array<{ id: string; claim?: string }> };
+    const target = listed.contributions.find((item) => item.claim?.startsWith('Matrixify'));
+    expect(target).toBeTruthy();
+
+    const correction = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'evidence',
+          claim: 'Matrixify was overstated: no UI into the data.',
+          body: 'Correction to the competitor scan.',
+          supersedes: target?.id,
+        }),
+      }),
+      testEnv,
+    );
+    const page = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), testEnv);
+    const html = await page.text();
+
+    expect(correction.status).toBe(201);
+    expect(html).toContain('is-superseded');
+    expect(html).toContain('Corrected by');
+    // Both remain readable — the record shows what was believed and what replaced it.
+    expect(html).toContain('Matrixify is a direct competitor.');
+    expect(html).toContain('Matrixify was overstated');
+  });
+
+  it('refuses to supersede a contribution that does not exist on this idea', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'evidence', body: 'A finding.', supersedes: 'contribution-does-not-exist' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(404);
+    expect((await response.json() as { error: string }).error).toContain('supersedes must reference');
   });
 
   it('records the replaced document as a revision on a canonical update', async () => {

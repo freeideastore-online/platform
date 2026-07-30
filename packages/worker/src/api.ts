@@ -3,6 +3,7 @@ import { createIdea, deleteIdea, deriveIdea, promoteIdea, revertIdeaToRevision, 
 import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, bodyJson, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { ideaSectionList, readIdeaSection } from './markdown';
+import { CONFIDENCE_VALUES, PROVENANCE_VALUES } from './idea-research';
 import { diffSummary, listRevisions, revisionBody, revisionById } from './revisions';
 import type { Env } from './types';
 
@@ -132,15 +133,62 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
   const body = String(input.body || '').trim();
   const kind = String(input.kind || 'comment').trim();
   if (body.length < 3) return bad('contribution body is required');
+
+  // Typed research fields. All optional — a plain comment supplies none of them.
+  const claim = String(input.claim || '').trim();
+  const sourceUrl = String(input.sourceUrl || input.source_url || '').trim();
+  const accessedAt = String(input.accessedAt || input.accessed_at || '').trim();
+  const provenance = String(input.provenance || '').trim().toLowerCase();
+  const confidence = String(input.confidence || '').trim().toLowerCase();
+  const supersedes = String(input.supersedes || '').trim();
+
   const overflow = tooLong([
     ['contribution body', body, FIELD_LIMITS.contribution],
     ['contribution kind', kind, FIELD_LIMITS.contributionKind],
+    ['claim', claim, FIELD_LIMITS.claim],
+    ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
   ]);
   if (overflow) return bad(overflow);
+
+  if (provenance && !PROVENANCE_VALUES.has(provenance)) {
+    return bad(`provenance must be one of ${[...PROVENANCE_VALUES].join(', ')}`);
+  }
+  if (confidence && !CONFIDENCE_VALUES.has(confidence)) {
+    return bad(`confidence must be one of ${[...CONFIDENCE_VALUES].join(', ')}`);
+  }
+  // A source that cannot be opened is not a source.
+  if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) {
+    return bad('source URL must be an http(s) URL');
+  }
+  if (accessedAt && !/^\d{4}-\d{2}-\d{2}$/.test(accessedAt)) {
+    return bad('accessed date must be YYYY-MM-DD');
+  }
+  // Superseding an entry that does not exist would silently orphan the link.
+  if (supersedes) {
+    const target = await env.DB.prepare('SELECT id FROM contributions WHERE id = ? AND idea_id = ?')
+      .bind(supersedes, ideaId)
+      .first<{ id: string }>();
+    if (!target) return bad('supersedes must reference an existing contribution on this idea', 404);
+  }
+
   await env.DB.prepare(
-    'INSERT INTO contributions (id, idea_id, profile_id, kind, body) VALUES (?, ?, ?, ?, ?)',
+    `INSERT INTO contributions
+     (id, idea_id, profile_id, kind, body, claim, source_url, accessed_at, provenance, confidence, supersedes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id('contribution'), ideaId, registered.profileId, kind, body)
+    .bind(
+      id('contribution'),
+      ideaId,
+      registered.profileId,
+      kind,
+      body,
+      claim,
+      sourceUrl,
+      accessedAt,
+      provenance,
+      confidence,
+      supersedes,
+    )
     .run();
   await env.DB.prepare('UPDATE ideas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .bind(ideaId)

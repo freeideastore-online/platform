@@ -127,6 +127,13 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
       idea_id: z.string().min(2),
       kind: z.enum(CONTRIBUTION_KINDS).optional(),
       body: z.string().min(3).max(8000),
+      claim: z.string().max(300).optional().describe("The assertion in one line. Shown as the entry headline and citable on its own."),
+      source_url: z.string().max(500).optional().describe("http(s) URL backing the claim."),
+      accessed_at: z.string().optional().describe("YYYY-MM-DD the source was checked. Research decays; record when it was true."),
+      provenance: z.enum(["extracted", "derived", "inferred", "human-asserted", "confirmed"]).optional()
+        .describe("How the claim came to be known. An inferred claim is not displayed like a confirmed one."),
+      confidence: z.enum(["low", "medium", "high"]).optional(),
+      supersedes: z.string().optional().describe("Id of the contribution this one corrects. The superseded entry stays readable but is marked as corrected."),
       contributor_handle: z.string().optional().describe("Optional profile handle to attribute the contribution through the current API fallback."),
     },
     async (input) => {
@@ -139,6 +146,12 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         body: JSON.stringify({
           kind: input.kind || "comment",
           body: input.body,
+          claim: input.claim,
+          source_url: input.source_url,
+          accessed_at: input.accessed_at,
+          provenance: input.provenance,
+          confidence: input.confidence,
+          supersedes: input.supersedes,
         }),
         contributorHandle: input.contributor_handle,
         token: props.token,

@@ -33,6 +33,21 @@ p{color:var(--body-text);margin:.78rem 0;max-width:760px}ul,ol{display:grid;gap:
 @media(max-width:860px){.top-brand strong{max-width:min(55vw,280px)}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body,.comments,.research{padding:.9rem}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
 ${navCss(860)}
 ${MARKDOWN_CSS}
+/* Typed research entries: provenance and confidence must be visible at a glance,
+   because an inferred claim must not read like a confirmed one. */
+.research-tag{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;background:var(--panel-alt);color:var(--muted);font-size:.6rem;font-weight:900;letter-spacing:.04em;padding:.12rem .42rem;text-transform:uppercase;margin-left:.3rem}
+.research-tag.prov-confirmed,.research-tag.prov-extracted{border-color:#0f766e;background:#ecfdf5;color:#0f766e}
+.research-tag.prov-derived{border-color:var(--accent);background:var(--mark);color:var(--accent-strong)}
+.research-tag.prov-inferred,.research-tag.prov-human-asserted{border-color:#b45309;background:#fffbeb;color:#92400e}
+.research-tag.conf-low{border-color:#b91c1c;background:#fef2f2;color:#b91c1c}
+.research-tag.superseded{border-color:var(--muted);background:var(--panel);color:var(--muted);text-decoration:line-through}
+.research-item.is-superseded>summary .research-excerpt{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.research-superseded{color:var(--muted);font-size:.78rem;margin:.2rem 0 0;padding:0 .7rem}.research-superseded a{color:var(--accent-strong);font-weight:900}
+.research-source{margin-left:.45rem;color:var(--accent-strong);font-weight:900}
+.research-accessed{margin-left:.35rem;color:var(--muted)}
+[data-theme="dark"] .research-tag.prov-confirmed,[data-theme="dark"] .research-tag.prov-extracted{background:#052e2b;color:#6ee7b7}
+[data-theme="dark"] .research-tag.prov-inferred,[data-theme="dark"] .research-tag.prov-human-asserted{background:#3a2a05;color:#fcd34d}
+[data-theme="dark"] .research-tag.conf-low{background:#3f1414;color:#fca5a5}
 /* Short ideas render without the chapter sidebar — close the column it left. */
 .book-shell.single-page{grid-template-columns:minmax(0,1fr) 300px}
 @media(max-width:1180px){.book-shell.single-page{grid-template-columns:minmax(0,1fr)}}

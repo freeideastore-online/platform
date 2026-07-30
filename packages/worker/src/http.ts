@@ -58,6 +58,7 @@ export const FIELD_LIMITS = {
   body: 200_000,
   contribution: 8000,
   contributionKind: 40,
+  claim: 300,
 } as const;
 
 /**

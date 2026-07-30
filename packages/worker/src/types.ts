@@ -79,4 +79,13 @@ export type IdeaContributionRow = {
   created_at: string;
   handle: string;
   display_name: string;
+  /** Typed research fields; see migration 0012. Empty when not supplied. */
+  claim?: string;
+  source_url?: string;
+  accessed_at?: string;
+  provenance?: string;
+  confidence?: string;
+  supersedes?: string;
+  /** Derived: the id of a later entry that corrects this one, if any. */
+  superseded_by?: string;
 };
