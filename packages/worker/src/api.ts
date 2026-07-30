@@ -12,7 +12,7 @@ import {
   updateIdeaSection,
 } from './api-idea-mutations';
 import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
-import { bad, bodyJson, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
+import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
 import { REFINEMENT_KIND } from './refinements';
@@ -141,7 +141,9 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
     "SELECT COUNT(*) AS n FROM contributions WHERE profile_id = ? AND created_at > datetime('now', '-1 minute')",
   ).bind(registered.profileId).first<{ n: number }>();
   if ((recentCount?.n ?? 0) >= 10) return json({ error: 'too many contributions — wait a minute' }, { status: 429 });
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const body = String(input.body || '').trim();
   const kind = String(input.kind || 'comment').trim();
   if (body.length < 3) return bad('contribution body is required');
@@ -235,7 +237,9 @@ async function handleCreateReaction(request: Request, env: Env, ideaParam: strin
     "SELECT COUNT(*) AS n FROM reactions WHERE profile_id = ? AND created_at > datetime('now', '-1 minute')",
   ).bind(registered.profileId).first<{ n: number }>();
   if ((recentCount?.n ?? 0) >= 15) return json({ error: 'too many reactions — wait a minute' }, { status: 429 });
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const type = String(input.type || '').trim();
   if (!['support', 'trash', 'pivot'].includes(type)) return bad('reaction type must be support, trash, or pivot');
   await env.DB.prepare('INSERT OR IGNORE INTO reactions (id, idea_id, profile_id, type) VALUES (?, ?, ?, ?)')

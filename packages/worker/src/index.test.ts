@@ -1019,6 +1019,59 @@ describe('FreeIdeaStore worker', () => {
     return data.refinements[0];
   }
 
+  it('says what is wrong with a malformed request body', async () => {
+    const notJson = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        body: 'this is not json',
+      }),
+      env(),
+    );
+    const notObject = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        body: '["an","array"]',
+      }),
+      env(),
+    );
+
+    // Previously both returned {} and surfaced as "title and summary are required".
+    expect(notJson.status).toBe(400);
+    await expect(notJson.json()).resolves.toEqual({ error: 'request body is not valid JSON' });
+    expect(notObject.status).toBe(400);
+    await expect(notObject.json()).resolves.toEqual({ error: 'request body must be a JSON object' });
+  });
+
+  it('rejects an oversized request body with 413, not a field error', async () => {
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        body: JSON.stringify({ title: 'Huge', summary: 'x'.repeat(20), body: 'y'.repeat(1_000_001) }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(413);
+    expect((await response.json() as { error: string }).error).toContain('the limit is 1000000');
+  });
+
+  it('still treats an absent body as no fields', async () => {
+    mockSignedInSerge();
+    // promote takes no fields; an empty body must not become an error.
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/promote', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token' },
+      }),
+      env(),
+    );
+
+    expect(response.status).not.toBe(400);
+  });
+
   it('refuses a refinement targeting a section the document does not have', async () => {
     mockSignedInSerge();
     const response = await worker.fetch(

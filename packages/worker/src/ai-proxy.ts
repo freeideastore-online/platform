@@ -1,4 +1,4 @@
-import { bad, bodyJson, json, SECURITY_HEADERS } from './http';
+import { bad, readJsonBody, json, SECURITY_HEADERS } from './http';
 import type { Env } from './types';
 
 const CF_ACCOUNT_ID = 'c1089bfcc43c1c6c2aa89e584e86f0bc';
@@ -40,7 +40,9 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
 
   if (request.method !== 'POST') return bad('method not allowed', 405);
 
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const apiKey = String(input.apiKey || '').trim();
   const provider = String(input.provider || 'anthropic').toLowerCase();
   const messages: { role: string; content: string }[] = Array.isArray(input.messages) ? input.messages : [];

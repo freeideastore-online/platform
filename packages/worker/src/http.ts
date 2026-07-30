@@ -117,16 +117,56 @@ export function enumValue(value: unknown, allowed: Set<string>, fallback: string
   return allowed.has(normalized) ? normalized : fallback;
 }
 
-const MAX_BODY_BYTES = 256_000; // 256KB
+/**
+ * Ceiling on a single request. Comfortably above FIELD_LIMITS.body so a full
+ * document write fits, while still bounding what one call can cost.
+ */
+export const MAX_REQUEST_CHARS = 1_000_000;
 
-export async function bodyJson(request: Request) {
+export type JsonBodyResult =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; response: Response };
+
+/**
+ * Parses a JSON request body, distinguishing "too large" and "malformed" from
+ * "absent".
+ *
+ * The previous version returned `{}` for all three, so an oversized or broken
+ * payload surfaced as whatever validation error came next — for createIdea that
+ * was "title and summary are required", which sent the caller looking in
+ * entirely the wrong place. Same silent-failure family as the truncation in #1.
+ */
+export async function readJsonBody(request: Request): Promise<JsonBodyResult> {
+  const declared = Number(request.headers.get('content-length') || '0');
+  if (Number.isFinite(declared) && declared > MAX_REQUEST_CHARS) {
+    return {
+      ok: false,
+      response: bad(`request body is ${declared} bytes; the limit is ${MAX_REQUEST_CHARS}`, 413),
+    };
+  }
+
+  let text: string;
   try {
-    const length = Number(request.headers.get('content-length') || '0');
-    if (length > MAX_BODY_BYTES) return {};
-    const text = await request.text();
-    if (text.length > MAX_BODY_BYTES) return {};
-    return JSON.parse(text) as Record<string, unknown>;
+    text = await request.text();
   } catch {
-    return {};
+    return { ok: false, response: bad('could not read the request body', 400) };
+  }
+  if (text.length > MAX_REQUEST_CHARS) {
+    return {
+      ok: false,
+      response: bad(`request body is ${text.length} characters; the limit is ${MAX_REQUEST_CHARS}`, 413),
+    };
+  }
+  // An absent body is legitimate: several endpoints take no fields.
+  if (!text.trim()) return { ok: true, data: {} };
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, response: bad('request body must be a JSON object', 400) };
+    }
+    return { ok: true, data: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false, response: bad('request body is not valid JSON', 400) };
   }
 }

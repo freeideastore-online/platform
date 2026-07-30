@@ -1,6 +1,6 @@
 import { authUserFor, profileFor } from './auth';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
-import { bad, bodyJson, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
+import { bad, readJsonBody, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
 import { appendToIdeaSection, documentMetrics, replaceIdeaSection } from './markdown';
 import {
   listRefinements,
@@ -16,7 +16,9 @@ const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'pro
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
 
 export async function createIdea(request: Request, env: Env) {
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const title = String(input.title || '').trim();
   const summary = String(input.summary || '').trim();
   if (title.length < 3 || summary.length < 10) return bad('title and summary are required');
@@ -91,7 +93,9 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   const parent = await ideaById(env, parentId);
   if (!parent) return bad('idea not found', 404);
 
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const title = String(input.title || `${parent.title} (derived)`).trim();
   if (title.length < 3) return bad('title is required');
   if (title.length > 80) return bad('title must be 80 characters or fewer — use summary for detail');
@@ -176,7 +180,9 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
   if (!idea) return bad('idea not found', 404);
   if (idea.created_by !== profile.id) return json({ error: 'only the idea owner can delete this idea' }, { status: 403 });
 
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const confirmTitle = String(input.confirmTitle || input.confirm_title || '').trim();
   if (!confirmTitle || (confirmTitle !== idea.title && confirmTitle !== idea.id)) {
     return bad('confirmation does not match idea title or id — send confirmTitle or confirm_title', 400);
@@ -296,7 +302,9 @@ export async function updateIdeaSection(
   if (owned instanceof Response) return owned;
   const idea = owned;
 
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const content = String(input.content ?? input.markdown ?? input.body ?? '');
   if (!content.trim()) return bad('section content is required');
 
@@ -344,7 +352,9 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   if (!idea) return bad('idea not found', 404);
   if (idea.created_by !== profile.id) return json({ error: 'only the idea owner can update the canonical document' }, { status: 403 });
 
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const bodyInput = input.body ?? input.body_md;
   const previousBody = await ideaBody(env, idea);
   const body = typeof bodyInput === 'string' ? bodyInput.trim() : previousBody;
@@ -536,7 +546,9 @@ export async function applyRefinement(
     return bad(`refinement is already ${refinement.status}`, 409);
   }
 
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const section = String(input.section || refinement.section || '').trim();
   if (!section) {
     return bad('no target section — the proposal does not name one, so pass `section`');
@@ -605,7 +617,9 @@ export async function resolveRefinement(
   if (!refinement) return bad('refinement not found on this idea', 404);
   if (refinement.status) return bad(`refinement is already ${refinement.status}`, 409);
 
-  const input = await bodyJson(request);
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
   const status = String(input.status || '').trim().toLowerCase();
   if (status === 'applied') {
     return bad('use the apply endpoint to mark a refinement applied, so it is tied to a revision');
