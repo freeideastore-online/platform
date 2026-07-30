@@ -39,7 +39,7 @@ ${navCss(820)}
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
+<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
 <main class="shell">
   <div class="crumb">Dynamic publications</div>
   <h1>Idea publications.</h1>

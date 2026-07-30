@@ -74,7 +74,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem
 ${navCss(860)}
 </style>
 </head>
-<body><header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header><main class="shell">${body}</main>${THEME_SCRIPT}${NAV_SCRIPT}</body></html>`, {
+<body><header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header><main class="shell">${body}</main>${THEME_SCRIPT}${NAV_SCRIPT}</body></html>`, {
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'public, max-age=60' },
   });
 }

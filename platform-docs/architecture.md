@@ -31,6 +31,18 @@ The hand-written pages in `store/` (`index.html`, `about/`, `skills/`) cannot im
 
 Account state (avatar or "Sign in") sits *outside* the nav on the console and profile pages, so it stays visible on mobile rather than disappearing into the drawer.
 
+## Search
+
+`/search` and `GET /api/search?q=…` cover idea documents and research entries. Without it a deep corpus is unusable: nothing could answer "which ideas mention ETIM" or "where did we record the Matrixify correction".
+
+The index is an FTS5 virtual table populated on write, not derived from a content table, because canonical bodies live in R2 and are invisible to SQL. Document sections are re-indexed on every canonical write and dropped when an idea is removed; research entries are indexed as they arrive, with the claim weighted above the prose.
+
+Tokenizer is `porter unicode61`. Stemming matches plurals and inflections in both directions — `supplier`/`suppliers`, `infer`/`inferring` — which is what prose search needs. Prefix wildcards are deliberately not used with it: porter stems the query as well as the content, so a prefix on a stemmed term matches unpredictably.
+
+User input is never passed to FTS5 raw. Terms are extracted and individually quoted, so punctuation that FTS5 treats as syntax (`OR`, `-`, parentheses) is searched for rather than executed, and a multi-word query is an AND of terms.
+
+Ranking starts at bm25 and then demotes what the record has moved past: a superseded research entry stays findable but does not outrank the correction that replaced it, and low-confidence entries are nudged down.
+
 ## Why Not One Repository Per Free Idea
 
 Free ideas can be numerous and low quality. A repo per idea would add operational cost and hit platform limits. The free store should keep raw ideas in shared storage and reserve heavier publishing workflows for mature ideas.

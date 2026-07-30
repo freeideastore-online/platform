@@ -16,6 +16,7 @@ import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, path
 import { ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
 import { REFINEMENT_KIND } from './refinements';
+import { indexContribution, search } from './search';
 import { listIdeaSources, sourceCitations, syncContributionSources } from './sources';
 import { diffSummary, listRevisions, revisionBody, revisionById } from './revisions';
 import type { Env } from './types';
@@ -133,6 +134,16 @@ async function handleGetRevisionDiff(env: Env, ideaParam: string, revisionParam:
 }
 
 
+
+async function handleSearch(env: Env, url: URL) {
+  const query = url.searchParams.get('q') || '';
+  const ideaParam = url.searchParams.get('idea') || '';
+  const ideaId = ideaParam ? pathId(ideaParam) : '';
+  if (ideaParam && !ideaId) return bad('invalid idea id', 400);
+  const limit = clampInt(url.searchParams.get('limit'), 20, 1, 50);
+  return json(await search(env, query, { ideaId: ideaId || undefined, limit }));
+}
+
 async function handleGetIdeaSources(env: Env, ideaParam: string) {
   const ideaId = pathId(ideaParam);
   if (!ideaId) return bad('invalid idea id', 400);
@@ -240,6 +251,7 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
     )
     .run();
   await syncContributionSources(env, ideaId, contributionId, { sourceUrl, body });
+  await indexContribution(env, ideaId, contributionId, { claim, body, kind });
   await env.DB.prepare('UPDATE ideas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .bind(ideaId)
     .run();
@@ -337,6 +349,12 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/promote$/,
     methods: {
       POST: (request, env, __, match) => promoteIdea(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/search$/,
+    methods: {
+      GET: (_, env, url) => handleSearch(env, url),
     },
   },
   {

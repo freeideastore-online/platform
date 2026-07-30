@@ -10,6 +10,7 @@ import {
   RESOLUTION_VALUES,
 } from './refinements';
 import { recordRevision, revisionBody, revisionById, type RevisionSource } from './revisions';
+import { indexDocument, removeIdeaFromIndex } from './search';
 import { syncDocumentSources } from './sources';
 import type { Env, IdeaRow } from './types';
 
@@ -205,6 +206,7 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
       env.IDEA_BUCKET.delete(renderKey).catch(() => undefined),
     ]);
   }
+  await removeIdeaFromIndex(env, idea.id);
   return json({ ok: true, idea: idea.id, status: 'removed' });
 }
 
@@ -279,8 +281,9 @@ async function writeCanonicalBody(
       idea.id,
     )
     .run();
-  // Re-index after the write so the registry reflects the document as published.
+  // Re-index after the write so the registry and search reflect what is published.
   await syncDocumentSources(env, idea, body);
+  await indexDocument(env, idea, body);
   return { ...metrics, revisionId };
 }
 
@@ -448,6 +451,7 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     .run();
 
   await syncDocumentSources(env, idea, body);
+  await indexDocument(env, idea, body);
   return json({ ok: true, idea: idea.id, url: `/ideas/${idea.id}/` });
 }
 

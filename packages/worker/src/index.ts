@@ -8,6 +8,7 @@ import { renderAccountPage } from './account-page';
 import { renderIdeasCatalogPage } from './idea-catalog-page';
 import { renderIdeaChapterPage } from './idea-chapter-page';
 import { renderIdeaPage } from './idea-home-page';
+import { renderSearchPage } from './search-page';
 import { json, pathId, SECURITY_HEADERS } from './http';
 import { checkSources } from './sources';
 
@@ -71,6 +72,14 @@ export default {
         const ideaId = pathId(ideaPageMatch[1] || '');
         if (!ideaId) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
         return await renderIdeaPage(env, request, ideaId);
+      } catch (error) {
+        return json({ error: 'internal error' }, { status: 500 });
+      }
+    }
+
+    if (url.pathname === '/search' || url.pathname === '/search/') {
+      try {
+        return await renderSearchPage(env, request);
       } catch (error) {
         return json({ error: 'internal error' }, { status: 500 });
       }

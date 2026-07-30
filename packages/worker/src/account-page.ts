@@ -51,7 +51,7 @@ ${navCss(760)}
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/console/">Console</a></nav>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a class="account-link" href="/console/">Sign in</a>`}<button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
+<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a class="account-link" href="/console/">Sign in</a>`}<button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
 <main class="shell">
   ${
     user

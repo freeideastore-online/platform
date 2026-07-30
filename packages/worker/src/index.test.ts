@@ -55,6 +55,7 @@ class FakeD1 {
   private readonly contributions: Array<Record<string, unknown>> = [];
   readonly revisions: Array<Record<string, unknown>> = [];
   readonly sources: Array<Record<string, unknown>> = [];
+  readonly searchIndex: Array<Record<string, unknown>> = [];
   readonly sourceLinks: Array<Record<string, unknown>> = [];
 
   constructor() {
@@ -305,6 +306,60 @@ class FakeD1 {
               badges_json: '[]',
             });
           }
+        },
+      });
+    }
+    if (sql.includes('INSERT INTO search_index')) {
+      return new FakeStatement({
+        run: ([title, text, ideaId, ref]) => {
+          this.searchIndex.push({ title, text, idea_id: ideaId, kind: sql.includes("'section'") ? 'section' : 'research', ref });
+        },
+      });
+    }
+    if (sql.includes('DELETE FROM search_index')) {
+      return new FakeStatement({
+        run: ([ideaId]) => {
+          const sectionsOnly = sql.includes("kind = 'section'");
+          for (let index = this.searchIndex.length - 1; index >= 0; index -= 1) {
+            const row = this.searchIndex[index];
+            if (!row || row.idea_id !== ideaId) continue;
+            if (sectionsOnly && row.kind !== 'section') continue;
+            this.searchIndex.splice(index, 1);
+          }
+        },
+      });
+    }
+    // FTS MATCH cannot be emulated faithfully; naive term containment is enough
+    // to exercise the ranking, shaping and render paths around it.
+    if (sql.includes('FROM search_index s')) {
+      return new FakeStatement({
+        all: (binds) => {
+          const match = String(binds[0] || '');
+          const terms = [...match.matchAll(/"([^"]+)"/g)].map((m) => m[1] || '');
+          const ideaFilter = sql.includes('AND s.idea_id = ?') ? String(binds[1]) : '';
+          const results = this.searchIndex
+            .filter((row) => (ideaFilter ? row.idea_id === ideaFilter : true))
+            .filter((row) => {
+              const haystack = `${row.title} ${row.text}`.toLowerCase();
+              return terms.length > 0 && terms.every((term) => haystack.includes(term));
+            })
+            .map((row, position) => {
+              const contribution = this.contributions.find((item) => item.id === row.ref);
+              const idea = this.ideas.get(String(row.idea_id));
+              return {
+                idea_id: row.idea_id,
+                kind: row.kind,
+                ref: row.ref,
+                title: row.title,
+                snippet: String(row.text).slice(0, 60),
+                rank: -10 + position,
+                idea_title: idea?.title || row.idea_id,
+                confidence: contribution?.confidence || '',
+                superseded_by:
+                  this.contributions.find((item) => item.supersedes === row.ref)?.id ?? null,
+              };
+            });
+          return { results };
         },
       });
     }
@@ -1098,6 +1153,139 @@ describe('FreeIdeaStore worker', () => {
     const data = (await list.json()) as { refinements: Array<{ id: string; section: string; proposal: string }> };
     return data.refinements[0];
   }
+
+  it('finds a claim across ideas and links to where it lives', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'evidence',
+          claim: 'ETIM is free under Open Data Commons.',
+          body: 'The taxonomy is an open standard with a public REST API.',
+        }),
+      }),
+      testEnv,
+    );
+    const response = await worker.fetch(new Request('https://fis.test/api/search?q=etim'), testEnv);
+    const data = (await response.json()) as {
+      hits: Array<{ idea_id: string; kind: string; ref: string; title: string }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(data.hits.length).toBeGreaterThan(0);
+    expect(data.hits[0]).toMatchObject({ idea_id: 'serge-idea-lab', kind: 'research' });
+    // The hit is addressable, so a result can be navigated to.
+    expect(data.hits[0]?.ref).toBeTruthy();
+  });
+
+  it('indexes document sections, and drops them when the document changes', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ body: '## Snapshot\nA distinctive phrase about porcelain grouping.' }),
+      }),
+      testEnv,
+    );
+    const found = await worker.fetch(new Request('https://fis.test/api/search?q=porcelain'), testEnv);
+    expect((await found.json() as { hits: unknown[] }).hits).toHaveLength(1);
+
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ body: '## Snapshot\nCompletely different wording now.' }),
+      }),
+      testEnv,
+    );
+    const gone = await worker.fetch(new Request('https://fis.test/api/search?q=porcelain'), testEnv);
+    expect((await gone.json() as { hits: unknown[] }).hits).toHaveLength(0);
+  });
+
+  it('ranks a superseded entry below the correction that replaced it', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ kind: 'evidence', claim: 'Matrixify is a direct competitor.', body: 'Distinctivetoken scan.' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/contributions'), testEnv);
+    const first = (await list.json() as { contributions: Array<{ id: string; claim?: string }> })
+      .contributions.find((item) => item.claim?.startsWith('Matrixify is'));
+
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          kind: 'evidence',
+          claim: 'Matrixify was overstated.',
+          body: 'Distinctivetoken correction.',
+          supersedes: first?.id,
+        }),
+      }),
+      testEnv,
+    );
+    const response = await worker.fetch(new Request('https://fis.test/api/search?q=distinctivetoken'), testEnv);
+    const data = (await response.json()) as { hits: Array<{ ref: string; title: string }> };
+
+    expect(data.hits).toHaveLength(2);
+    // The correction outranks the entry it superseded, even though the fake
+    // returns the superseded one first.
+    expect(data.hits[0]?.title).toBe('Matrixify was overstated.');
+  });
+
+  it('renders a search page with highlighted snippets', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '## Snapshot\nPorcelain grouping comes from the standard.' }),
+      }),
+      testEnv,
+    );
+    const page = await worker.fetch(new Request('https://fis.test/search?q=porcelain'), testEnv);
+    const html = await page.text();
+    const empty = await worker.fetch(new Request('https://fis.test/search'), testEnv);
+
+    expect(page.status).toBe(200);
+    expect(html).toContain('1 result for');
+    expect(html).toContain('href="/ideas/serge-idea-lab/#snapshot"');
+    // The form round-trips the query, escaped.
+    expect(html).toContain('value="porcelain"');
+    expect((await empty.text())).toContain('Search across every idea document');
+  });
+
+  it('does not let a search query inject markup through the snippet', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '## Snapshot\nA <script>alert(1)</script> in the body.' }),
+      }),
+      testEnv,
+    );
+    const page = await worker.fetch(new Request('https://fis.test/search?q=%22%3Cimg%20onerror%3D%3E'), testEnv);
+    const html = await page.text();
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img onerror');
+  });
 
   it('indexes the sources a document cites, per section', async () => {
     mockSignedInSerge();

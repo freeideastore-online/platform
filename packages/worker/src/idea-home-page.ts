@@ -51,7 +51,7 @@ ${ideaHomeStyles()}
 <body>
 <header class="book-topbar">
   <div class="top-brand"><a href="/" class="logo" aria-label="Home">FI</a><a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
-  <nav id="site-nav" class="topbar-nav site-nav"><a href="/">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a></nav>
+  <nav id="site-nav" class="topbar-nav site-nav"><a href="/">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a></nav>
   <button class="theme-toggle" type="button" data-reader-theme-toggle aria-label="Toggle theme" title="Toggle theme">&#9790;</button>
   ${NAV_TOGGLE}
 </header>
