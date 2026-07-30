@@ -13,6 +13,13 @@ binding = "DB"
 database_name = "freeideastore"
 database_id = "6c8cefe4-f170-45fd-9979-ebef9068e1aa"
 
+# Canonical idea bodies live here so a document is not limited to what fits in a
+# D1 column value. `ideaBody()` prefers body_key and falls back to body_md, so
+# rows written before this binding existed keep working.
+[[r2_buckets]]
+binding = "IDEA_BUCKET"
+bucket_name = "freeideastore-ideas"
+
 [assets]
 directory = "../../store"
 binding = "ASSETS"

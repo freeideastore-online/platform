@@ -1,6 +1,7 @@
 import { authUserFor, profileFor } from './auth';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
 import { bad, bodyJson, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
+import { documentMetrics } from './markdown';
 import type { Env } from './types';
 
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
@@ -32,6 +33,7 @@ export async function createIdea(request: Request, env: Env) {
   ]);
   if (overflow) return bad(overflow);
 
+  const metrics = documentMetrics(body, title);
   const ideaId = await uniqueIdeaId(env, title);
   const profileId = await profileFor(request, env);
   const bodyKey = `ideas/${ideaId}/body.md`;
@@ -49,8 +51,8 @@ export async function createIdea(request: Request, env: Env) {
   }
   await env.DB.prepare(
     `INSERT INTO ideas
-     (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by, body_words, chapter_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       ideaId,
@@ -68,6 +70,8 @@ export async function createIdea(request: Request, env: Env) {
       nextStep,
       risk,
       profileId,
+      metrics.words,
+      metrics.chapters,
     )
     .run();
   return json({ idea: ideaId, url: `/ideas/${ideaId}/` }, { status: 201 });
@@ -112,6 +116,7 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  const metrics = documentMetrics(seedBody, title);
   const bodyKey = `ideas/${ideaId}/body.md`;
   const renderKey = `ideas/${ideaId}/rendered.html`;
   let storedInR2 = false;
@@ -125,8 +130,8 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   }
   await env.DB.prepare(
     `INSERT INTO ideas
-     (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by, parent_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by, parent_id, body_words, chapter_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       ideaId,
@@ -145,6 +150,8 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
       risk,
       profileId,
       parent.id,
+      metrics.words,
+      metrics.chapters,
     )
     .run();
   return json({ idea: ideaId, url: `/ideas/${ideaId}/`, parent: parent.id, parentUrl: parentPath }, { status: 201 });
@@ -222,6 +229,7 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  const metrics = documentMetrics(body, title);
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
   const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
   let storedInR2 = false;
@@ -252,6 +260,8 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
          category = ?,
          next_step = ?,
          risk = ?,
+         body_words = ?,
+         chapter_count = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
   )
@@ -269,6 +279,8 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
       category,
       nextStep,
       risk,
+      metrics.words,
+      metrics.chapters,
       idea.id,
     )
     .run();

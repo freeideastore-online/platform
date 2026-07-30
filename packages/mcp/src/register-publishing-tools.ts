@@ -9,7 +9,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     "Replace the authenticated owner's canonical public idea document after refinement. Use get_idea first, preserve useful existing content, then publish the improved markdown.",
     {
       idea_id: z.string().min(2),
-      body: z.string().min(20).max(24000).describe("Complete markdown document to publish on the public idea page."),
+      body: z.string().min(20).max(200000).describe("Complete markdown document to publish on the public idea page. Bodies are stored in R2, so depth is not limited by the database."),
       summary: z.string().min(10).max(1000).optional(),
       stage: z.enum(STAGES).optional(),
       category: z.string().max(60).optional(),

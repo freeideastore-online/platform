@@ -1,5 +1,5 @@
 import { id, slug } from './http';
-import { defaultIdeaBody, PUBLICATION_SQL_PROXY } from './markdown';
+import { defaultIdeaBody, PUBLICATION_POLICY } from './markdown';
 import type { ContributorRow, Env, IdeaContributionRow, IdeaRow, ProfileContributionRow, ProfileIdeaRow } from './types';
 
 const HIDDEN_HANDLES = ['system', 'risk-finder', 'pivot-maker', 'evidence-hunter', 'cloudflare-smoke'] as const;
@@ -32,16 +32,13 @@ export async function listIdeas(env: Env, options: { stage?: string; limit?: num
          created_by,
          status,
          pro_candidate,
-         -- Mirrors PUBLICATION_SQL_PROXY: a publication needs enough total
-         -- length AND enough per chapter, not merely a '## ' anywhere. Heading
-         -- count is (len - len without '## ') / 3. When that count is 0 the
-         -- chapter-average divide yields NULL, which the AND already rejects.
+         -- PUBLICATION_POLICY evaluated exactly, from metrics stored on the row
+         -- (migration 0010). Measuring the text here is not an option: bodies
+         -- live in R2, so body_md is empty for anything written since.
          CASE
-           WHEN body_key != '' THEN 1
-           WHEN LENGTH(body_md) >= ${PUBLICATION_SQL_PROXY.minBodyChars}
-            AND (LENGTH(body_md) - LENGTH(REPLACE(body_md, '## ', ''))) / 3 >= ${PUBLICATION_SQL_PROXY.minChapters}
-            AND LENGTH(body_md) / ((LENGTH(body_md) - LENGTH(REPLACE(body_md, '## ', ''))) / 3)
-                >= ${PUBLICATION_SQL_PROXY.minMeanChapterChars}
+           WHEN chapter_count >= ${PUBLICATION_POLICY.minChapters}
+            AND body_words >= ${PUBLICATION_POLICY.minTotalWords}
+            AND body_words / chapter_count >= ${PUBLICATION_POLICY.minMeanChapterWords}
            THEN 1
            ELSE 0
          END AS has_publication,

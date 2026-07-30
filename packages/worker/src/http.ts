@@ -52,7 +52,10 @@ export const FIELD_LIMITS = {
   category: 60,
   nextStep: 500,
   risk: 500,
-  body: 24000,
+  // Bodies live in R2, not a D1 column value, so depth is not limited by the
+  // database. The remaining ceiling is the JSON request itself (MAX_BODY_BYTES);
+  // section-level writes lift that for incremental deepening.
+  body: 200_000,
   contribution: 8000,
   contributionKind: 40,
 } as const;

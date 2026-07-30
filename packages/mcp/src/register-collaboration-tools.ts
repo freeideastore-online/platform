@@ -77,7 +77,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
       idea_id: z.string().min(2).describe("The parent idea to derive from."),
       title: z.string().min(3).max(80).optional().describe("Title for the fork. Defaults to the parent title plus '(derived)'."),
       summary: z.string().min(10).max(1000).optional(),
-      body: z.string().max(24000).optional().describe("Optional replacement body. Defaults to a copy of the parent body."),
+      body: z.string().max(200000).optional().describe("Optional replacement body. Defaults to a copy of the parent body."),
       stage: z.enum(STAGES).optional(),
       category: z.string().max(60).optional(),
       contributor_handle: z.string().optional().describe("Optional profile handle to attribute the derived idea. This handle owns the fork."),

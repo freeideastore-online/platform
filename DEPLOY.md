@@ -34,13 +34,19 @@ Legacy Doppler path (no longer active — the `pas` project was removed from the
 # doppler run --project pas --config prd -- pnpm --filter @fis/worker exec wrangler deploy
 ```
 
-The current Doppler Cloudflare token can deploy Workers and run D1 migrations, but does not have R2 bucket permissions. Until that token is expanded, leave the `IDEA_BUCKET` binding out of `packages/worker/wrangler.toml`; the Worker stores free idea bodies in D1. After R2 is available, add:
+R2 is live as of 2026-07-30. The `freeideastore-ideas` bucket exists and `IDEA_BUCKET` is bound in `packages/worker/wrangler.toml`:
 
 ```toml
 [[r2_buckets]]
 binding = "IDEA_BUCKET"
 bucket_name = "freeideastore-ideas"
 ```
+
+Canonical idea bodies are written there so a document is not limited to what fits in a D1 column value. `ideaBody()` prefers `body_key` and falls back to `body_md`, so rows written before the binding existed keep rendering, and a failed R2 write still stores the body inline rather than losing it.
+
+Because bodies are no longer readable from SQL, `has_publication` is evaluated from the `body_words` and `chapter_count` columns added in migration `0010`, maintained on every canonical write. Deploying a worker that reads those columns requires the migration to be applied first.
+
+The note that previously lived here — that the Cloudflare token lacked R2 permissions — is obsolete; the token can create and write buckets.
 
 ## Cost Model
 

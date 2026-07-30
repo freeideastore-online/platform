@@ -152,16 +152,16 @@ export const PUBLICATION_POLICY = {
 } as const;
 
 /**
- * Character-based proxy of PUBLICATION_POLICY for the catalog query, which
- * counts characters because SQL cannot count words. ~6 chars per word.
- * Keep in step with PUBLICATION_POLICY or the store advertises publications
- * that the idea page does not render.
+ * Metrics stored on the idea row so the catalog can evaluate
+ * PUBLICATION_POLICY exactly. Bodies live in R2, so SQL cannot measure the
+ * document itself — it reads these columns instead of guessing from text.
  */
-export const PUBLICATION_SQL_PROXY = {
-  minBodyChars: PUBLICATION_POLICY.minTotalWords * 6,
-  minMeanChapterChars: PUBLICATION_POLICY.minMeanChapterWords * 6,
-  minChapters: PUBLICATION_POLICY.minChapters,
-} as const;
+export function documentMetrics(markdown: string, documentTitle = '') {
+  return {
+    words: wordCount(markdown),
+    chapters: ideaChapters(markdown, documentTitle).length,
+  };
+}
 
 function wordCount(text: string) {
   const trimmed = text.trim();

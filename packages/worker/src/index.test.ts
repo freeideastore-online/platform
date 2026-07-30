@@ -195,13 +195,15 @@ class FakeD1 {
               .filter((idea) => idea.status !== 'removed')
               .map(({ body_md, body_key, render_key, ...idea }) => ({
                 ...idea,
-                // Mirrors the has_publication SQL in data.ts (PUBLICATION_SQL_PROXY).
+                // Mirrors the has_publication SQL in data.ts: PUBLICATION_POLICY
+                // evaluated from the stored metrics. Seeded rows have no stored
+                // metrics, so derive them the way documentMetrics() would.
                 has_publication: (() => {
-                  if (body_key) return 1;
                   const text = String(body_md || '');
-                  const headings = (text.match(/^## /gm) || []).length;
-                  if (headings < 3 || text.length < 12000) return 0;
-                  return Math.floor(text.length / headings) >= 1800 ? 1 : 0;
+                  const words = Number(idea.body_words) || (text.trim() ? text.trim().split(/\s+/).length : 0);
+                  const chapters = Number(idea.chapter_count) || (text.match(/^## /gm) || []).length;
+                  if (chapters < 3 || words < 2000) return 0;
+                  return Math.floor(words / chapters) >= 300 ? 1 : 0;
                 })(),
               })),
           };
@@ -304,44 +306,24 @@ class FakeD1 {
       });
     }
     if (sql.includes('INSERT INTO ideas')) {
+      // Map binds by the statement's own column list. createIdea and deriveIdea
+      // insert different column sets, so fixed positional destructuring silently
+      // mis-assigns as soon as either statement changes.
+      const columns = (sql.match(/\(([^)]*)\)\s*VALUES/)?.[1] || '')
+        .split(',')
+        .map((column) => column.trim())
+        .filter(Boolean);
       return new FakeStatement({
         run: (binds) => {
           this.inserts.push(binds);
-          const [
-            id,
-            title,
-            summary,
-            preview,
-            signal,
-            body_md,
-            body_key,
-            render_key,
-            source_url,
-            visibility,
-            stage,
-            category,
-            next_step,
-            risk,
-            created_by,
-            parent_id = '',
-          ] = binds;
-          this.ideas.set(String(id), {
-            id,
-            title,
-            summary,
-            preview,
-            signal,
-            body_md,
-            body_key,
-            render_key,
-            source_url,
-            visibility,
-            stage,
-            category,
-            next_step,
-            risk,
-            created_by,
-            parent_id,
+          const row: Record<string, unknown> = {};
+          columns.forEach((column, index) => {
+            row[column] = binds[index];
+          });
+          this.ideas.set(String(row.id), {
+            parent_id: '',
+            body_words: 0,
+            chapter_count: 0,
             status: 'active',
             pro_candidate: 0,
             created_at: '2026-06-10 00:00:00',
@@ -350,6 +332,7 @@ class FakeD1 {
             trash: 0,
             pivot: 0,
             contribution_count: 0,
+            ...row,
           });
         },
       });
@@ -380,6 +363,8 @@ class FakeD1 {
             category,
             next_step,
             risk,
+            body_words,
+            chapter_count,
             id,
           ] = binds;
           const idea = this.ideas.get(String(id));
@@ -398,6 +383,8 @@ class FakeD1 {
             category,
             next_step,
             risk,
+            body_words,
+            chapter_count,
             updated_at: '2026-06-11 01:00:00',
           });
         },
@@ -491,10 +478,40 @@ function mockSignedInSerge() {
   );
 }
 
-function env(db = new FakeD1(), assetResponse = new Response('asset fallback', { status: 404 })) {
+/** Minimal R2 stand-in. `failWrites` exercises the inline fallback. */
+class FakeR2 {
+  objects = new Map<string, string>();
+  deleted: string[] = [];
+
+  constructor(private readonly failWrites = false) {}
+
+  put(key: string, value: string) {
+    if (this.failWrites) return Promise.reject(new Error('r2 unavailable'));
+    this.objects.set(key, value);
+    return Promise.resolve({ key });
+  }
+
+  get(key: string) {
+    const value = this.objects.get(key);
+    return Promise.resolve(value === undefined ? null : { text: () => Promise.resolve(value) });
+  }
+
+  delete(key: string) {
+    this.deleted.push(key);
+    this.objects.delete(key);
+    return Promise.resolve();
+  }
+}
+
+function env(
+  db = new FakeD1(),
+  assetResponse = new Response('asset fallback', { status: 404 }),
+  bucket?: FakeR2,
+) {
   return {
     DB: db,
     ASSETS: { fetch: () => Promise.resolve(assetResponse.clone()) },
+    ...(bucket ? { IDEA_BUCKET: bucket } : {}),
   } as unknown as Parameters<typeof worker.fetch>[1] & { DB: FakeD1 };
 }
 
@@ -682,6 +699,79 @@ describe('FreeIdeaStore worker', () => {
     expect(chapter.status).toBe(200);
     expect(chapterHtml).toContain('<h1>Snapshot</h1>');
     expect(chapterHtml).toContain('Chapter 1 of 3');
+  });
+
+  it('stores a new idea body in R2 and reads it back for rendering', async () => {
+    const bucket = new FakeR2();
+    const testEnv = env(new FakeD1(), undefined, bucket);
+    const create = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        body: JSON.stringify({
+          title: 'R2 Backed Idea',
+          summary: 'Body should be written to the bucket, not the D1 column.',
+          body: '## Snapshot\nStored in the bucket.',
+        }),
+      }),
+      testEnv,
+    );
+
+    expect(create.status).toBe(201);
+    expect(bucket.objects.get('ideas/r2-backed-idea/body.md')).toContain('Stored in the bucket.');
+
+    // The page renders from R2, not from body_md.
+    const page = await worker.fetch(new Request('https://fis.test/ideas/r2-backed-idea/'), testEnv);
+    expect(await page.text()).toContain('Stored in the bucket.');
+  });
+
+  it('falls back to inline storage when the R2 write fails', async () => {
+    const bucket = new FakeR2(true);
+    const testEnv = env(new FakeD1(), undefined, bucket);
+    const create = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        body: JSON.stringify({
+          title: 'Fallback Idea',
+          summary: 'A failed bucket write must not lose the document.',
+          body: '## Snapshot\nKept inline after the bucket write failed.',
+        }),
+      }),
+      testEnv,
+    );
+
+    expect(create.status).toBe(201);
+    expect(bucket.objects.size).toBe(0);
+    const page = await worker.fetch(new Request('https://fis.test/ideas/fallback-idea/'), testEnv);
+    expect(await page.text()).toContain('Kept inline after the bucket write failed.');
+  });
+
+  it('accepts a document far larger than the old 24k D1 ceiling', async () => {
+    const bucket = new FakeR2();
+    const testEnv = env(new FakeD1(), undefined, bucket);
+    // ~40k chars: rejected outright before bodies moved to R2.
+    const body = ['## Snapshot', filler(150), '', '## Research', filler(150), '', '## Risk', filler(150)].join('\n');
+    expect(body.length).toBeGreaterThan(24000);
+
+    const create = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        body: JSON.stringify({ title: 'Deep Idea', summary: 'A genuinely deep research document.', body }),
+      }),
+      testEnv,
+    );
+
+    expect(create.status).toBe(201);
+    expect(bucket.objects.get('ideas/deep-idea/body.md')?.length).toBe(body.length);
+
+    // Deep enough to earn chapter pages, and the catalog agrees.
+    const chapter = await worker.fetch(new Request('https://fis.test/ideas/deep-idea/research/'), testEnv);
+    expect(chapter.status).toBe(200);
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas'), testEnv);
+    const data = (await list.json()) as { ideas: Array<{ id: string; has_publication: number }> };
+    expect(data.ideas.find((idea) => idea.id === 'deep-idea')?.has_publication).toBe(1);
   });
 
   it('renders a short idea as one page with no chapter navigation', async () => {

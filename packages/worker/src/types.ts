@@ -30,6 +30,9 @@ export type IdeaRow = {
   pivot: number;
   contribution_count: number;
   has_publication?: number;
+  /** Maintained on canonical writes; see migration 0010 and documentMetrics(). */
+  body_words?: number;
+  chapter_count?: number;
 };
 
 export type AuthUser = {
