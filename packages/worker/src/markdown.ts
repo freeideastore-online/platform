@@ -221,7 +221,11 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
         ignoredDocumentTitle = true;
         continue;
       }
-      if (sawHeading || currentLines.some((item) => item.trim())) push();
+      // Only close a real chapter here. Content sitting before the first `##`
+      // is a lead-in, not a chapter — promoting it turned a 70-word status
+      // note on the gapfill idea into "Overview, chapter 1 of 11". It stays
+      // visible because the idea home page renders the whole body inline.
+      if (sawHeading) push();
       currentTitle = title;
       currentLines = [];
       sawHeading = true;

@@ -133,6 +133,30 @@ describe('ideaChapters', () => {
     expect(chapters[1]?.markdown).toContain('### Cheapest Test');
   });
 
+  it('does not turn content before the first heading into a chapter', () => {
+    const chapters = ideaChapters([
+      '> **Status: scan complete.** A lead-in, not a chapter.',
+      '',
+      '## Snapshot',
+      'The short version.',
+      '',
+      '## Design notes',
+      'How it works.',
+    ].join('\n'));
+
+    expect(chapters.map((chapter) => chapter.title)).toEqual(['Snapshot', 'Design notes']);
+    expect(chapters.map((chapter) => chapter.id)).not.toContain('overview');
+    // The first chapter is a real one, so the book starts on real content.
+    expect(chapters[0]?.id).toBe('snapshot');
+  });
+
+  it('still produces one chapter for a document with no headings at all', () => {
+    const chapters = ideaChapters('Just a paragraph, no headings anywhere.');
+
+    expect(chapters).toHaveLength(1);
+    expect(chapters[0]?.markdown).toContain('Just a paragraph');
+  });
+
   it('gives colliding canonical ids distinct URLs instead of shadowing one', () => {
     const chapters = ideaChapters([
       '## Prototype plan',
