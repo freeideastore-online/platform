@@ -1019,6 +1019,53 @@ describe('FreeIdeaStore worker', () => {
     return data.refinements[0];
   }
 
+  it('refuses a refinement targeting a section the document does not have', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        // 'design' is an aspect, not one of this document's section ids.
+        body: JSON.stringify({ kind: 'refinement', section: 'design', body: 'Proposal:\nSomething.' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(400);
+    const data = (await response.json()) as { error: string };
+    expect(data.error).toContain('unknown section "design"');
+    // The error lists what would work, so the caller can retry without guessing.
+    expect(data.error).toContain('snapshot');
+  });
+
+  it('still accepts a refinement with no target, to be routed at apply time', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'refinement', body: 'Proposal:\nSomething general.' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(201);
+  });
+
+  it('does not section-validate non-refinement contributions', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'evidence', section: 'design', body: 'A finding.' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(201);
+  });
+
   it('surfaces queued refinements instead of leaving them invisible', async () => {
     mockSignedInSerge();
     const testEnv = env();

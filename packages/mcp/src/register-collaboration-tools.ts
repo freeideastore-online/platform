@@ -174,7 +174,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
     "Record a structured refinement proposal for an existing idea without overwriting the canonical idea page.",
     {
       idea_id: z.string().min(2),
-      section: z.enum(["snapshot", "signal", "next_step", "risk", "research", "design", "prototype", "validation", "body"]),
+      section: z.string().min(1).describe("Target section id from list_idea_sections. Validated when the proposal is recorded — a proposal that names a section the document does not have could never be applied."),
       proposal: z.string().min(10).max(6000),
       rationale: z.string().max(1500).optional().describe("Kept within the contribution body limit alongside the proposal."),
       contributor_handle: z.string().optional().describe("Optional profile handle to attribute the refinement through the current API fallback."),

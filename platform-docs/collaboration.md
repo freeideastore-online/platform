@@ -58,6 +58,8 @@ Values outside the vocabulary are rejected, a `source_url` must be `http(s)`, `a
 
 A refinement now has queue state — open, `applied`, `rejected`, or `superseded` — and names its target section as a field rather than in prose.
 
+`section` is a **real section id** from `list_idea_sections`, validated when the proposal is recorded. It used to be a fixed vocabulary of document aspects (`design`, `prototype`, `signal`…), which mostly did not correspond to any section the document actually had — on one idea only 1 of 5 queued proposals named a section that existed, so the rest could never have been applied. Validating at propose time means a proposal that cannot be applied is never accepted. Proposals may still omit the section entirely and be routed at apply time.
+
 - `list_pending_refinements` — what is waiting, with the target section and the extracted proposal text.
 - `apply_refinement` — merge it into the target section and close it. Pass `content` to control the exact wording; without it the proposal text is appended verbatim, which is at least honestly what the proposer wrote. `mode` chooses append (default) or replace.
 - `resolve_refinement` — close without merging, recording why. A reason is required.

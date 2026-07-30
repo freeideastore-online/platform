@@ -14,7 +14,8 @@ import {
 import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, bodyJson, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { ideaSectionList, readIdeaSection } from './markdown';
-import { CONFIDENCE_VALUES, PROVENANCE_VALUES } from './idea-research';
+import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
+import { REFINEMENT_KIND } from './refinements';
 import { diffSummary, listRevisions, revisionBody, revisionById } from './revisions';
 import type { Env } from './types';
 
@@ -176,6 +177,20 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
   if (accessedAt && !/^\d{4}-\d{2}-\d{2}$/.test(accessedAt)) {
     return bad('accessed date must be YYYY-MM-DD');
   }
+  // A refinement whose target section does not exist can never be applied, so it
+  // would sit in the queue forever — exactly the failure the queue was built to
+  // fix. Validate at propose time rather than at apply time.
+  if (section && normaliseKind(kind) === REFINEMENT_KIND) {
+    const idea = await ideaById(env, ideaId);
+    const sections = idea ? ideaSectionList(await ideaBody(env, idea), idea.title) : [];
+    if (!sections.some((candidate) => candidate.id === section)) {
+      return bad(
+        `unknown section "${section}" — valid sections are ${sections.map((candidate) => candidate.id).join(', ')}`,
+        400,
+      );
+    }
+  }
+
   // Superseding an entry that does not exist would silently orphan the link.
   if (supersedes) {
     const target = await env.DB.prepare('SELECT id FROM contributions WHERE id = ? AND idea_id = ?')
