@@ -343,6 +343,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#refinements-are-a-queue-not-a-comment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Refinements Are A Queue, Not A Comment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -576,6 +587,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#refinements-are-a-queue-not-a-comment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Refinements Are A Queue, Not A Comment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -635,6 +657,16 @@
 <p>All are optional; a plain comment supplies none of them.</p>
 <p><strong>Corrections supersede rather than pile up.</strong> When an entry supersedes another, the older one stays readable and is marked as corrected, with a link to the entry that replaced it. The record should show what was believed and what replaced it, not present two contradictory claims as equal peers.</p>
 <p>Values outside the vocabulary are rejected, a <code>source_url</code> must be <code>http(s)</code>, <code>accessed_at</code> must be <code>YYYY-MM-DD</code>, and <code>supersedes</code> must reference an existing entry on the same idea — an unresolvable link would silently orphan the correction.</p>
+<h2 id="refinements-are-a-queue-not-a-comment">Refinements Are A Queue, Not A Comment<a class="headerlink" href="#refinements-are-a-queue-not-a-comment" title="Permanent link">&para;</a></h2>
+<p><code>propose_idea_refinement</code> deliberately does not touch the canonical document. Without somewhere to track that decision, proposals simply accumulated: the gapfill idea carried four unpublished refinements while holding 2.8x more research outside the document than in it.</p>
+<p>A refinement now has queue state — open, <code>applied</code>, <code>rejected</code>, or <code>superseded</code> — and names its target section as a field rather than in prose.</p>
+<ul>
+<li><code>list_pending_refinements</code> — what is waiting, with the target section and the extracted proposal text.</li>
+<li><code>apply_refinement</code> — merge it into the target section and close it. Pass <code>content</code> to control the exact wording; without it the proposal text is appended verbatim, which is at least honestly what the proposer wrote. <code>mode</code> chooses append (default) or replace.</li>
+<li><code>resolve_refinement</code> — close without merging, recording why. A reason is required.</li>
+</ul>
+<p>The idea page shows an <strong>Awaiting merge</strong> count in the Signals rail, and each proposal carries an <em>awaiting merge</em> or resolved badge. An invisible queue never drains.</p>
+<p>Two rules keep the record trustworthy. Applying goes through <code>apply_refinement</code> only, so a merge is always tied to the revision it produced — <code>resolve_refinement</code> rejects <code>applied</code> for that reason. And a refinement can only be resolved once; a second attempt returns 409 rather than double-applying.</p>
 
 
 

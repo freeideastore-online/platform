@@ -51,3 +51,17 @@ All are optional; a plain comment supplies none of them.
 **Corrections supersede rather than pile up.** When an entry supersedes another, the older one stays readable and is marked as corrected, with a link to the entry that replaced it. The record should show what was believed and what replaced it, not present two contradictory claims as equal peers.
 
 Values outside the vocabulary are rejected, a `source_url` must be `http(s)`, `accessed_at` must be `YYYY-MM-DD`, and `supersedes` must reference an existing entry on the same idea — an unresolvable link would silently orphan the correction.
+
+## Refinements Are A Queue, Not A Comment
+
+`propose_idea_refinement` deliberately does not touch the canonical document. Without somewhere to track that decision, proposals simply accumulated: the gapfill idea carried four unpublished refinements while holding 2.8x more research outside the document than in it.
+
+A refinement now has queue state — open, `applied`, `rejected`, or `superseded` — and names its target section as a field rather than in prose.
+
+- `list_pending_refinements` — what is waiting, with the target section and the extracted proposal text.
+- `apply_refinement` — merge it into the target section and close it. Pass `content` to control the exact wording; without it the proposal text is appended verbatim, which is at least honestly what the proposer wrote. `mode` chooses append (default) or replace.
+- `resolve_refinement` — close without merging, recording why. A reason is required.
+
+The idea page shows an **Awaiting merge** count in the Signals rail, and each proposal carries an *awaiting merge* or resolved badge. An invisible queue never drains.
+
+Two rules keep the record trustworthy. Applying goes through `apply_refinement` only, so a merge is always tied to the revision it produced — `resolve_refinement` rejects `applied` for that reason. And a refinement can only be resolved once; a second attempt returns 409 rather than double-applying.

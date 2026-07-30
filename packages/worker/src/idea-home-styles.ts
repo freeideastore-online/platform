@@ -40,6 +40,10 @@ ${MARKDOWN_CSS}
 .research-tag.prov-derived{border-color:var(--accent);background:var(--mark);color:var(--accent-strong)}
 .research-tag.prov-inferred,.research-tag.prov-human-asserted{border-color:#b45309;background:#fffbeb;color:#92400e}
 .research-tag.conf-low{border-color:#b91c1c;background:#fef2f2;color:#b91c1c}
+.research-tag.pending{border-color:#b45309;background:#fffbeb;color:#92400e}
+.research-tag.resolved{border-color:#0f766e;background:#ecfdf5;color:#0f766e}
+[data-theme="dark"] .research-tag.pending{background:#3a2a05;color:#fcd34d}
+[data-theme="dark"] .research-tag.resolved{background:#052e2b;color:#6ee7b7}
 .research-tag.superseded{border-color:var(--muted);background:var(--panel);color:var(--muted);text-decoration:line-through}
 .research-item.is-superseded>summary .research-excerpt{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
 .research-superseded{color:var(--muted);font-size:.78rem;margin:.2rem 0 0;padding:0 .7rem}.research-superseded a{color:var(--accent-strong);font-weight:900}

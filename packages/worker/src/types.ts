@@ -88,4 +88,9 @@ export type IdeaContributionRow = {
   supersedes?: string;
   /** Derived: the id of a later entry that corrects this one, if any. */
   superseded_by?: string;
+  /** Refinement queue state; see migration 0013. '' means still open. */
+  section?: string;
+  status?: string;
+  resolution?: string;
+  resolved_revision?: string;
 };

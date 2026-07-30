@@ -5,6 +5,7 @@ import { ideaDiagram } from './idea-diagrams';
 import { ideaHomeScripts } from './idea-home-scripts';
 import { ideaHomeStyles } from './idea-home-styles';
 import { RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
+import { openRefinementCount } from './refinements';
 import { ideaChapters, isPaginated, markdownHeadings, markdownToHtml } from './markdown';
 import { readerSettingsBootScript } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE } from './site-nav';
@@ -23,6 +24,8 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   const derived = await derivedIdeas(env, idea.id);
   const contributions = await contributionsByIdea(env, idea.id, RESEARCH_RENDER_CAP);
   const { research, comments } = splitContributions(contributions);
+  // A queued proposal that nobody can see never gets merged.
+  const pendingRefinements = await openRefinementCount(env, idea.id);
   const headings = markdownHeadings(body);
   const chapters = ideaChapters(body, idea.title);
   // Short documents read as one page: the body is rendered inline below, so
@@ -93,6 +96,7 @@ ${
       <div><strong>Sections</strong><nav class="toc-box">${headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('')}${research.length ? '<a href="#research">Research &amp; evidence</a>' : ''}<a href="#comments">Comments</a></nav></div>
       <div><strong>Reactions</strong><span><span id="support-count">${escapeHtml(idea.support)}</span> supports / <span id="trash-count">${escapeHtml(idea.trash)}</span> trash / <span id="pivot-count">${escapeHtml(idea.pivot)}</span> pivots</span><div class="reaction-buttons" aria-label="React to idea"><button class="react-button" type="button" data-reaction="support">&#128077; Support</button><button class="react-button" type="button" data-reaction="trash">&#128465; Trash</button><button class="react-button" type="button" data-reaction="pivot">&#128260; Pivot</button></div><p id="reaction-status" class="reaction-status">Sign in to react.</p></div>
       <div><strong>Contributions</strong><span>${research.length ? `<a href="#research">${research.length} research ${research.length === 1 ? 'entry' : 'entries'}</a>` : 'No research entries yet'} / <a href="#comments">${comments} ${comments === 1 ? 'comment' : 'comments'}</a></span></div>
+      ${pendingRefinements ? `<div><strong>Awaiting merge</strong><span><a href="#research">${pendingRefinements} proposed ${pendingRefinements === 1 ? 'refinement' : 'refinements'}</a> not yet in the document</span></div>` : ''}
       <div><strong>Next step</strong><span>${escapeHtml(idea.next_step || 'Needs a next validation step.')}</span></div>
       <div><strong>Risk</strong><span>${escapeHtml(idea.risk || 'Risk not yet named.')}</span></div>
       ${derived.length ? `<div><strong>Derived ideas</strong><nav class="toc-box">${derived.map((child) => `<a href="/ideas/${escapeHtml(child.id)}/">${escapeHtml(child.title)}</a>`).join('')}</nav></div>` : ''}

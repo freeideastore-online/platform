@@ -456,7 +456,9 @@ class FakeD1 {
     // (migration 0012 added the typed research fields) and an exact-prefix match
     // silently stops matching, which reads as "no contributions" rather than a
     // broken fake.
-    if (sql.includes('FROM contributions c JOIN profiles p')) {
+    // The refinement queue query shares this FROM clause, so exclude it here or
+    // the broader branch wins on order and drops the kind/status filters.
+    if (sql.includes('FROM contributions c JOIN profiles p') && !sql.includes('c.kind = ?')) {
       return new FakeStatement({
         all: ([ideaId]) => ({
           results: this.contributions
@@ -482,6 +484,58 @@ class FakeD1 {
               };
             }),
         }),
+      });
+    }
+    if (sql.includes('FROM contributions c JOIN profiles p') && sql.includes('c.kind = ?')) {
+      return new FakeStatement({
+        all: ([ideaId, kind]) => ({
+          results: this.contributions
+            .filter((item) => item.idea_id === ideaId && item.kind === kind)
+            .filter((item) => {
+              if (sql.includes("AND c.status = ''")) return !item.status;
+              if (sql.includes("AND c.status != ''")) return Boolean(item.status);
+              return true;
+            })
+            .map((item) => {
+              const profile = this.profiles.get(String(item.profile_id)) || {};
+              return {
+                ...item,
+                section: item.section || '',
+                status: item.status || '',
+                resolution: item.resolution || '',
+                resolved_revision: item.resolved_revision || '',
+                handle: profile.handle || 'guest',
+                display_name: profile.display_name || profile.handle || 'Guest',
+              };
+            }),
+        }),
+      });
+    }
+    if (sql.includes('SELECT COUNT(*) AS n FROM contributions') && sql.includes('kind = ?')) {
+      return new FakeStatement({
+        first: ([ideaId, kind]) => ({
+          n: this.contributions.filter(
+            (item) => item.idea_id === ideaId && item.kind === kind && !item.status,
+          ).length,
+        }),
+      });
+    }
+    if (sql.includes('FROM contributions WHERE id = ? AND idea_id = ? AND kind = ?')) {
+      return new FakeStatement({
+        first: ([contributionId, ideaId, kind]) => {
+          const found = this.contributions.find(
+            (item) => item.id === contributionId && item.idea_id === ideaId && item.kind === kind,
+          );
+          return found ? { ...found, section: found.section || '', status: found.status || '' } : null;
+        },
+      });
+    }
+    if (sql.includes('UPDATE contributions') && sql.includes('SET status = ?')) {
+      return new FakeStatement({
+        run: ([status, resolution, revisionId, contributionId]) => {
+          const found = this.contributions.find((item) => item.id === contributionId);
+          if (found) Object.assign(found, { status, resolution, resolved_revision: revisionId });
+        },
       });
     }
     if (sql.includes('INSERT INTO contributions')) {
@@ -944,6 +998,147 @@ describe('FreeIdeaStore worker', () => {
     const data = (await response.json()) as { error: string };
     expect(data.error).toContain('unknown section "not-a-section"');
     expect(data.error).toContain('/sections');
+  });
+
+  async function proposeRefinement(testEnv: ReturnType<typeof env>, ideaId: string, section: string) {
+    const create = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/${ideaId}/contributions`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'refinement',
+          section,
+          body: `Section: ${section}\n\nProposal:\nSharpen the wording here.\n\nRationale:\nIt reads vaguely.`,
+        }),
+      }),
+      testEnv,
+    );
+    expect(create.status).toBe(201);
+    const list = await worker.fetch(new Request(`https://fis.test/api/ideas/${ideaId}/refinements`), testEnv);
+    const data = (await list.json()) as { refinements: Array<{ id: string; section: string; proposal: string }> };
+    return data.refinements[0];
+  }
+
+  it('surfaces queued refinements instead of leaving them invisible', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
+
+    expect(refinement?.section).toBe('snapshot');
+    // The proposal text is extracted from the composed body.
+    expect(refinement?.proposal).toBe('Sharpen the wording here.');
+
+    const page = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), testEnv);
+    const html = await page.text();
+    expect(html).toContain('Awaiting merge');
+    expect(html).toContain('1 proposed refinement');
+    expect(html).toContain('research-tag pending');
+  });
+
+  it('applies a refinement into its target section and ties it to a revision', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
+
+    const apply = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      }),
+      testEnv,
+    );
+    const applied = (await apply.json()) as { ok: boolean; section: string; revision: string | null };
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const data = (await read.json()) as { body: string };
+
+    expect(apply.status).toBe(200);
+    expect(applied.section).toBe('snapshot');
+    // The proposal text landed in the document...
+    expect(data.body).toContain('Sharpen the wording here.');
+    expect(data.body).toContain('Owned by the signed-in account.');
+    // ...and the resolution points at the revision the write produced.
+    expect(applied.revision).toBeTruthy();
+
+    // The queue has drained.
+    const open = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/refinements'), testEnv);
+    expect((await open.json() as { refinements: unknown[] }).refinements).toHaveLength(0);
+    const resolved = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/refinements?status=resolved'),
+      testEnv,
+    );
+    const resolvedData = (await resolved.json()) as { refinements: Array<{ status: string; resolved_revision: string }> };
+    expect(resolvedData.refinements[0]?.status).toBe('applied');
+    expect(resolvedData.refinements[0]?.resolved_revision).toBe(applied.revision);
+  });
+
+  it('lets the author control the merged wording', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
+
+    await worker.fetch(
+      new Request(`https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ mode: 'replace', content: 'Rewritten in the maintainer voice.' }),
+      }),
+      testEnv,
+    );
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const data = (await read.json()) as { body: string };
+
+    expect(data.body).toContain('Rewritten in the maintainer voice.');
+    // `replace` was honoured, so the proposal's own words are not in the document.
+    expect(data.body).not.toContain('Sharpen the wording here.');
+  });
+
+  it('refuses to apply the same refinement twice', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
+    const path = `https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`;
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+
+    await worker.fetch(new Request(path, { method: 'POST', headers, body: '{}' }), testEnv);
+    const second = await worker.fetch(new Request(path, { method: 'POST', headers, body: '{}' }), testEnv);
+
+    expect(second.status).toBe(409);
+    expect((await second.json() as { error: string }).error).toContain('already applied');
+  });
+
+  it('closes a refinement without merging, but demands a reason', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
+    const path = `https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/resolve`;
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+
+    const noReason = await worker.fetch(
+      new Request(path, { method: 'POST', headers, body: JSON.stringify({ status: 'rejected' }) }),
+      testEnv,
+    );
+    const viaResolve = await worker.fetch(
+      new Request(path, { method: 'POST', headers, body: JSON.stringify({ status: 'applied', reason: 'x' }) }),
+      testEnv,
+    );
+    const rejected = await worker.fetch(
+      new Request(path, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ status: 'rejected', reason: 'Superseded by the deep market scan.' }),
+      }),
+      testEnv,
+    );
+
+    expect(noReason.status).toBe(400);
+    // 'applied' must go through apply, so it is always tied to a revision.
+    expect(viaResolve.status).toBe(400);
+    expect((await viaResolve.json() as { error: string }).error).toContain('use the apply endpoint');
+    expect(rejected.status).toBe(200);
+
+    const open = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/refinements'), testEnv);
+    expect((await open.json() as { refinements: unknown[] }).refinements).toHaveLength(0);
   });
 
   it('stores typed research fields and renders provenance on the page', async () => {

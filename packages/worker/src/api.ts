@@ -1,5 +1,16 @@
 import { authUserFor, hasBearerAuth, isApiMutation, isSameOriginMutation, registeredProfileFor } from './auth';
-import { createIdea, deleteIdea, deriveIdea, promoteIdea, revertIdeaToRevision, updateIdea, updateIdeaSection } from './api-idea-mutations';
+import {
+  applyRefinement,
+  createIdea,
+  deleteIdea,
+  deriveIdea,
+  handleListRefinements,
+  promoteIdea,
+  resolveRefinement,
+  revertIdeaToRevision,
+  updateIdea,
+  updateIdeaSection,
+} from './api-idea-mutations';
 import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, bodyJson, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { ideaSectionList, readIdeaSection } from './markdown';
@@ -141,6 +152,8 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
   const provenance = String(input.provenance || '').trim().toLowerCase();
   const confidence = String(input.confidence || '').trim().toLowerCase();
   const supersedes = String(input.supersedes || '').trim();
+  // Refinements name the section they target, so the queue can route the write.
+  const section = String(input.section || '').trim();
 
   const overflow = tooLong([
     ['contribution body', body, FIELD_LIMITS.contribution],
@@ -173,8 +186,8 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
 
   await env.DB.prepare(
     `INSERT INTO contributions
-     (id, idea_id, profile_id, kind, body, claim, source_url, accessed_at, provenance, confidence, supersedes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, idea_id, profile_id, kind, body, claim, source_url, accessed_at, provenance, confidence, supersedes, section)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id('contribution'),
@@ -188,6 +201,7 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
       provenance,
       confidence,
       supersedes,
+      section,
     )
     .run();
   await env.DB.prepare('UPDATE ideas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?')
@@ -285,6 +299,24 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/promote$/,
     methods: {
       POST: (request, env, __, match) => promoteIdea(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/refinements$/,
+    methods: {
+      GET: (_, env, url, match) => handleListRefinements(env, match![1] || '', url),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/refinements\/([^/]+)\/apply$/,
+    methods: {
+      POST: (request, env, __, match) => applyRefinement(request, env, match![1] || '', match![2] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/refinements\/([^/]+)\/resolve$/,
+    methods: {
+      POST: (request, env, __, match) => resolveRefinement(request, env, match![1] || '', match![2] || ''),
     },
   },
   {

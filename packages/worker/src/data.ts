@@ -172,7 +172,7 @@ export async function ideasByProfile(env: Env, profileId: string, limit = 500) {
 export async function contributionsByIdea(env: Env, ideaId: string, limit?: number) {
   const rows = await env.DB.prepare(
     `SELECT c.id, c.kind, c.body, c.created_at, c.claim, c.source_url, c.accessed_at,
-            c.provenance, c.confidence, c.supersedes,
+            c.provenance, c.confidence, c.supersedes, c.section, c.status, c.resolution,
             p.handle, p.display_name,
             -- The later entry that corrects this one, if any.
             (SELECT s.id FROM contributions s WHERE s.supersedes = c.id ORDER BY s.created_at DESC LIMIT 1)

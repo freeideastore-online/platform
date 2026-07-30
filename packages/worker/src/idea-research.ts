@@ -38,7 +38,7 @@ const KIND_GROUPS: Array<{ kind: string; title: string; blurb: string }> = [
   { kind: 'kill-signal', title: 'Kill signals', blurb: 'Findings that would end the idea.' },
   { kind: 'pivot', title: 'Pivots', blurb: 'Alternative shapes worth testing.' },
   { kind: 'prototype', title: 'Prototype notes', blurb: 'What to build first, and how to test it.' },
-  { kind: 'refinement', title: 'Proposed refinements', blurb: 'Proposals, not yet merged into the document above.' },
+  { kind: 'refinement', title: 'Proposed refinements', blurb: 'Proposals for the document above. Open ones are awaiting merge.' },
 ];
 
 const KIND_ORDER = new Map(KIND_GROUPS.map((group, index) => [group.kind, index]));
@@ -98,6 +98,9 @@ function renderItem(item: IdeaContributionRow) {
     item.provenance ? `<span class="research-tag prov-${escapeHtml(item.provenance)}">${escapeHtml(item.provenance)}</span>` : '',
     item.confidence ? `<span class="research-tag conf-${escapeHtml(item.confidence)}">${escapeHtml(item.confidence)} confidence</span>` : '',
     superseded ? '<span class="research-tag superseded">superseded</span>' : '',
+    // Refinement queue state: open proposals are the ones still worth acting on.
+    kind === 'refinement' && !item.status ? '<span class="research-tag pending">awaiting merge</span>' : '',
+    kind === 'refinement' && item.status ? `<span class="research-tag resolved">${escapeHtml(item.status)}</span>` : '',
   ].filter(Boolean).join('');
 
   const headline = item.claim ? escapeHtml(item.claim) : escapeHtml(excerpt(item.body));

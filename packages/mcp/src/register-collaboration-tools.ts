@@ -193,7 +193,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
       ].join("\n");
       const res = await fisApi<{ ok: boolean }>(env, `/api/ideas/${encodeURIComponent(input.idea_id)}/contributions`, {
         method: "POST",
-        body: JSON.stringify({ kind: "refinement", body }),
+        body: JSON.stringify({ kind: "refinement", body, section: input.section }),
         contributorHandle: input.contributor_handle,
         token: props.token,
       });

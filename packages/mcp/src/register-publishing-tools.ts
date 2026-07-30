@@ -288,4 +288,92 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       return text(JSON.stringify(res.data, null, 2));
     },
   );
+
+  server.tool(
+    "list_pending_refinements",
+    "List refinement proposals for an idea that have not been merged into the canonical document yet. Use this to find work waiting rather than reading every contribution.",
+    {
+      idea_id: z.string().min(2),
+      status: z.enum(["open", "resolved", "all"]).optional().describe("Defaults to open."),
+    },
+    async (input) => {
+      const query = input.status ? `?status=${input.status}` : "";
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/refinements${query}`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error listing refinements (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "apply_refinement",
+    "Merge a queued refinement into the authenticated owner's canonical document and close it. Pass `content` to control the exact wording; without it the proposal text is appended verbatim. The resolution records the revision it produced.",
+    {
+      idea_id: z.string().min(2),
+      refinement_id: z.string().min(2),
+      section: z.string().optional().describe("Target section id. Defaults to the section the proposal names."),
+      mode: z.enum(["append", "replace"]).optional().describe("Defaults to append."),
+      content: z.string().max(200000).optional().describe("Merged markdown to write. Defaults to the proposal text."),
+      note: z.string().max(1000).optional(),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) {
+        return text("Error applying refinement: authentication required. Connect through MCP OAuth first.");
+      }
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/refinements/${encodeURIComponent(input.refinement_id)}/apply`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            section: input.section,
+            mode: input.mode,
+            content: input.content,
+            note: input.note,
+          }),
+          token: props.token,
+        },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error applying refinement (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "resolve_refinement",
+    "Close a refinement without merging it, recording why. Keeps the queue honest instead of leaving proposals open forever.",
+    {
+      idea_id: z.string().min(2),
+      refinement_id: z.string().min(2),
+      status: z.enum(["rejected", "superseded"]),
+      reason: z.string().min(3).max(1000),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) {
+        return text("Error resolving refinement: authentication required. Connect through MCP OAuth first.");
+      }
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/refinements/${encodeURIComponent(input.refinement_id)}/resolve`,
+        {
+          method: "POST",
+          body: JSON.stringify({ status: input.status, reason: input.reason }),
+          token: props.token,
+        },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error resolving refinement (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
 }

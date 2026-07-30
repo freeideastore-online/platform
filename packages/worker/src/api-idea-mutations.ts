@@ -2,6 +2,13 @@ import { authUserFor, profileFor } from './auth';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
 import { bad, bodyJson, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
 import { appendToIdeaSection, documentMetrics, replaceIdeaSection } from './markdown';
+import {
+  listRefinements,
+  markRefinementResolved,
+  proposalText,
+  refinementById,
+  RESOLUTION_VALUES,
+} from './refinements';
 import { recordRevision, revisionBody, revisionById, type RevisionSource } from './revisions';
 import type { Env, IdeaRow } from './types';
 
@@ -226,8 +233,9 @@ async function writeCanonicalBody(
 ) {
   // Snapshot what is about to be replaced, before replacing it. An unchanged
   // body is not a revision.
+  let revisionId: string | null = null;
   if (revision.previousBody !== body) {
-    await recordRevision(env, idea, revision.previousBody, {
+    revisionId = await recordRevision(env, idea, revision.previousBody, {
       authorProfileId: revision.authorProfileId,
       source: revision.source,
       section: revision.section,
@@ -264,7 +272,7 @@ async function writeCanonicalBody(
       idea.id,
     )
     .run();
-  return metrics;
+  return { ...metrics, revisionId };
 }
 
 /**
@@ -501,4 +509,123 @@ export async function revertIdeaToRevision(
     chapters: metrics.chapters,
     url: `/ideas/${idea.id}/`,
   });
+}
+
+/**
+ * Applies a queued refinement to its target section and closes it.
+ *
+ * The platform does not try to merge prose on the author's behalf: pass
+ * `content` to control the exact wording. Without it the proposal text is
+ * appended verbatim, which is the honest default — it is what the proposer
+ * wrote. Either way the resolution records the revision it produced, so the
+ * queue and document history are linked.
+ */
+export async function applyRefinement(
+  request: Request,
+  env: Env,
+  rawIdeaId: string,
+  rawContributionId: string,
+) {
+  const owned = await ownedIdea(request, env, rawIdeaId);
+  if (owned instanceof Response) return owned;
+  const idea = owned;
+
+  const refinement = await refinementById(env, idea.id, rawContributionId);
+  if (!refinement) return bad('refinement not found on this idea', 404);
+  if (refinement.status) {
+    return bad(`refinement is already ${refinement.status}`, 409);
+  }
+
+  const input = await bodyJson(request);
+  const section = String(input.section || refinement.section || '').trim();
+  if (!section) {
+    return bad('no target section — the proposal does not name one, so pass `section`');
+  }
+  const mode = String(input.mode || 'append') === 'replace' ? 'replace' : 'append';
+  const content = String(input.content || proposalText(String(refinement.body || ''))).trim();
+  if (!content) return bad('nothing to apply: the proposal is empty');
+
+  const current = await ideaBody(env, idea);
+  const next =
+    mode === 'replace'
+      ? replaceIdeaSection(current, section, content, idea.title)
+      : appendToIdeaSection(current, section, content, idea.title);
+  if (next === null) {
+    return bad(
+      `unknown section "${section}" — read /api/ideas/${idea.id}/sections for the current list`,
+      404,
+    );
+  }
+
+  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
+  if (overflow) return bad(overflow);
+
+  const result = await writeCanonicalBody(env, idea, next, idea.title, {
+    previousBody: current,
+    authorProfileId: idea.created_by,
+    source: mode === 'replace' ? 'section-replace' : 'section-append',
+    section,
+    reason: `applied refinement ${refinement.id}`,
+  });
+  await markRefinementResolved(
+    env,
+    refinement.id,
+    'applied',
+    String(input.note || ''),
+    result.revisionId || '',
+  );
+
+  return json({
+    ok: true,
+    idea: idea.id,
+    refinement: refinement.id,
+    section,
+    mode,
+    revision: result.revisionId,
+    words: result.words,
+    url: `/ideas/${idea.id}/`,
+  });
+}
+
+/**
+ * Closes a refinement without applying it, so the queue drains and the record
+ * says why rather than leaving a proposal open forever.
+ */
+export async function resolveRefinement(
+  request: Request,
+  env: Env,
+  rawIdeaId: string,
+  rawContributionId: string,
+) {
+  const owned = await ownedIdea(request, env, rawIdeaId);
+  if (owned instanceof Response) return owned;
+  const idea = owned;
+
+  const refinement = await refinementById(env, idea.id, rawContributionId);
+  if (!refinement) return bad('refinement not found on this idea', 404);
+  if (refinement.status) return bad(`refinement is already ${refinement.status}`, 409);
+
+  const input = await bodyJson(request);
+  const status = String(input.status || '').trim().toLowerCase();
+  if (status === 'applied') {
+    return bad('use the apply endpoint to mark a refinement applied, so it is tied to a revision');
+  }
+  if (!RESOLUTION_VALUES.has(status)) {
+    return bad(`status must be one of ${[...RESOLUTION_VALUES].join(', ')}`);
+  }
+  const reason = String(input.reason || '').trim();
+  if (!reason) return bad('a reason is required so the record says why');
+
+  await markRefinementResolved(env, refinement.id, status, reason);
+  return json({ ok: true, idea: idea.id, refinement: refinement.id, status, reason });
+}
+
+export async function handleListRefinements(env: Env, rawIdeaId: string, url: URL) {
+  const ideaId = pathId(rawIdeaId);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const scopeParam = url.searchParams.get('status') || 'open';
+  const scope = scopeParam === 'resolved' || scopeParam === 'all' ? scopeParam : 'open';
+  return json({ idea: idea.id, status: scope, refinements: await listRefinements(env, idea.id, scope) });
 }
