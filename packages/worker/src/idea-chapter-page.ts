@@ -1,6 +1,6 @@
 import { ideaBody, ideaById } from './data';
-import { escapeHtml, htmlResponse, SECURITY_HEADERS } from './http';
-import { ideaChapterById, ideaChapters, MARKDOWN_CSS, markdownHeadings, markdownToHtml } from './markdown';
+import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
+import { ideaChapterById, ideaChapters, isPaginated, MARKDOWN_CSS, markdownHeadings, markdownToHtml } from './markdown';
 import {
   readerSettingsBootScript,
   readerSettingsCss,
@@ -20,6 +20,15 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
 
   if (requestedChapterId !== chapter.id) {
     return Response.redirect(`${new URL(request.url).origin}/ideas/${idea.id}/${chapter.id}/`, 301);
+  }
+
+  // Short documents are served as one page, so send chapter deep links to the
+  // matching heading anchor instead of 404ing them. 302 rather than 301: the
+  // document can grow past the pagination threshold later.
+  if (!isPaginated(body, idea.title)) {
+    const anchor = slug(chapter.title);
+    const target = `${new URL(request.url).origin}/ideas/${idea.id}/${anchor ? `#${anchor}` : ''}`;
+    return Response.redirect(target, 302);
   }
 
   const index = chapters.indexOf(chapter);

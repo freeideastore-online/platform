@@ -33,6 +33,9 @@ p{color:var(--body-text);margin:.78rem 0;max-width:760px}ul,ol{display:grid;gap:
 @media(max-width:860px){.top-brand strong{max-width:min(55vw,280px)}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body,.comments,.research{padding:.9rem}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
 ${navCss(860)}
 ${MARKDOWN_CSS}
+/* Short ideas render without the chapter sidebar — close the column it left. */
+.book-shell.single-page{grid-template-columns:minmax(0,1fr) 300px}
+@media(max-width:1180px){.book-shell.single-page{grid-template-columns:minmax(0,1fr)}}
 ${readerSettingsCss()}
 </style>`;
 }

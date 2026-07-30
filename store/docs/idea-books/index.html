@@ -385,6 +385,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#when-an-idea-gets-chapter-pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When An Idea Gets Chapter Pages
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publishing-model" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -577,6 +588,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#when-an-idea-gets-chapter-pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When An Idea Gets Chapter Pages
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publishing-model" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -679,6 +701,17 @@
 <li>Pivot: the original shape is changing because a sharper wedge or blocker emerged.</li>
 <li>Parked: the idea is intentionally paused, weak, blocked, or waiting for new evidence.</li>
 </ul>
+<h2 id="when-an-idea-gets-chapter-pages">When An Idea Gets Chapter Pages<a class="headerlink" href="#when-an-idea-gets-chapter-pages" title="Permanent link">&para;</a></h2>
+<p>Chapters are earned by content weight, not by heading count. A document is published as chapter pages only when all three hold (<code>PUBLICATION_POLICY</code> in <code>packages/worker/src/markdown.ts</code>):</p>
+<ul>
+<li>at least 2000 words in total,</li>
+<li>at least 3 chapters,</li>
+<li>at least 300 words per chapter on average.</li>
+</ul>
+<p>Below any of those bars the idea renders as a single page with an in-page table of contents, and chapter deep links <code>302</code> to the matching heading anchor.</p>
+<p>This gate exists because splitting on <code>##</code> alone produced chapters that were not worth a page. Across all 11 published ideas, mean words per chapter ran 38-185, no chapter filled a laptop viewport, and the idea page — which renders the whole body inline — already showed 103% of the combined chapter content. Pagination was navigation wrapped around content the reader could already scroll, and it made the argument harder to critique by spreading it across page loads.</p>
+<p>An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.</p>
+<p>Content before the first <code>##</code> is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence.</p>
 <h2 id="publishing-model">Publishing Model<a class="headerlink" href="#publishing-model" title="Permanent link">&para;</a></h2>
 <p>The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits <code>##</code> headings into chapter URLs, and keeps <code>###</code> headings as sub-sections inside the chapter.</p>
 <p>FreeIdeaStore does not create per-idea GitHub docs, Zensical projects, generated static publication assets, or fallback static pages for free ideas.</p>

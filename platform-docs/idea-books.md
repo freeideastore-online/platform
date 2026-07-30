@@ -71,6 +71,22 @@ No. Free ideas should be cheap. Raw ideas can use only the sections that are hon
 - Pivot: the original shape is changing because a sharper wedge or blocker emerged.
 - Parked: the idea is intentionally paused, weak, blocked, or waiting for new evidence.
 
+## When An Idea Gets Chapter Pages
+
+Chapters are earned by content weight, not by heading count. A document is published as chapter pages only when all three hold (`PUBLICATION_POLICY` in `packages/worker/src/markdown.ts`):
+
+- at least 2000 words in total,
+- at least 3 chapters,
+- at least 300 words per chapter on average.
+
+Below any of those bars the idea renders as a single page with an in-page table of contents, and chapter deep links `302` to the matching heading anchor.
+
+This gate exists because splitting on `##` alone produced chapters that were not worth a page. Across all 11 published ideas, mean words per chapter ran 38-185, no chapter filled a laptop viewport, and the idea page — which renders the whole body inline — already showed 103% of the combined chapter content. Pagination was navigation wrapped around content the reader could already scroll, and it made the argument harder to critique by spreading it across page loads.
+
+An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.
+
+Content before the first `##` is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence.
+
 ## Publishing Model
 
 The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits `##` headings into chapter URLs, and keeps `###` headings as sub-sections inside the chapter.

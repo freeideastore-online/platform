@@ -5,7 +5,7 @@ import { ideaDiagram } from './idea-diagrams';
 import { ideaHomeScripts } from './idea-home-scripts';
 import { ideaHomeStyles } from './idea-home-styles';
 import { RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
-import { ideaChapters, markdownHeadings, markdownToHtml } from './markdown';
+import { ideaChapters, isPaginated, markdownHeadings, markdownToHtml } from './markdown';
 import { readerSettingsBootScript } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE } from './site-nav';
 import type { Env } from './types';
@@ -25,7 +25,9 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   const { research, comments } = splitContributions(contributions);
   const headings = markdownHeadings(body);
   const chapters = ideaChapters(body, idea.title);
-  const bookStartPath = `/ideas/${idea.id}/${chapters[0]?.id || 'snapshot'}/`;
+  // Short documents read as one page: the body is rendered inline below, so
+  // chapter pages would only re-present content the reader can already scroll.
+  const paginated = isPaginated(body, idea.title);
   const chapterLinks = chapters.map((chapter, index) => `<a class="chapter-link" data-title="${escapeHtml(chapter.title)} ${escapeHtml(chapter.excerpt)}" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/"><b>${index + 1}</b><span>${escapeHtml(chapter.title)}</span></a>`).join('');
   const page = `<!DOCTYPE html>
 <html lang="en">
@@ -46,16 +48,24 @@ ${ideaHomeStyles()}
   <button class="theme-toggle" type="button" data-reader-theme-toggle aria-label="Toggle theme" title="Toggle theme">&#9790;</button>
   ${NAV_TOGGLE}
 </header>
-<details class="mobile-book-nav">
+${
+  paginated
+    ? `<details class="mobile-book-nav">
   <summary>Chapters</summary>
   <nav class="chapter-list">${chapterLinks}</nav>
-</details>
-<div class="book-shell">
-  <aside class="book-sidebar">
+</details>`
+    : ''
+}
+<div class="book-shell${paginated ? '' : ' single-page'}">
+  ${
+    paginated
+      ? `<aside class="book-sidebar">
     <div class="book-search"><input id="book-filter" type="search" placeholder="Filter chapters" aria-label="Filter chapters"></div>
     <div class="nav-title"><span>Chapters</span><span>${chapters.length}</span></div>
     <nav class="chapter-list" id="chapter-list">${chapterLinks}</nav>
-  </aside>
+  </aside>`
+      : ''
+  }
   <main class="content-wrap">
     <article class="article">
       <h1>${escapeHtml(idea.title)}</h1>

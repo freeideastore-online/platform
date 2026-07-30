@@ -2,6 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
 import { RESEARCH_RENDER_CAP, researchSection } from './idea-research';
 
+/**
+ * Filler prose for fixtures that need to clear PUBLICATION_POLICY. Chapter
+ * pages only exist for documents long enough to be worth paging through, so a
+ * fixture that tests chapter rendering has to be a realistic length.
+ */
+function filler(sentences: number) {
+  return Array.from(
+    { length: sentences },
+    (_, index) => `Filler sentence ${index} covering public filings, valuation screens and source trails in detail.`,
+  ).join(' ');
+}
+
 type QueryHandler = {
   all?: (binds: unknown[]) => unknown;
   first?: (binds: unknown[]) => unknown;
@@ -81,8 +93,29 @@ class FakeD1 {
       summary: 'Public reports, valuation screens, source-backed weekly watchlist.',
       preview: 'Weekly public-data research assistant.',
       signal: 'Validate with 10 Australian retail investors.',
-      body_md:
-        '# Snapshot\nPublic reports and filings.\n\n## Design Sketch\n### Workflow\n1. Review filings.\n2. Cite sources.\n\n### Source Trail\nKeep every product and reference clickable.\n\n## Risk\nAccidental financial advice.',
+      // Long enough to earn chapter pages, so the chapter-rendering tests below
+      // exercise the paginated path rather than the single-page fallback.
+      body_md: [
+        '## Snapshot',
+        'Public reports and filings.',
+        '',
+        filler(55),
+        '',
+        '## Design Sketch',
+        '### Workflow',
+        '1. Review filings.',
+        '2. Cite sources.',
+        '',
+        '### Source Trail',
+        'Keep every product and reference clickable.',
+        '',
+        filler(55),
+        '',
+        '## Risk',
+        'Accidental financial advice.',
+        '',
+        filler(55),
+      ].join('\n'),
       body_key: '',
       render_key: '',
       source_url: '',
@@ -162,7 +195,14 @@ class FakeD1 {
               .filter((idea) => idea.status !== 'removed')
               .map(({ body_md, body_key, render_key, ...idea }) => ({
                 ...idea,
-                has_publication: body_key || String(body_md || '').includes('## ') ? 1 : 0,
+                // Mirrors the has_publication SQL in data.ts (PUBLICATION_SQL_PROXY).
+                has_publication: (() => {
+                  if (body_key) return 1;
+                  const text = String(body_md || '');
+                  const headings = (text.match(/^## /gm) || []).length;
+                  if (headings < 3 || text.length < 12000) return 0;
+                  return Math.floor(text.length / headings) >= 1800 ? 1 : 0;
+                })(),
               })),
           };
         },
@@ -606,7 +646,25 @@ describe('FreeIdeaStore worker', () => {
         body: JSON.stringify({
           title: 'MCP Book Idea',
           summary: 'A test idea using the canonical MCP dynamic book markdown shape.',
-          body: '# MCP Book Idea\n\nStage: raw\nCategory: platform\n\n## Snapshot\nThis is the first real chapter.\n\n## Research\nThis is the second chapter.',
+          // Long enough to earn chapter pages, so this still asserts on chapter URLs.
+          body: [
+            '# MCP Book Idea',
+            '',
+            'Stage: raw',
+            'Category: platform',
+            '',
+            '## Snapshot',
+            'This is the first real chapter.',
+            filler(55),
+            '',
+            '## Research',
+            'This is the second chapter.',
+            filler(55),
+            '',
+            '## Risk',
+            'This is the third chapter.',
+            filler(55),
+          ].join('\n'),
         }),
       }),
       testEnv,
@@ -623,7 +681,37 @@ describe('FreeIdeaStore worker', () => {
     expect(html).not.toContain('href="/ideas/mcp-book-idea/mcp-book-idea/"');
     expect(chapter.status).toBe(200);
     expect(chapterHtml).toContain('<h1>Snapshot</h1>');
-    expect(chapterHtml).toContain('Chapter 1 of 2');
+    expect(chapterHtml).toContain('Chapter 1 of 3');
+  });
+
+  it('renders a short idea as one page with no chapter navigation', async () => {
+    // serge-idea-lab is a few lines long — far below PUBLICATION_POLICY.
+    const response = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), env());
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    // No chapter sidebar, filter, or mobile chapter list...
+    expect(html).not.toContain('class="book-sidebar"');
+    expect(html).not.toContain('aria-label="Filter chapters"');
+    expect(html).not.toContain('class="mobile-book-nav"');
+    expect(html).toContain('single-page');
+    // ...but the body and its in-page section links are still there.
+    expect(html).toContain('Owned by the signed-in account.');
+    expect(html).toContain('<strong>Sections</strong>');
+  });
+
+  it('sends chapter deep links on a short idea to the matching anchor', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/snapshot/'), env());
+
+    // 302 not 301: the document can grow past the threshold later.
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('https://fis.test/ideas/serge-idea-lab/#snapshot');
+  });
+
+  it('keeps chapter pages for a document long enough to earn them', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/snapshot/'), env());
+
+    expect(response.status).toBe(200);
   });
 
   it('renders all publication chapters through the dynamic Worker publisher', async () => {

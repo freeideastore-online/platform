@@ -131,6 +131,56 @@ export type IdeaChapter = {
   aliases: string[];
 };
 
+/**
+ * When a document earns chapter URLs.
+ *
+ * Splitting used to happen on heading count alone, so every `##` became a page
+ * regardless of size. Measured across all 11 published ideas, mean words per
+ * chapter ran 38-185 — no chapter filled a laptop viewport, and the idea home
+ * page (which renders the whole body inline) already showed 103% of the
+ * combined chapter content. Pagination was navigation over content the reader
+ * could already scroll.
+ *
+ * A document now has to be long enough to be worth paging through *and* carry
+ * enough per chapter for a chapter to stand alone. Below either bar the idea is
+ * one page with an in-page table of contents.
+ */
+export const PUBLICATION_POLICY = {
+  minTotalWords: 2000,
+  minMeanChapterWords: 300,
+  minChapters: 3,
+} as const;
+
+/**
+ * Character-based proxy of PUBLICATION_POLICY for the catalog query, which
+ * counts characters because SQL cannot count words. ~6 chars per word.
+ * Keep in step with PUBLICATION_POLICY or the store advertises publications
+ * that the idea page does not render.
+ */
+export const PUBLICATION_SQL_PROXY = {
+  minBodyChars: PUBLICATION_POLICY.minTotalWords * 6,
+  minMeanChapterChars: PUBLICATION_POLICY.minMeanChapterWords * 6,
+  minChapters: PUBLICATION_POLICY.minChapters,
+} as const;
+
+function wordCount(text: string) {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+/**
+ * True when the document is substantial enough to publish as chapter pages.
+ * `has_publication` in the catalog and the book navigation must both use this,
+ * or the store advertises a publication that does not exist.
+ */
+export function isPaginated(markdown: string, documentTitle = '') {
+  const chapters = ideaChapters(markdown, documentTitle);
+  if (chapters.length < PUBLICATION_POLICY.minChapters) return false;
+  const total = wordCount(markdown);
+  if (total < PUBLICATION_POLICY.minTotalWords) return false;
+  return Math.floor(total / chapters.length) >= PUBLICATION_POLICY.minMeanChapterWords;
+}
+
 export function markdownHeadings(markdown: string) {
   return markdown
     .split(/\r?\n/)
