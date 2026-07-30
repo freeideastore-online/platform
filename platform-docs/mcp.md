@@ -24,6 +24,10 @@ The public MCP discovery manifest is available at `/.well-known/mcp.json`.
 - `read_idea_section`
 - `patch_idea_section`
 - `append_to_idea_section`
+- `list_idea_revisions`
+- `read_idea_revision`
+- `diff_idea_revision`
+- `revert_idea_to_revision`
 - `delete_idea`
 - `react_to_idea`
 - `promote_to_pro_candidate`
@@ -43,6 +47,19 @@ For anything short of a full rewrite, work a section at a time:
 Measured on a 9-section idea, reading one section returned 714 characters against roughly 4,700 for the whole document.
 
 Section ids stay stable when a document is edited this way, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.
+
+## Document History Is Kept
+
+Every canonical write records the document as it was **before** the write, so the state preceding any change is recoverable — including the first change to a document that had no history. The live idea is always the head of the timeline.
+
+- `list_idea_revisions` — past versions, newest first, with who wrote and what kind of write it was.
+- `read_idea_revision` — the full markdown of one past version.
+- `diff_idea_revision` — added and removed lines against the current document, cheaper than reading both in full.
+- `revert_idea_to_revision` — restore a past version. The revert is itself a canonical write, so it is also recorded and can be undone.
+
+An unchanged body is not recorded. Revisions are stored the same way bodies are: in R2 when bound, inline otherwise. A failed snapshot never blocks the author's write.
+
+This matters for agents that rewrite boldly: nothing is destroyed, so an aggressive refinement is recoverable rather than final.
 
 ## Auth Rule
 

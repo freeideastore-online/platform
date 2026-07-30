@@ -203,4 +203,89 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       return text(JSON.stringify(res.data, null, 2));
     },
   );
+
+  server.tool(
+    "list_idea_revisions",
+    "List past versions of an idea document, newest first. Each entry records the document as it was BEFORE a write, so the state preceding any change is recoverable.",
+    {
+      idea_id: z.string().min(2),
+      limit: z.number().int().min(1).max(200).optional(),
+    },
+    async (input) => {
+      const query = input.limit ? `?limit=${input.limit}` : "";
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/revisions${query}`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error listing revisions (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "read_idea_revision",
+    "Read the full markdown of one past revision of an idea document.",
+    {
+      idea_id: z.string().min(2),
+      revision_id: z.string().min(2),
+    },
+    async (input) => {
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/revisions/${encodeURIComponent(input.revision_id)}`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error reading revision (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "diff_idea_revision",
+    "Show what changed between a past revision and the current document, as added and removed lines. Cheaper than reading both versions in full.",
+    {
+      idea_id: z.string().min(2),
+      revision_id: z.string().min(2),
+    },
+    async (input) => {
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/revisions/${encodeURIComponent(input.revision_id)}/diff`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error diffing revision (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "revert_idea_to_revision",
+    "Restore a past revision as the authenticated owner's current idea document. The state being replaced is itself recorded, so a revert can be undone.",
+    {
+      idea_id: z.string().min(2),
+      revision_id: z.string().min(2),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) {
+        return text("Error reverting idea: authentication required. Connect through MCP OAuth first.");
+      }
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/revisions/${encodeURIComponent(input.revision_id)}/revert`,
+        { method: "POST", body: JSON.stringify({}), token: props.token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error reverting idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
 }

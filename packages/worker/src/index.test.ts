@@ -53,6 +53,7 @@ class FakeD1 {
   private readonly ideas = new Map<string, Record<string, unknown>>();
   private readonly profiles = new Map<string, Record<string, unknown>>();
   private readonly contributions: Array<Record<string, unknown>> = [];
+  readonly revisions: Array<Record<string, unknown>> = [];
 
   constructor() {
     this.profiles.set('profile-system', {
@@ -303,6 +304,38 @@ class FakeD1 {
             });
           }
         },
+      });
+    }
+    if (sql.includes('INSERT INTO idea_revisions')) {
+      const columns = (sql.match(/\(([^)]*)\)\s*VALUES/)?.[1] || '')
+        .split(',')
+        .map((column) => column.trim())
+        .filter(Boolean);
+      return new FakeStatement({
+        run: (binds) => {
+          const row: Record<string, unknown> = {};
+          columns.forEach((column, index) => {
+            row[column] = binds[index];
+          });
+          // Newest first, and ordering must be stable within a test run.
+          this.revisions.unshift({ created_at: `2026-06-12 00:00:${String(this.revisions.length).padStart(2, '0')}`, ...row });
+        },
+      });
+    }
+    if (sql.includes('FROM idea_revisions r')) {
+      return new FakeStatement({
+        all: ([ideaId, limit]) => ({
+          results: this.revisions
+            .filter((revision) => revision.idea_id === ideaId)
+            .slice(0, Number(limit || 50))
+            .map((revision) => ({ ...revision, handle: 'serge-the-dev', display_name: 'Serge The Dev' })),
+        }),
+      });
+    }
+    if (sql.includes('FROM idea_revisions WHERE id = ?')) {
+      return new FakeStatement({
+        first: ([revisionId, ideaId]) =>
+          this.revisions.find((revision) => revision.id === revisionId && revision.idea_id === ideaId) ?? null,
       });
     }
     if (sql.includes('INSERT INTO ideas')) {
@@ -884,6 +917,147 @@ describe('FreeIdeaStore worker', () => {
     const data = (await response.json()) as { error: string };
     expect(data.error).toContain('unknown section "not-a-section"');
     expect(data.error).toContain('/sections');
+  });
+
+  it('records the replaced document as a revision on a canonical update', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const update = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '## Snapshot\nA completely different document.' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
+    const data = (await list.json()) as { revisions: Array<{ id: string; source: string }> };
+
+    expect(update.status).toBe(200);
+    expect(data.revisions).toHaveLength(1);
+    expect(data.revisions[0]?.source).toBe('update');
+
+    // The revision holds what was replaced, so the prior state is recoverable.
+    const read = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/serge-idea-lab/revisions/${data.revisions[0]?.id}`),
+      testEnv,
+    );
+    const revision = (await read.json()) as { markdown: string };
+    expect(revision.markdown).toContain('Owned by the signed-in account.');
+    expect(revision.markdown).not.toContain('A completely different document.');
+  });
+
+  it('records a revision for a section write too', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ content: 'Appended detail.' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
+    const data = (await list.json()) as { revisions: Array<{ source: string; section: string }> };
+
+    expect(data.revisions).toHaveLength(1);
+    expect(data.revisions[0]).toMatchObject({ source: 'section-append', section: 'snapshot' });
+  });
+
+  it('does not record a revision when the body is unchanged', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const update = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ stage: 'researching' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
+    const data = (await list.json()) as { revisions: unknown[] };
+
+    expect(update.status).toBe(200);
+    expect(data.revisions).toHaveLength(0);
+  });
+
+  it('reverts to a revision, and the revert is itself undoable', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const original = '## Snapshot\nOwned by the signed-in account.';
+
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '## Snapshot\nOverwritten by a parallel session.' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
+    const { revisions } = (await list.json()) as { revisions: Array<{ id: string }> };
+
+    const revert = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/serge-idea-lab/revisions/${revisions[0]?.id}/revert`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      testEnv,
+    );
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const data = (await read.json()) as { body: string };
+
+    expect(revert.status).toBe(200);
+    expect(data.body).toBe(original);
+
+    // The overwrite that was undone is still on record.
+    const after = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
+    const afterData = (await after.json()) as { revisions: Array<{ source: string }> };
+    expect(afterData.revisions).toHaveLength(2);
+    expect(afterData.revisions.some((revision) => revision.source === 'revert')).toBe(true);
+  });
+
+  it('reports what a revision changed as added and removed lines', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '## Snapshot\nOwned by the signed-in account.\nPlus one new line.' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
+    const { revisions } = (await list.json()) as { revisions: Array<{ id: string }> };
+    const diff = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/serge-idea-lab/revisions/${revisions[0]?.id}/diff`),
+      testEnv,
+    );
+    const data = (await diff.json()) as { added: number; removed: number; changes: Array<{ type: string; text: string }> };
+
+    expect(diff.status).toBe(200);
+    // One line added; the shared lines are recognised as unchanged.
+    expect(data.added).toBe(1);
+    expect(data.removed).toBe(0);
+    expect(data.changes).toEqual([{ type: 'added', text: 'Plus one new line.' }]);
+  });
+
+  it('refuses a revert from someone who does not own the idea', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/revisions/whatever/revert', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(403);
   });
 
   it('renders a short idea as one page with no chapter navigation', async () => {

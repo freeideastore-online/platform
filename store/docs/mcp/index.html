@@ -437,6 +437,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#document-history-is-kept" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Document History Is Kept
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#auth-rule" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -577,6 +588,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#document-history-is-kept" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Document History Is Kept
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#auth-rule" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -633,6 +655,10 @@
 <li><code>read_idea_section</code></li>
 <li><code>patch_idea_section</code></li>
 <li><code>append_to_idea_section</code></li>
+<li><code>list_idea_revisions</code></li>
+<li><code>read_idea_revision</code></li>
+<li><code>diff_idea_revision</code></li>
+<li><code>revert_idea_to_revision</code></li>
 <li><code>delete_idea</code></li>
 <li><code>react_to_idea</code></li>
 <li><code>promote_to_pro_candidate</code></li>
@@ -649,6 +675,16 @@
 </ol>
 <p>Measured on a 9-section idea, reading one section returned 714 characters against roughly 4,700 for the whole document.</p>
 <p>Section ids stay stable when a document is edited this way, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.</p>
+<h2 id="document-history-is-kept">Document History Is Kept<a class="headerlink" href="#document-history-is-kept" title="Permanent link">&para;</a></h2>
+<p>Every canonical write records the document as it was <strong>before</strong> the write, so the state preceding any change is recoverable — including the first change to a document that had no history. The live idea is always the head of the timeline.</p>
+<ul>
+<li><code>list_idea_revisions</code> — past versions, newest first, with who wrote and what kind of write it was.</li>
+<li><code>read_idea_revision</code> — the full markdown of one past version.</li>
+<li><code>diff_idea_revision</code> — added and removed lines against the current document, cheaper than reading both in full.</li>
+<li><code>revert_idea_to_revision</code> — restore a past version. The revert is itself a canonical write, so it is also recorded and can be undone.</li>
+</ul>
+<p>An unchanged body is not recorded. Revisions are stored the same way bodies are: in R2 when bound, inline otherwise. A failed snapshot never blocks the author's write.</p>
+<p>This matters for agents that rewrite boldly: nothing is destroyed, so an aggressive refinement is recoverable rather than final.</p>
 <h2 id="auth-rule">Auth Rule<a class="headerlink" href="#auth-rule" title="Permanent link">&para;</a></h2>
 <p>Creating public ideas may support fallback attribution. Comments, reactions, contributions, canonical updates, deletion, and owner-specific actions require authentication.</p>
 <p>Canonical updates, deletion, and <code>promote_to_pro_candidate</code> require the authenticated idea owner.</p>

@@ -2,6 +2,7 @@ import { authUserFor, profileFor } from './auth';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
 import { bad, bodyJson, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
 import { appendToIdeaSection, documentMetrics, replaceIdeaSection } from './markdown';
+import { recordRevision, revisionBody, revisionById, type RevisionSource } from './revisions';
 import type { Env, IdeaRow } from './types';
 
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
@@ -216,7 +217,23 @@ async function ownedIdea(request: Request, env: Env, rawIdeaId: string): Promise
  * Persists a canonical body: R2 when bound, inline otherwise, and refreshes the
  * stored metrics the catalog reads.
  */
-async function writeCanonicalBody(env: Env, idea: IdeaRow, body: string, title: string) {
+async function writeCanonicalBody(
+  env: Env,
+  idea: IdeaRow,
+  body: string,
+  title: string,
+  revision: { previousBody: string; authorProfileId?: string; source: RevisionSource; section?: string; reason?: string },
+) {
+  // Snapshot what is about to be replaced, before replacing it. An unchanged
+  // body is not a revision.
+  if (revision.previousBody !== body) {
+    await recordRevision(env, idea, revision.previousBody, {
+      authorProfileId: revision.authorProfileId,
+      source: revision.source,
+      section: revision.section,
+      reason: revision.reason,
+    });
+  }
   const metrics = documentMetrics(body, title);
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
   const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
@@ -290,7 +307,13 @@ export async function updateIdeaSection(
   const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
   if (overflow) return bad(overflow);
 
-  const metrics = await writeCanonicalBody(env, idea, next, idea.title);
+  const metrics = await writeCanonicalBody(env, idea, next, idea.title, {
+    previousBody: current,
+    authorProfileId: idea.created_by,
+    source: mode === 'append' ? 'section-append' : 'section-replace',
+    section: sectionId,
+    reason: String(input.reason || ''),
+  });
   return json({
     ok: true,
     idea: idea.id,
@@ -315,7 +338,8 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
 
   const input = await bodyJson(request);
   const bodyInput = input.body ?? input.body_md;
-  const body = typeof bodyInput === 'string' ? bodyInput.trim() : await ideaBody(env, idea);
+  const previousBody = await ideaBody(env, idea);
+  const body = typeof bodyInput === 'string' ? bodyInput.trim() : previousBody;
   const title = String(input.title || idea.title).trim();
   const summary = String(input.summary || idea.summary).trim();
   const preview = String(input.preview ?? idea.preview ?? '');
@@ -339,6 +363,14 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   ]);
   if (overflow) return bad(overflow);
   const metrics = documentMetrics(body, title);
+  // publish_idea_update replaces the whole document; keep what it replaced.
+  if (body !== previousBody) {
+    await recordRevision(env, idea, previousBody, {
+      authorProfileId: profile.id,
+      source: 'update',
+      reason: String(input.reason || ''),
+    });
+  }
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
   const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
   let storedInR2 = false;
@@ -426,5 +458,47 @@ export async function promoteIdea(request: Request, env: Env, rawIdeaId: string)
       missing: idea.risk || 'Diligence gap not yet named.',
       assets: ['free idea page', 'contributor history'],
     },
+  });
+}
+
+/**
+ * Restores a past revision as the current document.
+ *
+ * The restore is itself a canonical write, so the state it replaces is
+ * snapshotted too — reverting is undoable.
+ */
+export async function revertIdeaToRevision(
+  request: Request,
+  env: Env,
+  rawIdeaId: string,
+  rawRevisionId: string,
+) {
+  const owned = await ownedIdea(request, env, rawIdeaId);
+  if (owned instanceof Response) return owned;
+  const idea = owned;
+
+  const revision = await revisionById(env, idea.id, rawRevisionId);
+  if (!revision) return bad('revision not found', 404);
+  const body = await revisionBody(env, revision);
+  if (!body.trim()) return bad('revision has no stored body', 409);
+
+  const current = await ideaBody(env, idea);
+  if (current === body) {
+    return json({ ok: true, idea: idea.id, revision: revision.id, note: 'already at this revision' });
+  }
+
+  const metrics = await writeCanonicalBody(env, idea, body, idea.title, {
+    previousBody: current,
+    authorProfileId: idea.created_by,
+    source: 'revert',
+    reason: `revert to ${revision.id}`,
+  });
+  return json({
+    ok: true,
+    idea: idea.id,
+    revision: revision.id,
+    words: metrics.words,
+    chapters: metrics.chapters,
+    url: `/ideas/${idea.id}/`,
   });
 }

@@ -1,8 +1,9 @@
 import { authUserFor, hasBearerAuth, isApiMutation, isSameOriginMutation, registeredProfileFor } from './auth';
-import { createIdea, deleteIdea, deriveIdea, promoteIdea, updateIdea, updateIdeaSection } from './api-idea-mutations';
+import { createIdea, deleteIdea, deriveIdea, promoteIdea, revertIdeaToRevision, updateIdea, updateIdeaSection } from './api-idea-mutations';
 import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, bodyJson, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { ideaSectionList, readIdeaSection } from './markdown';
+import { diffSummary, listRevisions, revisionBody, revisionById } from './revisions';
 import type { Env } from './types';
 
 async function handleHealth(env: Env) {
@@ -82,6 +83,39 @@ async function handleGetSection(env: Env, ideaParam: string, sectionParam: strin
     return bad(`unknown section "${sectionId}" — read /api/ideas/${idea.id}/sections for the current list`, 404);
   }
   return json({ idea: idea.id, section: sectionId, markdown });
+}
+
+
+async function handleGetRevisions(env: Env, ideaParam: string, url: URL) {
+  const ideaId = pathId(ideaParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const limit = clampInt(url.searchParams.get('limit'), 50, 1, 200);
+  return json({ idea: idea.id, revisions: await listRevisions(env, idea.id, limit) });
+}
+
+async function handleGetRevision(env: Env, ideaParam: string, revisionParam: string) {
+  const ideaId = pathId(ideaParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const revision = await revisionById(env, idea.id, revisionParam);
+  if (!revision) return bad('revision not found', 404);
+  return json({ idea: idea.id, revision, markdown: await revisionBody(env, revision) });
+}
+
+/** What a revision changed, relative to the document as it stands now. */
+async function handleGetRevisionDiff(env: Env, ideaParam: string, revisionParam: string) {
+  const ideaId = pathId(ideaParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const revision = await revisionById(env, idea.id, revisionParam);
+  if (!revision) return bad('revision not found', 404);
+  const before = await revisionBody(env, revision);
+  const after = await ideaBody(env, idea);
+  return json({ idea: idea.id, revision: revision.id, from: 'revision', to: 'current', ...diffSummary(before, after) });
 }
 
 async function handleCreateContribution(request: Request, env: Env, ideaParam: string) {
@@ -203,6 +237,30 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/promote$/,
     methods: {
       POST: (request, env, __, match) => promoteIdea(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/revisions$/,
+    methods: {
+      GET: (_, env, url, match) => handleGetRevisions(env, match![1] || '', url),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/revisions\/([^/]+)$/,
+    methods: {
+      GET: (_, env, __, match) => handleGetRevision(env, match![1] || '', match![2] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/revisions\/([^/]+)\/diff$/,
+    methods: {
+      GET: (_, env, __, match) => handleGetRevisionDiff(env, match![1] || '', match![2] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/revisions\/([^/]+)\/revert$/,
+    methods: {
+      POST: (request, env, __, match) => revertIdeaToRevision(request, env, match![1] || '', match![2] || ''),
     },
   },
   {
