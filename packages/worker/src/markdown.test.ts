@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ideaChapterById, ideaChapters, markdownHeadings, markdownToHtml } from './markdown';
+import {
+  appendToIdeaSection,
+  ideaChapterById,
+  ideaChapters,
+  ideaSectionList,
+  markdownHeadings,
+  markdownToHtml,
+  readIdeaSection,
+  replaceIdeaSection,
+} from './markdown';
 
 describe('markdownToHtml', () => {
   it('renders markdown links and bare URLs as safe new-tab links', () => {
@@ -103,6 +112,96 @@ describe('markdownToHtml', () => {
     expect(html).toContain('<br>');
     expect(html).toContain('First line.');
     expect(html).toContain('Second line.');
+  });
+});
+
+describe('section editing', () => {
+  const doc = [
+    '# Deep Idea',
+    '',
+    '> Lead-in that is not a section.',
+    '',
+    '## Snapshot',
+    'The short version.',
+    '',
+    '## Research',
+    'First finding.',
+    '',
+    '### Sources',
+    'A sub-section that belongs to Research.',
+    '',
+    '## Risk',
+    'The main risk.',
+  ].join('\n');
+
+  it('lists sections with the same ids the chapter URLs use', () => {
+    const sections = ideaSectionList(doc, 'Deep Idea');
+
+    expect(sections.map((section) => section.id)).toEqual(['snapshot', 'research', 'risk']);
+    expect(ideaChapters(doc, 'Deep Idea').map((chapter) => chapter.id)).toEqual(
+      sections.map((section) => section.id),
+    );
+    expect(sections[1]?.words).toBeGreaterThan(0);
+  });
+
+  it('reads one section without the rest of the document', () => {
+    const section = readIdeaSection(doc, 'research', 'Deep Idea');
+
+    expect(section).toContain('## Research');
+    expect(section).toContain('First finding.');
+    expect(section).toContain('### Sources');
+    expect(section).not.toContain('The short version.');
+    expect(section).not.toContain('The main risk.');
+  });
+
+  it('replaces a section and leaves everything else byte-identical', () => {
+    const next = replaceIdeaSection(doc, 'research', 'Replaced entirely.', 'Deep Idea');
+
+    expect(next).toContain('## Research\n\nReplaced entirely.');
+    expect(next).not.toContain('First finding.');
+    // The sub-section belonged to Research, so it goes with it.
+    expect(next).not.toContain('### Sources');
+    // Untouched sections and the lead-in survive exactly.
+    expect(next).toContain('> Lead-in that is not a section.');
+    expect(next).toContain('## Snapshot\nThe short version.');
+    expect(next).toContain('## Risk\nThe main risk.');
+    // Section ids are unchanged, so published URLs still resolve.
+    expect(ideaSectionList(String(next), 'Deep Idea').map((s) => s.id)).toEqual(['snapshot', 'research', 'risk']);
+  });
+
+  it('appends to a section without disturbing what is there', () => {
+    const next = appendToIdeaSection(doc, 'research', 'RESEARCH LOG 2: a later finding.', 'Deep Idea');
+
+    expect(next).toContain('First finding.');
+    expect(next).toContain('### Sources');
+    expect(next).toContain('RESEARCH LOG 2: a later finding.');
+    expect(next).toContain('## Risk\nThe main risk.');
+  });
+
+  it('does not accumulate blank lines across repeated edits', () => {
+    let next: string | null = doc;
+    for (let round = 0; round < 3; round += 1) {
+      next = replaceIdeaSection(String(next), 'research', 'Stable content.', 'Deep Idea');
+    }
+
+    expect(next).not.toMatch(/\n{3,}/);
+    expect(next).toContain('## Research\n\nStable content.\n\n## Risk');
+  });
+
+  it('returns null for an unknown section instead of corrupting the document', () => {
+    expect(replaceIdeaSection(doc, 'nope', 'x', 'Deep Idea')).toBeNull();
+    expect(appendToIdeaSection(doc, 'nope', 'x', 'Deep Idea')).toBeNull();
+    expect(readIdeaSection(doc, 'nope', 'Deep Idea')).toBeNull();
+  });
+
+  it('addresses a section by its collision-suffixed id', () => {
+    const collided = ['## Prototype plan', 'First.', '', '## Prototype risks', 'Second.'].join('\n');
+    const ids = ideaSectionList(collided).map((section) => section.id);
+    expect(ids).toEqual(['prototype', 'prototype-risks']);
+
+    const next = appendToIdeaSection(collided, 'prototype-risks', 'Added to the second.');
+    expect(next).toContain('## Prototype risks\n\nSecond.\n\nAdded to the second.');
+    expect(next).toContain('## Prototype plan\nFirst.');
   });
 });
 

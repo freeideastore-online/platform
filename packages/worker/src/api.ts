@@ -1,7 +1,8 @@
 import { authUserFor, hasBearerAuth, isApiMutation, isSameOriginMutation, registeredProfileFor } from './auth';
-import { createIdea, deleteIdea, deriveIdea, promoteIdea, updateIdea } from './api-idea-mutations';
+import { createIdea, deleteIdea, deriveIdea, promoteIdea, updateIdea, updateIdeaSection } from './api-idea-mutations';
 import { contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, bodyJson, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
+import { ideaSectionList, readIdeaSection } from './markdown';
 import type { Env } from './types';
 
 async function handleHealth(env: Env) {
@@ -57,6 +58,30 @@ async function handleGetContributions(env: Env, ideaParam: string) {
   if (!ideaId) return bad('invalid idea id', 400);
   if (!(await ideaById(env, ideaId))) return bad('idea not found', 404);
   return json({ contributions: await contributionsByIdea(env, ideaId) });
+}
+
+async function handleGetSections(env: Env, ideaParam: string) {
+  const ideaId = pathId(ideaParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const body = await ideaBody(env, idea);
+  return json({ idea: idea.id, sections: ideaSectionList(body, idea.title) });
+}
+
+async function handleGetSection(env: Env, ideaParam: string, sectionParam: string) {
+  const ideaId = pathId(ideaParam);
+  const sectionId = pathId(sectionParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  if (!sectionId) return bad('invalid section id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const body = await ideaBody(env, idea);
+  const markdown = readIdeaSection(body, sectionId, idea.title);
+  if (markdown === null) {
+    return bad(`unknown section "${sectionId}" — read /api/ideas/${idea.id}/sections for the current list`, 404);
+  }
+  return json({ idea: idea.id, section: sectionId, markdown });
 }
 
 async function handleCreateContribution(request: Request, env: Env, ideaParam: string) {
@@ -178,6 +203,21 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/promote$/,
     methods: {
       POST: (request, env, __, match) => promoteIdea(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/sections$/,
+    methods: {
+      GET: (_, env, __, match) => handleGetSections(env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/sections\/([^/]+)$/,
+    methods: {
+      GET: (_, env, __, match) => handleGetSection(env, match![1] || '', match![2] || ''),
+      // PUT replaces a section, POST extends it.
+      PUT: (request, env, __, match) => updateIdeaSection(request, env, match![1] || '', match![2] || '', 'replace'),
+      POST: (request, env, __, match) => updateIdeaSection(request, env, match![1] || '', match![2] || '', 'append'),
     },
   },
   {

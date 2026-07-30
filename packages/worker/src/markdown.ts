@@ -205,12 +205,61 @@ function excerpt(markdown: string) {
   return plainText(markdown).slice(0, 180);
 }
 
-export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
-  const chapters: IdeaChapter[] = [];
-  let currentTitle = 'Overview';
-  let currentLines: string[] = [];
+type SectionRange = {
+  title: string;
+  /** Index of the heading line itself. */
+  headingLine: number;
+  /** First content line, just after the heading. */
+  contentStart: number;
+  /** Exclusive end of the content — the next section's heading, or EOF. */
+  contentEnd: number;
+};
+
+/**
+ * Line boundaries of every section, by the same rules chapter splitting uses:
+ * `###` and deeper belong to the section above, a leading `#` repeating the
+ * document title is not a section, and content before the first heading is a
+ * lead-in.
+ *
+ * Chapter listing and section editing both build on this, so the two cannot
+ * disagree about where a section begins and ends.
+ */
+function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
+  const lines = markdown.split(/\r?\n/);
+  const ranges: SectionRange[] = [];
   let sawHeading = false;
-  let ignoredDocumentTitle = false;
+  let sawContentBeforeFirstHeading = false;
+
+  lines.forEach((line, index) => {
+    const heading = line.trim().match(/^(#{1,3})\s+(.+)$/);
+    if (!heading) {
+      if (!sawHeading && line.trim()) sawContentBeforeFirstHeading = true;
+      return;
+    }
+    const level = (heading[1] || '').length;
+    const title = (heading[2] || '').trim();
+    if (level > 2) return;
+    if (
+      level === 1 &&
+      documentTitle &&
+      !sawHeading &&
+      !sawContentBeforeFirstHeading &&
+      slug(title) === slug(documentTitle)
+    ) {
+      return;
+    }
+    const previous = ranges[ranges.length - 1];
+    if (previous) previous.contentEnd = index;
+    ranges.push({ title, headingLine: index, contentStart: index + 1, contentEnd: lines.length });
+    sawHeading = true;
+  });
+
+  return ranges;
+}
+
+export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
+  const lines = markdown.split(/\r?\n/);
+  const ranges = sectionRanges(markdown, documentTitle);
 
   /**
    * Every id and alias handed out so far.
@@ -222,12 +271,11 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
    */
   const claimed = new Set<string>();
 
-  const push = () => {
-    const body = currentLines.join('\n').trim();
-    if (!body && !sawHeading) return;
-    const canonical = chapterId(currentTitle);
+  const chapters = ranges.map((range) => {
+    const body = lines.slice(range.contentStart, range.contentEnd).join('\n').trim();
+    const canonical = chapterId(range.title);
     // `slug()` truncates at 64 chars, so long titles can collide here too.
-    const rawSlug = slug(currentTitle) || canonical;
+    const rawSlug = slug(range.title) || canonical;
 
     // The first chapter to claim an id keeps it, so already-published URLs
     // never move. Later collisions fall back to their own slug, then to a
@@ -243,49 +291,14 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
     const aliases = [id, ...preferred.filter((candidate) => candidate !== id && !claimed.has(candidate))];
     for (const alias of aliases) claimed.add(alias);
 
-    chapters.push({
+    return {
       id,
-      title: currentTitle,
-      markdown: `## ${currentTitle}\n\n${body}`.trim(),
+      title: range.title,
+      markdown: `## ${range.title}\n\n${body}`.trim(),
       excerpt: excerpt(body) || 'Open this chapter.',
       aliases: Array.from(new Set(aliases)),
-    });
-  };
-
-  for (const line of markdown.split(/\r?\n/)) {
-    const heading = line.trim().match(/^(#{1,3})\s+(.+)$/);
-    if (heading) {
-      const level = (heading[1] || '').length;
-      const title = (heading[2] || '').trim();
-      if (level > 2) {
-        currentLines.push(line);
-        continue;
-      }
-      if (
-        level === 1 &&
-        documentTitle &&
-        !sawHeading &&
-        !currentLines.some((item) => item.trim()) &&
-        slug(title) === slug(documentTitle)
-      ) {
-        ignoredDocumentTitle = true;
-        continue;
-      }
-      // Only close a real chapter here. Content sitting before the first `##`
-      // is a lead-in, not a chapter — promoting it turned a 70-word status
-      // note on the gapfill idea into "Overview, chapter 1 of 11". It stays
-      // visible because the idea home page renders the whole body inline.
-      if (sawHeading) push();
-      currentTitle = title;
-      currentLines = [];
-      sawHeading = true;
-      ignoredDocumentTitle = false;
-      continue;
-    }
-    if (ignoredDocumentTitle && !sawHeading) continue;
-    currentLines.push(line);
-  }
-  push();
+    };
+  });
 
   return chapters.length ? chapters : [{
     id: 'snapshot',
@@ -298,6 +311,84 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
 
 export function ideaChapterById(chapters: IdeaChapter[], rawChapterId: string) {
   return chapters.find((chapter) => chapter.aliases.includes(rawChapterId));
+}
+
+/**
+ * Locates a section for editing. Section ids are the chapter ids, so the URL a
+ * reader sees and the handle an agent writes through are the same string.
+ * Returns null for the synthetic single-chapter fallback, which has no heading
+ * to splice around.
+ */
+function findSection(markdown: string, sectionId: string, documentTitle: string) {
+  const ranges = sectionRanges(markdown, documentTitle);
+  const chapters = ideaChapters(markdown, documentTitle);
+  if (chapters.length !== ranges.length) return null;
+  const index = chapters.findIndex((chapter) => chapter.aliases.includes(sectionId));
+  const range = ranges[index];
+  const chapter = chapters[index];
+  return range && chapter ? { range, chapter } : null;
+}
+
+/** Section titles and ids, for callers deciding what to read or write. */
+export function ideaSectionList(markdown: string, documentTitle = '') {
+  return ideaChapters(markdown, documentTitle).map((chapter) => ({
+    id: chapter.id,
+    title: chapter.title,
+    words: wordCount(chapter.markdown),
+  }));
+}
+
+/** One section's markdown, heading included. Null when the section is unknown. */
+export function readIdeaSection(markdown: string, sectionId: string, documentTitle = '') {
+  return findSection(markdown, sectionId, documentTitle)?.chapter.markdown ?? null;
+}
+
+/**
+ * Replaces one section's content, leaving the rest of the document byte-identical.
+ *
+ * This is what makes deep documents workable: rewriting a section previously
+ * meant sending the whole document back, which cost O(document) tokens per edit
+ * and had to fit in one request. Null when the section is unknown.
+ */
+export function replaceIdeaSection(
+  markdown: string,
+  sectionId: string,
+  content: string,
+  documentTitle = '',
+): string | null {
+  const found = findSection(markdown, sectionId, documentTitle);
+  if (!found) return null;
+  const lines = markdown.split(/\r?\n/);
+  const body = content.trim();
+  // The replaced region always takes the same shape, so repeated edits do not
+  // accumulate blank lines.
+  const region = body ? ['', ...body.split(/\r?\n/), ''] : [''];
+  return [
+    ...lines.slice(0, found.range.contentStart),
+    ...region,
+    ...lines.slice(found.range.contentEnd),
+  ].join('\n');
+}
+
+/** Adds to the end of a section — the shape research accumulation actually takes. */
+export function appendToIdeaSection(
+  markdown: string,
+  sectionId: string,
+  content: string,
+  documentTitle = '',
+): string | null {
+  const found = findSection(markdown, sectionId, documentTitle);
+  if (!found) return null;
+  const lines = markdown.split(/\r?\n/);
+  const existing = lines.slice(found.range.contentStart, found.range.contentEnd).join('\n').trim();
+  const addition = content.trim();
+  if (!addition) return markdown;
+  return replaceIdeaSection(
+    markdown,
+    sectionId,
+    existing ? `${existing}\n\n${addition}` : addition,
+    documentTitle,
+  );
 }
 
 export function defaultIdeaBody(idea: IdeaRow) {

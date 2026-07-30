@@ -1,8 +1,8 @@
 import { authUserFor, profileFor } from './auth';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
 import { bad, bodyJson, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
-import { documentMetrics } from './markdown';
-import type { Env } from './types';
+import { appendToIdeaSection, documentMetrics, replaceIdeaSection } from './markdown';
+import type { Env, IdeaRow } from './types';
 
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
@@ -191,6 +191,115 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
     ]);
   }
   return json({ ok: true, idea: idea.id, status: 'removed' });
+}
+
+/**
+ * Owner-only guard shared by the canonical write paths.
+ * Returns the idea on success, or the Response to send back.
+ */
+async function ownedIdea(request: Request, env: Env, rawIdeaId: string): Promise<Response | IdeaRow> {
+  const ideaId = pathId(rawIdeaId);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const user = await authUserFor(request);
+  if (!user) return json({ error: 'authentication required' }, { status: 401 });
+  const profile = await contributorByHandle(env, user.handle);
+  if (!profile) return json({ error: 'profile not found' }, { status: 403 });
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  if (idea.created_by !== profile.id) {
+    return json({ error: 'only the idea owner can update the canonical document' }, { status: 403 });
+  }
+  return idea;
+}
+
+/**
+ * Persists a canonical body: R2 when bound, inline otherwise, and refreshes the
+ * stored metrics the catalog reads.
+ */
+async function writeCanonicalBody(env: Env, idea: IdeaRow, body: string, title: string) {
+  const metrics = documentMetrics(body, title);
+  const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
+  const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
+  let storedInR2 = false;
+  if (env.IDEA_BUCKET) {
+    try {
+      await env.IDEA_BUCKET.put(bodyKey, body, {
+        httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
+      });
+      storedInR2 = true;
+      await env.IDEA_BUCKET.delete(renderKey).catch(() => undefined);
+    } catch {
+      // Fall back to storing the body inline in D1 if the R2 write fails.
+    }
+  }
+  await env.DB.prepare(
+    `UPDATE ideas
+     SET body_md = ?, body_key = ?, render_key = ?, body_words = ?, chapter_count = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  )
+    .bind(
+      storedInR2 ? '' : body,
+      storedInR2 ? bodyKey : '',
+      storedInR2 ? renderKey : '',
+      metrics.words,
+      metrics.chapters,
+      idea.id,
+    )
+    .run();
+  return metrics;
+}
+
+/**
+ * Rewrites or extends a single section.
+ *
+ * Deepening a document used to require sending the whole thing back through
+ * `publish_idea_update`, which cost O(document) tokens per edit and had to fit
+ * in one request. That is why research accumulated as ten separate "RESEARCH LOG
+ * n/10" contributions instead of landing in the document.
+ */
+export async function updateIdeaSection(
+  request: Request,
+  env: Env,
+  rawIdeaId: string,
+  rawSectionId: string,
+  mode: 'replace' | 'append',
+) {
+  const sectionId = pathId(rawSectionId);
+  if (!sectionId) return bad('invalid section id', 400);
+  const owned = await ownedIdea(request, env, rawIdeaId);
+  if (owned instanceof Response) return owned;
+  const idea = owned;
+
+  const input = await bodyJson(request);
+  const content = String(input.content ?? input.markdown ?? input.body ?? '');
+  if (!content.trim()) return bad('section content is required');
+
+  const current = await ideaBody(env, idea);
+  const next =
+    mode === 'append'
+      ? appendToIdeaSection(current, sectionId, content, idea.title)
+      : replaceIdeaSection(current, sectionId, content, idea.title);
+  if (next === null) {
+    return bad(
+      `unknown section "${sectionId}" — read /api/ideas/${idea.id}/sections for the current list`,
+      404,
+    );
+  }
+
+  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
+  if (overflow) return bad(overflow);
+
+  const metrics = await writeCanonicalBody(env, idea, next, idea.title);
+  return json({
+    ok: true,
+    idea: idea.id,
+    section: sectionId,
+    mode,
+    words: metrics.words,
+    chapters: metrics.chapters,
+    url: `/ideas/${idea.id}/`,
+  });
 }
 
 export async function updateIdea(request: Request, env: Env, rawIdeaId: string) {

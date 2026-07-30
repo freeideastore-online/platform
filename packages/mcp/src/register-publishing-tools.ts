@@ -114,4 +114,93 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       return text(JSON.stringify(res.data, null, 2));
     },
   );
+
+  server.tool(
+    "list_idea_sections",
+    "List the sections of an idea document with their ids and word counts. Start here before reading or writing a section — the ids are the same handles the public chapter URLs use.",
+    {
+      idea_id: z.string().min(2),
+    },
+    async (input) => {
+      const res = await fisApi<{ idea: string; sections: Array<{ id: string; title: string; words: number }> }>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error listing sections (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "read_idea_section",
+    "Read one section of an idea document. Use this instead of get_idea when revising a single section — it avoids pulling the whole document into context.",
+    {
+      idea_id: z.string().min(2),
+      section: z.string().min(1).describe("Section id from list_idea_sections."),
+    },
+    async (input) => {
+      const res = await fisApi<{ markdown: string }>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error reading section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "patch_idea_section",
+    "Replace the content of one section of the authenticated owner's idea document, leaving the rest byte-identical. Prefer this over publish_idea_update when revising part of a document — publish_idea_update requires resending the whole thing.",
+    {
+      idea_id: z.string().min(2),
+      section: z.string().min(1).describe("Section id from list_idea_sections."),
+      content: z.string().min(1).max(200000).describe("Replacement markdown for the section body. Do not repeat the section heading."),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) {
+        return text("Error patching section: authentication required. Connect through MCP OAuth first.");
+      }
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
+        { method: "PUT", body: JSON.stringify({ content: input.content }), token: props.token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error patching section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "append_to_idea_section",
+    "Add markdown to the end of one section of the authenticated owner's idea document. This is the natural shape for accumulating research into the canonical document rather than leaving it in contribution history.",
+    {
+      idea_id: z.string().min(2),
+      section: z.string().min(1).describe("Section id from list_idea_sections."),
+      content: z.string().min(1).max(200000).describe("Markdown to append to the section body."),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) {
+        return text("Error appending to section: authentication required. Connect through MCP OAuth first.");
+      }
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
+        { method: "POST", body: JSON.stringify({ content: input.content }), token: props.token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error appending to section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
 }

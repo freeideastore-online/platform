@@ -346,6 +346,23 @@ class FakeD1 {
         },
       });
     }
+    // Section writes update only the body columns (writeCanonicalBody).
+    if (sql.includes('UPDATE ideas') && sql.includes('SET body_md = ?')) {
+      return new FakeStatement({
+        run: ([body_md, body_key, render_key, body_words, chapter_count, id]) => {
+          const idea = this.ideas.get(String(id));
+          if (!idea) return;
+          Object.assign(idea, {
+            body_md,
+            body_key,
+            render_key,
+            body_words,
+            chapter_count,
+            updated_at: '2026-06-11 02:00:00',
+          });
+        },
+      });
+    }
     if (sql.includes('UPDATE ideas') && sql.includes('SET title = ?')) {
       return new FakeStatement({
         run: (binds) => {
@@ -772,6 +789,101 @@ describe('FreeIdeaStore worker', () => {
     const list = await worker.fetch(new Request('https://fis.test/api/ideas'), testEnv);
     const data = (await list.json()) as { ideas: Array<{ id: string; has_publication: number }> };
     expect(data.ideas.find((idea) => idea.id === 'deep-idea')?.has_publication).toBe(1);
+  });
+
+  it('lists and reads sections without returning the whole document', async () => {
+    const testEnv = env();
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/asx-filings-analyst/sections'), testEnv);
+    const listed = (await list.json()) as { sections: Array<{ id: string; title: string; words: number }> };
+
+    expect(list.status).toBe(200);
+    expect(listed.sections.map((section) => section.id)).toEqual(['snapshot', 'design-sketch', 'risk']);
+
+    const read = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/sections/risk'),
+      testEnv,
+    );
+    const section = (await read.json()) as { markdown: string };
+
+    expect(read.status).toBe(200);
+    expect(section.markdown).toContain('Accidental financial advice.');
+    // The point of the endpoint: other sections are not in the payload.
+    expect(section.markdown).not.toContain('Public reports and filings.');
+  });
+
+  it('patches one section and leaves the rest of the document intact', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const patch = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ content: 'Rewritten snapshot only.' }),
+      }),
+      testEnv,
+    );
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const data = (await read.json()) as { body: string };
+
+    expect(patch.status).toBe(200);
+    await expect(patch.json()).resolves.toMatchObject({ ok: true, section: 'snapshot', mode: 'replace' });
+    expect(data.body).toContain('Rewritten snapshot only.');
+    expect(data.body).not.toContain('Owned by the signed-in account.');
+  });
+
+  it('appends to a section, which is how research should accumulate', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const append = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ content: 'A later finding, appended.' }),
+      }),
+      testEnv,
+    );
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const data = (await read.json()) as { body: string };
+
+    expect(append.status).toBe(200);
+    // Both the original content and the addition survive.
+    expect(data.body).toContain('Owned by the signed-in account.');
+    expect(data.body).toContain('A later finding, appended.');
+  });
+
+  it('refuses a section write from someone who does not own the idea', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      // asx-filings-analyst is owned by profile-system, not the signed-in user.
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/sections/risk', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ content: 'Should not be written.' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: 'only the idea owner can update the canonical document',
+    });
+  });
+
+  it('rejects a write to an unknown section and points at the section list', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/not-a-section', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ content: 'Nowhere to put this.' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(404);
+    const data = (await response.json()) as { error: string };
+    expect(data.error).toContain('unknown section "not-a-section"');
+    expect(data.error).toContain('/sections');
   });
 
   it('renders a short idea as one page with no chapter navigation', async () => {
