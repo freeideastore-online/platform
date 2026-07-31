@@ -7,6 +7,11 @@ import {
   markdownHeadings,
   markdownToHtml,
   readIdeaSection,
+  addIdeaSection,
+  mergeIdeaSections,
+  moveIdeaSection,
+  removeIdeaSection,
+  renameIdeaSection,
   replaceIdeaSection,
 } from './markdown';
 
@@ -317,5 +322,117 @@ describe('ideaChapters', () => {
     expect(chapters[0]?.excerpt).toContain('StudentRide');
     expect(chapters[0]?.excerpt).not.toContain('**');
     expect(chapters[0]?.excerpt).not.toContain('](https://');
+  });
+});
+
+describe('structural section editing', () => {
+  const doc = [
+    '# Deep Idea',
+    '',
+    '> Lead-in.',
+    '',
+    '## Snapshot',
+    'The short version.',
+    '',
+    '## Research',
+    'First finding.',
+    '',
+    '## Risk',
+    'The main risk.',
+  ].join('\n');
+
+  it('adds a section at the end by default', () => {
+    const next = addIdeaSection(doc, 'Validation', 'The cheapest test.', { documentTitle: 'Deep Idea' });
+
+    expect(ideaSectionList(String(next), 'Deep Idea').map((s) => s.id)).toEqual([
+      'snapshot',
+      'research',
+      'risk',
+      'validation',
+    ]);
+    expect(next).toContain('## Validation\n\nThe cheapest test.');
+    // Existing sections and the lead-in are untouched.
+    expect(next).toContain('> Lead-in.');
+    expect(next).toContain('## Snapshot\nThe short version.');
+  });
+
+  it('adds a section at a chosen position', () => {
+    const after = addIdeaSection(doc, 'Evidence', 'Sources.', { after: 'snapshot', documentTitle: 'Deep Idea' });
+    const before = addIdeaSection(doc, 'Overview', 'Framing.', { before: 'snapshot', documentTitle: 'Deep Idea' });
+
+    expect(ideaSectionList(String(after), 'Deep Idea').map((s) => s.id)).toEqual([
+      'snapshot',
+      'evidence',
+      'research',
+      'risk',
+    ]);
+    expect(ideaSectionList(String(before), 'Deep Idea').map((s) => s.id)[0]).toBe('overview');
+  });
+
+  it('renames a section, which moves its id', () => {
+    const next = renameIdeaSection(doc, 'research', 'Context and evidence', 'Deep Idea');
+    const ids = ideaSectionList(String(next), 'Deep Idea').map((s) => s.id);
+
+    expect(ids).toEqual(['snapshot', 'context-and-evidence', 'risk']);
+    // Content survives the rename.
+    expect(next).toContain('## Context and evidence\nFirst finding.');
+    expect(ids).not.toContain('research');
+  });
+
+  it('merges one section into another and drops the source', () => {
+    const next = mergeIdeaSections(doc, 'risk', 'research', 'Deep Idea');
+    const ids = ideaSectionList(String(next), 'Deep Idea').map((s) => s.id);
+
+    expect(ids).toEqual(['snapshot', 'research']);
+    // Both bodies survive, in order.
+    expect(next).toContain('First finding.');
+    expect(next).toContain('The main risk.');
+    expect(String(next).indexOf('First finding.')).toBeLessThan(String(next).indexOf('The main risk.'));
+  });
+
+  it('moves a section without disturbing its content', () => {
+    const next = moveIdeaSection(doc, 'risk', { before: 'research', documentTitle: 'Deep Idea' });
+
+    expect(ideaSectionList(String(next), 'Deep Idea').map((s) => s.id)).toEqual([
+      'snapshot',
+      'risk',
+      'research',
+    ]);
+    expect(next).toContain('## Risk\nThe main risk.');
+    expect(next).toContain('## Research\nFirst finding.');
+  });
+
+  it('removes a section', () => {
+    const next = removeIdeaSection(doc, 'research', 'Deep Idea');
+
+    expect(ideaSectionList(String(next), 'Deep Idea').map((s) => s.id)).toEqual(['snapshot', 'risk']);
+    expect(next).not.toContain('First finding.');
+    expect(next).not.toMatch(/\n{3,}/);
+  });
+
+  it('returns null for an unknown section rather than writing a wrong document', () => {
+    expect(addIdeaSection(doc, 'X', 'y', { after: 'nope', documentTitle: 'Deep Idea' })).toBeNull();
+    expect(renameIdeaSection(doc, 'nope', 'X', 'Deep Idea')).toBeNull();
+    expect(removeIdeaSection(doc, 'nope', 'Deep Idea')).toBeNull();
+    expect(moveIdeaSection(doc, 'nope', { after: 'snapshot', documentTitle: 'Deep Idea' })).toBeNull();
+    expect(mergeIdeaSections(doc, 'nope', 'snapshot', 'Deep Idea')).toBeNull();
+    expect(mergeIdeaSections(doc, 'snapshot', 'snapshot', 'Deep Idea')).toBeNull();
+    expect(addIdeaSection(doc, '   ', 'y', { documentTitle: 'Deep Idea' })).toBeNull();
+  });
+
+  it('keeps the document parseable after a chain of structural edits', () => {
+    let next: string | null = doc;
+    next = addIdeaSection(String(next), 'Validation', 'A test.', { documentTitle: 'Deep Idea' });
+    next = moveIdeaSection(String(next), 'validation', { after: 'snapshot', documentTitle: 'Deep Idea' });
+    next = renameIdeaSection(String(next), 'validation', 'Cheapest test', 'Deep Idea');
+    next = mergeIdeaSections(String(next), 'risk', 'research', 'Deep Idea');
+
+    expect(ideaSectionList(String(next), 'Deep Idea').map((s) => s.id)).toEqual([
+      'snapshot',
+      'cheapest-test',
+      'research',
+    ]);
+    expect(next).not.toMatch(/\n{3,}/);
+    expect(next).toContain('> Lead-in.');
   });
 });

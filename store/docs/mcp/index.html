@@ -655,6 +655,10 @@
 <li><code>read_idea_section</code></li>
 <li><code>patch_idea_section</code></li>
 <li><code>append_to_idea_section</code></li>
+<li><code>add_idea_section</code></li>
+<li><code>edit_idea_section</code></li>
+<li><code>merge_idea_sections</code></li>
+<li><code>delete_idea_section</code></li>
 <li><code>list_idea_revisions</code></li>
 <li><code>read_idea_revision</code></li>
 <li><code>diff_idea_revision</code></li>
@@ -674,7 +678,15 @@
 <li><code>patch_idea_section</code> to replace it, or <code>append_to_idea_section</code> to extend it. Everything outside the section stays byte-identical.</li>
 </ol>
 <p>Measured on a 9-section idea, reading one section returned 714 characters against roughly 4,700 for the whole document.</p>
-<p>Section ids stay stable when a document is edited this way, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.</p>
+<p>Structure is editable at the same granularity. <code>patch_idea_section</code> and <code>append_to_idea_section</code> only touch sections that already exist, so growing or reshaping a document used to mean resending the whole body — the expensive path these tools exist to remove:</p>
+<ul>
+<li><code>add_idea_section</code> — a section the document does not have yet, optionally positioned with <code>after</code> / <code>before</code>.</li>
+<li><code>edit_idea_section</code> — rename and/or move. <strong>Renaming changes the section id</strong>, so the old chapter URL stops resolving; that is inherent to slug-derived ids.</li>
+<li><code>merge_idea_sections</code> — fold one section into another and drop the source. This is how a document of many thin sections becomes one with fewer substantial ones.</li>
+<li><code>delete_idea_section</code> — remove a section. Recoverable through revisions.</li>
+</ul>
+<p>Structural edits are ordinary canonical writes, so each one is snapshotted as a revision and re-indexes sources and search automatically.</p>
+<p>Section ids stay stable under content edits, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.</p>
 <h2 id="document-history-is-kept">Document History Is Kept<a class="headerlink" href="#document-history-is-kept" title="Permanent link">&para;</a></h2>
 <p>Every canonical write records the document as it was <strong>before</strong> the write, so the state preceding any change is recoverable — including the first change to a document that had no history. The live idea is always the head of the timeline.</p>
 <ul>

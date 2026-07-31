@@ -24,6 +24,10 @@ The public MCP discovery manifest is available at `/.well-known/mcp.json`.
 - `read_idea_section`
 - `patch_idea_section`
 - `append_to_idea_section`
+- `add_idea_section`
+- `edit_idea_section`
+- `merge_idea_sections`
+- `delete_idea_section`
 - `list_idea_revisions`
 - `read_idea_revision`
 - `diff_idea_revision`
@@ -46,7 +50,16 @@ For anything short of a full rewrite, work a section at a time:
 
 Measured on a 9-section idea, reading one section returned 714 characters against roughly 4,700 for the whole document.
 
-Section ids stay stable when a document is edited this way, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.
+Structure is editable at the same granularity. `patch_idea_section` and `append_to_idea_section` only touch sections that already exist, so growing or reshaping a document used to mean resending the whole body — the expensive path these tools exist to remove:
+
+- `add_idea_section` — a section the document does not have yet, optionally positioned with `after` / `before`.
+- `edit_idea_section` — rename and/or move. **Renaming changes the section id**, so the old chapter URL stops resolving; that is inherent to slug-derived ids.
+- `merge_idea_sections` — fold one section into another and drop the source. This is how a document of many thin sections becomes one with fewer substantial ones.
+- `delete_idea_section` — remove a section. Recoverable through revisions.
+
+Structural edits are ordinary canonical writes, so each one is snapshotted as a revision and re-indexes sources and search automatically.
+
+Section ids stay stable under content edits, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.
 
 ## Document History Is Kept
 

@@ -1203,6 +1203,135 @@ describe('FreeIdeaStore worker', () => {
     return data.refinements[0];
   }
 
+  it('adds a section the document does not have yet', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const add = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'Validation', content: 'The cheapest test.' }),
+      }),
+      testEnv,
+    );
+    const data = (await add.json()) as { sections: Array<{ id: string }>; revision: string | null };
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+
+    expect(add.status).toBe(200);
+    expect(data.sections.map((section) => section.id)).toEqual(['snapshot', 'validation']);
+    // A structural edit is a canonical write, so it is recoverable.
+    expect(data.revision).toBeTruthy();
+    expect((await read.json() as { body: string }).body).toContain('## Validation');
+  });
+
+  it('renames and moves a section in one call', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'Risk', content: 'The main risk.' }),
+      }),
+      testEnv,
+    );
+    const edit = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/risk', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ title: 'Risks and constraints', before: 'snapshot' }),
+      }),
+      testEnv,
+    );
+    const data = (await edit.json()) as { sections: Array<{ id: string }> };
+
+    expect(edit.status).toBe(200);
+    // Renamed (so the id moved) and reordered in the same write.
+    expect(data.sections.map((section) => section.id)).toEqual(['risks-and-constraints', 'snapshot']);
+  });
+
+  it('merges a thin section into another and removes the source', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'Thin', content: 'A short thought.' }),
+      }),
+      testEnv,
+    );
+    const merge = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/thin/merge', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ into: 'snapshot' }),
+      }),
+      testEnv,
+    );
+    const body = (await (await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv)).json()) as { body: string };
+
+    expect(merge.status).toBe(200);
+    expect((await merge.json() as { sections: Array<{ id: string }> }).sections.map((s) => s.id)).toEqual(['snapshot']);
+    // Content survives the merge; only the heading goes.
+    expect(body.body).toContain('A short thought.');
+    expect(body.body).toContain('Owned by the signed-in account.');
+    expect(body.body).not.toContain('## Thin');
+  });
+
+  it('deletes a section', async () => {
+    mockSignedInSerge();
+    const testEnv = env();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'Scratch', content: 'Temporary.' }),
+      }),
+      testEnv,
+    );
+    const remove = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/scratch', { method: 'DELETE', headers, body: '{}' }),
+      testEnv,
+    );
+
+    expect(remove.status).toBe(200);
+    expect((await remove.json() as { sections: Array<{ id: string }> }).sections.map((s) => s.id)).toEqual(['snapshot']);
+  });
+
+  it('404s a structural edit that references a section that is not there', async () => {
+    mockSignedInSerge();
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'X', content: 'y', after: 'not-a-section' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(404);
+    expect((await response.json() as { error: string }).error).toContain('/sections');
+  });
+
+  it('refuses a structural edit from someone who does not own the idea', async () => {
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/sections', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'X', content: 'y' }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
   it('serves a requested page of the research record', async () => {
     mockSignedInSerge();
     const testEnv = env();

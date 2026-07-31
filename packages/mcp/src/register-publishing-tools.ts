@@ -376,4 +376,107 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       return text(JSON.stringify(res.data, null, 2));
     },
   );
+
+  server.tool(
+    "add_idea_section",
+    "Add a new section to the authenticated owner's idea document. Use this to grow a document's structure — patch_idea_section and append_to_idea_section only edit sections that already exist.",
+    {
+      idea_id: z.string().min(2),
+      title: z.string().min(1).max(120),
+      content: z.string().max(200000).optional(),
+      after: z.string().optional().describe("Section id to insert after. Defaults to the end of the document."),
+      before: z.string().optional().describe("Section id to insert before."),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) return text("Error adding section: authentication required. Connect through MCP OAuth first.");
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title: input.title, content: input.content, after: input.after, before: input.before }),
+          token: props.token,
+        },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error adding section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "edit_idea_section",
+    "Rename and/or move a section of the authenticated owner's idea document. Renaming changes the section id, so the old chapter URL stops resolving.",
+    {
+      idea_id: z.string().min(2),
+      section: z.string().min(1),
+      title: z.string().max(120).optional().describe("New title. Changes the section id."),
+      after: z.string().optional().describe("Move to sit after this section id."),
+      before: z.string().optional().describe("Move to sit before this section id."),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) return text("Error editing section: authentication required. Connect through MCP OAuth first.");
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ title: input.title, after: input.after, before: input.before }),
+          token: props.token,
+        },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error editing section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "merge_idea_sections",
+    "Fold one section's content into another and remove the source. This is how a document with many thin sections becomes one with fewer substantial ones.",
+    {
+      idea_id: z.string().min(2),
+      from_section: z.string().min(1).describe("Section to fold in and remove."),
+      into_section: z.string().min(1).describe("Section that receives the content."),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) return text("Error merging sections: authentication required. Connect through MCP OAuth first.");
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.from_section)}/merge`,
+        { method: "POST", body: JSON.stringify({ into: input.into_section }), token: props.token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error merging sections (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "delete_idea_section",
+    "Remove a section and its content from the authenticated owner's idea document. Recoverable through revisions.",
+    {
+      idea_id: z.string().min(2),
+      section: z.string().min(1),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) return text("Error deleting section: authentication required. Connect through MCP OAuth first.");
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
+        { method: "DELETE", body: JSON.stringify({}), token: props.token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error deleting section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
 }

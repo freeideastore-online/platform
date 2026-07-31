@@ -1,7 +1,17 @@
 import { authUserFor, profileFor } from './auth';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
-import { bad, readJsonBody, enumValue, FIELD_LIMITS, json, pathId, tooLong } from './http';
-import { appendToIdeaSection, documentMetrics, replaceIdeaSection } from './markdown';
+import { bad, enumValue, FIELD_LIMITS, json, pathId, readJsonBody, slug, tooLong } from './http';
+import {
+  addIdeaSection,
+  appendToIdeaSection,
+  documentMetrics,
+  mergeIdeaSections,
+  moveIdeaSection,
+  ideaSectionList,
+  removeIdeaSection,
+  renameIdeaSection,
+  replaceIdeaSection,
+} from './markdown';
 import {
   listRefinements,
   markRefinementResolved,
@@ -650,4 +660,109 @@ export async function handleListRefinements(env: Env, rawIdeaId: string, url: UR
   const scopeParam = url.searchParams.get('status') || 'open';
   const scope = scopeParam === 'resolved' || scopeParam === 'all' ? scopeParam : 'open';
   return json({ idea: idea.id, status: scope, refinements: await listRefinements(env, idea.id, scope) });
+}
+
+/**
+ * Applies a structural edit and persists it as a canonical write.
+ *
+ * Structure changes are ordinary canonical writes, so revisions make them
+ * recoverable and sources/search re-index automatically. `compute` returns null
+ * when a referenced section does not exist, which becomes a 404 rather than a
+ * silently wrong document.
+ */
+async function writeStructuralEdit(
+  request: Request,
+  env: Env,
+  rawIdeaId: string,
+  reason: string,
+  compute: (body: string, idea: IdeaRow, input: Record<string, unknown>) => string | null,
+) {
+  const owned = await ownedIdea(request, env, rawIdeaId);
+  if (owned instanceof Response) return owned;
+  const idea = owned;
+
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const input = parsedBody.data;
+
+  const current = await ideaBody(env, idea);
+  const next = compute(current, idea, input);
+  if (next === null) {
+    return bad(
+      `structural edit could not be applied — read /api/ideas/${idea.id}/sections for the current list`,
+      404,
+    );
+  }
+  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
+  if (overflow) return bad(overflow);
+  if (next === current) {
+    return json({ ok: true, idea: idea.id, note: 'no change' });
+  }
+
+  const result = await writeCanonicalBody(env, idea, next, idea.title, {
+    previousBody: current,
+    authorProfileId: idea.created_by,
+    source: 'section-structure',
+    reason,
+  });
+  return json({
+    ok: true,
+    idea: idea.id,
+    revision: result.revisionId,
+    sections: ideaSectionList(next, idea.title),
+    url: `/ideas/${idea.id}/`,
+  });
+}
+
+export function createIdeaSection(request: Request, env: Env, rawIdeaId: string) {
+  return writeStructuralEdit(request, env, rawIdeaId, 'add section', (body, idea, input) => {
+    const title = String(input.title || '').trim();
+    if (!title) return null;
+    return addIdeaSection(body, title, String(input.content || ''), {
+      after: String(input.after || '') || undefined,
+      before: String(input.before || '') || undefined,
+      documentTitle: idea.title,
+    });
+  });
+}
+
+/** Rename and/or move in one call, since restructuring usually does both. */
+export function editIdeaSection(request: Request, env: Env, rawIdeaId: string, rawSectionId: string) {
+  return writeStructuralEdit(request, env, rawIdeaId, `edit section ${rawSectionId}`, (body, idea, input) => {
+    const sectionId = pathId(rawSectionId);
+    if (!sectionId) return null;
+    let next: string | null = body;
+    const title = String(input.title || '').trim();
+    if (title) {
+      next = renameIdeaSection(next, sectionId, title, idea.title);
+      if (next === null) return null;
+    }
+    const after = String(input.after || '').trim();
+    const before = String(input.before || '').trim();
+    if (after || before) {
+      // A rename changes the id, so move the section under its new handle.
+      const movedId = title ? slug(title) || sectionId : sectionId;
+      next = moveIdeaSection(next, movedId, {
+        after: after || undefined,
+        before: before || undefined,
+        documentTitle: idea.title,
+      });
+    }
+    return next;
+  });
+}
+
+export function deleteIdeaSection(request: Request, env: Env, rawIdeaId: string, rawSectionId: string) {
+  return writeStructuralEdit(request, env, rawIdeaId, `remove section ${rawSectionId}`, (body, idea) => {
+    const sectionId = pathId(rawSectionId);
+    return sectionId ? removeIdeaSection(body, sectionId, idea.title) : null;
+  });
+}
+
+export function mergeIdeaSection(request: Request, env: Env, rawIdeaId: string, rawSectionId: string) {
+  return writeStructuralEdit(request, env, rawIdeaId, `merge section ${rawSectionId}`, (body, idea, input) => {
+    const from = pathId(rawSectionId);
+    const into = String(input.into || '').trim();
+    return from && into ? mergeIdeaSections(body, from, into, idea.title) : null;
+  });
 }

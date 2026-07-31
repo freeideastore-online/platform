@@ -17,7 +17,12 @@ export type RevisionRow = {
 };
 
 /** What kind of write produced a revision. */
-export type RevisionSource = 'update' | 'section-replace' | 'section-append' | 'revert';
+export type RevisionSource =
+  | 'update'
+  | 'section-replace'
+  | 'section-append'
+  | 'section-structure'
+  | 'revert';
 
 /**
  * Records the document being replaced, before it is overwritten.

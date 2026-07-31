@@ -395,6 +395,158 @@ export function appendToIdeaSection(
   );
 }
 
+/**
+ * Structural edits: adding, renaming, moving, merging and removing sections.
+ *
+ * Without these, growing or reshaping a document still meant resending the whole
+ * body — the O(document) path section writes were built to remove. Restructuring
+ * is exactly what thin documents need, so it should be the cheap operation, not
+ * the expensive one.
+ *
+ * Every one returns new markdown, or null when the referenced section does not
+ * exist, so callers fail loudly rather than writing a document they did not mean.
+ */
+
+/** Trailing blank lines are normalised so repeated edits do not accumulate them. */
+function joinBlocks(before: string[], block: string[], after: string[]) {
+  const out = [...before];
+  if (out.length && out[out.length - 1]?.trim()) out.push('');
+  out.push(...block);
+  if (after.length && after[0]?.trim()) out.push('');
+  out.push(...after);
+  return out.join('\n');
+}
+
+function sectionBlockLines(title: string, content: string, level = 2) {
+  const body = content.trim();
+  const heading = `${'#'.repeat(level)} ${title.trim()}`;
+  return body ? [heading, '', ...body.split(/\r?\n/)] : [heading];
+}
+
+/**
+ * Inserts a new section. Without `after`/`before` it goes at the end, which is
+ * where a document usually grows.
+ */
+export function addIdeaSection(
+  markdown: string,
+  title: string,
+  content: string,
+  options: { after?: string; before?: string; documentTitle?: string } = {},
+): string | null {
+  if (!title.trim()) return null;
+  const documentTitle = options.documentTitle || '';
+  const lines = markdown.split(/\r?\n/);
+  const block = sectionBlockLines(title, content);
+
+  let at = lines.length;
+  if (options.after) {
+    const anchor = findSection(markdown, options.after, documentTitle);
+    if (!anchor) return null;
+    at = anchor.range.contentEnd;
+  } else if (options.before) {
+    const anchor = findSection(markdown, options.before, documentTitle);
+    if (!anchor) return null;
+    at = anchor.range.headingLine;
+  }
+  return joinBlocks(lines.slice(0, at), block, lines.slice(at));
+}
+
+/**
+ * Renames a section, keeping its content and heading level.
+ *
+ * The id is derived from the title, so renaming MOVES the section's URL. That is
+ * inherent to slug-derived ids; callers should expect the old chapter URL to stop
+ * resolving.
+ */
+export function renameIdeaSection(
+  markdown: string,
+  sectionId: string,
+  newTitle: string,
+  documentTitle = '',
+): string | null {
+  if (!newTitle.trim()) return null;
+  const found = findSection(markdown, sectionId, documentTitle);
+  if (!found) return null;
+  const lines = markdown.split(/\r?\n/);
+  const current = lines[found.range.headingLine] || '';
+  const level = (current.trim().match(/^(#{1,2})/)?.[1] || '##').length;
+  lines[found.range.headingLine] = `${'#'.repeat(level)} ${newTitle.trim()}`;
+  return lines.join('\n');
+}
+
+/** Removes a section and its content. Recoverable through revisions. */
+export function removeIdeaSection(
+  markdown: string,
+  sectionId: string,
+  documentTitle = '',
+): string | null {
+  const found = findSection(markdown, sectionId, documentTitle);
+  if (!found) return null;
+  const lines = markdown.split(/\r?\n/);
+  return [...lines.slice(0, found.range.headingLine), ...lines.slice(found.range.contentEnd)]
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+/** Moves a section relative to another, for reordering toward a spine. */
+export function moveIdeaSection(
+  markdown: string,
+  sectionId: string,
+  options: { after?: string; before?: string; documentTitle?: string } = {},
+): string | null {
+  const documentTitle = options.documentTitle || '';
+  const found = findSection(markdown, sectionId, documentTitle);
+  if (!found) return null;
+  if (options.after === sectionId || options.before === sectionId) return markdown;
+
+  const lines = markdown.split(/\r?\n/);
+  const block = lines.slice(found.range.headingLine, found.range.contentEnd);
+  const withoutBlock = [
+    ...lines.slice(0, found.range.headingLine),
+    ...lines.slice(found.range.contentEnd),
+  ].join('\n');
+
+  // Resolve the anchor against the document *after* removal, so the insertion
+  // point is not computed from indices the removal has already shifted.
+  const anchorId = options.after || options.before;
+  if (!anchorId) return joinBlocks(withoutBlock.split(/\r?\n/), block, []);
+  const anchor = findSection(withoutBlock, anchorId, documentTitle);
+  if (!anchor) return null;
+  const remaining = withoutBlock.split(/\r?\n/);
+  const at = options.after ? anchor.range.contentEnd : anchor.range.headingLine;
+  return joinBlocks(remaining.slice(0, at), block, remaining.slice(at));
+}
+
+/**
+ * Folds one section's content into another and removes the source. This is how
+ * a document with many thin sections becomes one with fewer substantial ones.
+ */
+export function mergeIdeaSections(
+  markdown: string,
+  fromSectionId: string,
+  intoSectionId: string,
+  documentTitle = '',
+): string | null {
+  if (fromSectionId === intoSectionId) return null;
+  const from = findSection(markdown, fromSectionId, documentTitle);
+  const into = findSection(markdown, intoSectionId, documentTitle);
+  if (!from || !into) return null;
+
+  const lines = markdown.split(/\r?\n/);
+  const fromBody = lines.slice(from.range.contentStart, from.range.contentEnd).join('\n').trim();
+  const intoBody = lines.slice(into.range.contentStart, into.range.contentEnd).join('\n').trim();
+  // Append first, then remove: the merged text has to exist before the source
+  // section goes, or a failure mid-way would lose it.
+  const merged = replaceIdeaSection(
+    markdown,
+    intoSectionId,
+    intoBody ? `${intoBody}\n\n${fromBody}`.trim() : fromBody,
+    documentTitle,
+  );
+  if (merged === null) return null;
+  return removeIdeaSection(merged, fromSectionId, documentTitle);
+}
+
 export function defaultIdeaBody(idea: IdeaRow) {
   return [
     `## Snapshot`,

@@ -2,6 +2,10 @@ import { authUserFor, hasBearerAuth, isApiMutation, isSameOriginMutation, regist
 import {
   applyRefinement,
   createIdea,
+  createIdeaSection,
+  deleteIdeaSection,
+  editIdeaSection,
+  mergeIdeaSection,
   deleteIdea,
   deriveIdea,
   handleListRefinements,
@@ -427,15 +431,26 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/sections$/,
     methods: {
       GET: (_, env, __, match) => handleGetSections(env, match![1] || ''),
+      // Structural: add a section the document does not have yet.
+      POST: (request, env, __, match) => createIdeaSection(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/sections\/([^/]+)\/merge$/,
+    methods: {
+      POST: (request, env, __, match) => mergeIdeaSection(request, env, match![1] || '', match![2] || ''),
     },
   },
   {
     pattern: /^\/api\/ideas\/([^/]+)\/sections\/([^/]+)$/,
     methods: {
       GET: (_, env, __, match) => handleGetSection(env, match![1] || '', match![2] || ''),
-      // PUT replaces a section, POST extends it.
+      // PUT replaces a section's content, POST extends it. PATCH and DELETE are
+      // structural: rename/move, and remove.
       PUT: (request, env, __, match) => updateIdeaSection(request, env, match![1] || '', match![2] || '', 'replace'),
       POST: (request, env, __, match) => updateIdeaSection(request, env, match![1] || '', match![2] || '', 'append'),
+      PATCH: (request, env, __, match) => editIdeaSection(request, env, match![1] || '', match![2] || ''),
+      DELETE: (request, env, __, match) => deleteIdeaSection(request, env, match![1] || '', match![2] || ''),
     },
   },
   {
