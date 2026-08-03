@@ -28,6 +28,51 @@ pnpm --filter @fis/mcp exec wrangler deploy
 
 Wrangler reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the environment. If those are set (e.g. via shell profile or CI secrets), no Doppler wrapper is needed.
 
+## CI Is The Deploy Path
+
+`.github/workflows/deploy-worker.yml` and `deploy-mcp.yml` run on push to `main` (path-filtered) and on `workflow_dispatch`. Each one installs, runs `pnpm test`, runs `pnpm typecheck`, applies D1 migrations `--remote`, then deploys. That ordering matters: a worker that reads a column added by a migration must not ship before the migration runs.
+
+Prefer CI over a local `wrangler deploy`. Both work, but only CI cannot skip the test gate, and deploying locally while CI also deploys means two paths racing on the same worker.
+
+```bash
+gh workflow run "Deploy Worker" --repo freeideastore-online/platform --ref main
+gh workflow run "Deploy MCP"    --repo freeideastore-online/platform --ref main
+gh run list --repo freeideastore-online/platform --limit 4
+```
+
+Use `workflow_dispatch` rather than re-running an old run: a re-run replays that run's commit, so it will not pick up anything merged since.
+
+### Secrets CI needs
+
+Both workflows map org secrets onto the names wrangler expects:
+
+```yaml
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+```
+
+`CF_API_TOKEN` and `CF_ACCOUNT_ID` are **GitHub org secrets on `freeideastore-online`**, managed from `~/dev/ops` (`ops put fis CF_API_TOKEN`). The Cloudflare token is named `fis-prd` and needs:
+
+| Scope | Level | Why |
+|---|---|---|
+| Workers Scripts — Edit | Account | deploys both workers, incl. the MCP Durable Object and the cron trigger |
+| D1 — Edit | Account | `wrangler d1 migrations apply --remote` |
+| Workers R2 Storage — Edit | Account | the `IDEA_BUCKET` binding |
+| Account Settings — Read | Account | account resolution |
+| Workers Routes — Edit | Zone `freeideastore.online` | both workers use `custom_domain = true` |
+
+Do not add IP filtering: GitHub Actions runners have dynamic addresses.
+
+**If a run fails with "necessary to set a CLOUDFLARE_API_TOKEN":** the org secret is missing or empty — the env var is being set to an unresolved `secrets.CF_API_TOKEN`. An invalid token and an absent one look identical here. Writing org secrets needs `admin:org` on the active `gh` account:
+
+```bash
+gh auth refresh -h github.com -s admin:org
+cd ~/dev/ops && ./bin/ops push fis CF_API_TOKEN gh freeideastore-online
+```
+
+A `403` on `gh secret list --org` means a missing token scope, not a missing secret.
+
 Legacy Doppler path (no longer active — the `pas` project was removed from the workspace):
 
 ```bash
