@@ -157,6 +157,65 @@ export const PUBLICATION_POLICY = {
 } as const;
 
 /**
+ * The size a chapter should be to earn its own page.
+ *
+ * This is topic-based authoring: a page is one topic that completely answers one
+ * question, not a formatting unit. The band below is where that tradition lands
+ * — Wikipedia's WP:SIZERULE divides above ~8,000 words of readable prose and
+ * declines to divide below ~1,500 on length alone; technical book chapters run
+ * 3,000–8,000; documentation pages run 500–3,000 with an in-page table of
+ * contents. A research chapter sits at the lower end of that because it is read
+ * to be checked rather than read straight through.
+ *
+ * Both edges matter, and only having one is how the corpus got where it is:
+ *
+ * - Without a FLOOR, chapters become paragraphs. Every idea in the store
+ *   currently averages 78–255 words per chapter, so the entire corpus is a
+ *   paragraph-per-page waiting to happen.
+ * - Without a CEILING, a chapter grows without limit and the reader gets one
+ *   endless page.
+ *
+ * Depth below chapter level belongs in `###` sub-sections, which render as
+ * in-page anchors. Never paginate below a chapter — that is what turns reading
+ * into navigating between paragraphs.
+ *
+ * A document grows by chapters getting deeper and then SPLITTING at the ceiling,
+ * never by adding more thin chapters. That is what makes depth unbounded (#16)
+ * without fragmenting it.
+ */
+export const CHAPTER_SIZE = {
+  /** Below this a chapter cannot stand alone — merge it into a neighbour. */
+  floorWords: 500,
+  /** The band a chapter should live in. */
+  targetMinWords: 800,
+  targetMaxWords: 3000,
+  /** Above this a chapter has become two topics — split it. */
+  ceilingWords: 4000,
+} as const;
+
+export type ChapterVerdict = 'merge' | 'thin' | 'ok' | 'split';
+
+/**
+ * Per-chapter sizing, so the shape of a document is a fact rather than an
+ * impression. `isPaginated` only reports a MEAN, which hides the distribution
+ * that actually matters: a document can clear the mean while half its chapters
+ * are paragraphs.
+ */
+export function chapterHealth(markdown: string, documentTitle = '') {
+  return ideaChapters(markdown, documentTitle).map((chapter) => {
+    // `chapter.markdown` carries its own `## Title` line. Counting that would
+    // credit every chapter with its heading, which flatters the shortest ones
+    // most — exactly the chapters this is meant to catch.
+    const words = wordCount(chapter.markdown.replace(/^##[^\n]*\n?/, ''));
+    let verdict: ChapterVerdict = 'ok';
+    if (words < CHAPTER_SIZE.floorWords) verdict = 'merge';
+    else if (words < CHAPTER_SIZE.targetMinWords) verdict = 'thin';
+    else if (words > CHAPTER_SIZE.ceilingWords) verdict = 'split';
+    return { id: chapter.id, title: chapter.title, words, verdict };
+  });
+}
+
+/**
  * Metrics stored on the idea row so the catalog can evaluate
  * PUBLICATION_POLICY exactly. Bodies live in R2, so SQL cannot measure the
  * document itself — it reads these columns instead of guessing from text.

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendToIdeaSection,
+  chapterHealth,
+  CHAPTER_SIZE,
   ideaChapterById,
   ideaChapters,
   ideaSectionList,
@@ -434,5 +436,50 @@ describe('structural section editing', () => {
     ]);
     expect(next).not.toMatch(/\n{3,}/);
     expect(next).toContain('> Lead-in.');
+  });
+});
+
+describe('chapterHealth', () => {
+  const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
+  const doc = (...chapters: Array<[string, number]>) =>
+    chapters.map(([title, n]) => `## ${title}\n\n${words(n)}`).join('\n\n');
+
+  it('calls a paragraph-sized chapter a merge candidate', () => {
+    const [only] = chapterHealth(doc(['Thin', 226]));
+    expect(only?.words).toBe(226);
+    expect(only?.verdict).toBe('merge');
+  });
+
+  it('separates "too small to stand alone" from "merely under target"', () => {
+    // Both are below target, but only one should be dissolved into a neighbour.
+    // Collapsing these into a single "too short" would either destroy chapters
+    // that just need writing, or leave paragraph-pages in place.
+    const [merge, thin] = chapterHealth(doc(['Merge', 400], ['Thin', 700]));
+    expect(merge?.verdict).toBe('merge');
+    expect(thin?.verdict).toBe('thin');
+  });
+
+  it('calls an oversized chapter a split candidate', () => {
+    const [big] = chapterHealth(doc(['Huge', CHAPTER_SIZE.ceilingWords + 1]));
+    expect(big?.verdict).toBe('split');
+  });
+
+  it('accepts a chapter inside the band', () => {
+    const [ok] = chapterHealth(doc(['Good', 1200]));
+    expect(ok?.verdict).toBe('ok');
+  });
+
+  it('does not count the heading toward the body', () => {
+    // A heading credited to the body flatters the shortest chapters most, which
+    // are the ones this exists to catch.
+    const [c] = chapterHealth(doc(['A Very Long Chapter Heading Indeed', 100]));
+    expect(c?.words).toBe(100);
+  });
+
+  it('reports the distribution a mean would hide', () => {
+    // isPaginated() only sees an average. A document can clear it while half its
+    // chapters are paragraphs — which is the shape the corpus is actually in.
+    const health = chapterHealth(doc(['Fat', 3000], ['Para', 100], ['Para2', 100]));
+    expect(health.map((c) => c.verdict)).toEqual(['ok', 'merge', 'merge']);
   });
 });
