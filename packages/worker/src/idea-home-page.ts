@@ -1,6 +1,6 @@
 import { AUTH_PREFIX } from './auth';
 import { contributionCount, contributionsByIdea, derivedIdeas, ideaBody, ideaById } from './data';
-import { escapeHtml, htmlResponse, SECURITY_HEADERS } from './http';
+import { escapeHtml, FIELD_LIMITS, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { sourcesSection } from './idea-sources-section';
 import { ideaHomeScripts } from './idea-home-scripts';
@@ -110,7 +110,7 @@ ${
       <div id="comment-list" class="comment-list"><p class="comment-empty">Loading comments...</p></div>
       <p id="comment-auth" class="auth-callout"><a href="${AUTH_PREFIX}/start?provider=github&return_to=/ideas/${escapeHtml(idea.id)}/">Sign in with GitHub</a> or <a href="${AUTH_PREFIX}/start?provider=google&return_to=/ideas/${escapeHtml(idea.id)}/">Google</a> to comment and react.</p>
       <form id="comment-form" class="comment-form">
-        <label>Comment<textarea name="body" required minlength="3" maxlength="2000" placeholder="Add a useful comment, question, critique, or note."></textarea></label>
+        <label>Comment<textarea name="body" required minlength="3" maxlength="${FIELD_LIMITS.contribution}" placeholder="Add a useful comment, question, critique, or note."></textarea></label>
         <button class="button" type="submit">Post comment</button>
         <p id="comment-status" class="comment-status">Sign in to post public comments.</p>
       </form>
