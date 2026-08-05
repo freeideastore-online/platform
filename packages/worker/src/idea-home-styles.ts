@@ -1,3 +1,4 @@
+import { brandCss } from './brand';
 import { MARKDOWN_CSS } from './markdown';
 import { readerSettingsCss } from './reader-settings';
 import { navCss } from './site-nav';
@@ -10,7 +11,7 @@ body{background:var(--page);color:var(--ink);font-family:Manrope,system-ui,sans-
 a{color:inherit;text-decoration:none}
 .book-topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.5rem .95rem;backdrop-filter:blur(14px)}
 .top-brand{display:flex;align-items:center;gap:.65rem;min-width:0;font-weight:900;margin-right:auto}.top-brand strong{display:block;max-width:min(60vw,540px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.logo{display:grid;flex:0 0 auto;width:34px;height:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9);font-weight:900}
+${brandCss()}
 .topbar-nav{display:flex;align-items:center;gap:.15rem}.topbar-nav a{padding:.4rem .6rem;border-radius:6px;color:var(--muted);font-size:.78rem;font-weight:700}.topbar-nav a:hover{background:var(--mark);color:var(--accent-strong)}.book-shell{display:grid;grid-template-columns:292px minmax(0,1fr) 300px;min-height:calc(100vh - 62px)}
 .book-sidebar{position:sticky;top:62px;height:calc(100vh - 62px);overflow:auto;border-right:1px solid var(--line);background:var(--panel);padding:1rem}
 .book-search{position:relative;margin:.75rem 0}.book-search input{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--panel-alt);color:var(--ink);font:inherit;font-size:.8rem;padding:.58rem .65rem}.book-search input:focus{border-color:var(--hover-line);outline:2px solid var(--focus)}

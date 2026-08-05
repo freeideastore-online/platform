@@ -1,3 +1,4 @@
+import { brandHead, brandLockup } from './brand';
 import { escapeHtml, SECURITY_HEADERS } from './http';
 import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
 import { THEME_BOOT, THEME_CSS, THEME_SCRIPT } from './theme';
@@ -408,7 +409,7 @@ export function renderConsolePage(request: Request) {
 <title>Console - FreeIdeaStore</title>
 <meta name="description" content="Create, draft, and attribute new FreeIdeaStore ideas with GitHub or Google sign-in.">
 <link rel="canonical" href="${escapeHtml(origin)}/console/">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+${brandHead()}
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 ${THEME_BOOT}
 <style>
@@ -426,7 +427,7 @@ ${navCss(840)}
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><span id="account-slot"></span><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
+<header>${brandLockup()}<nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><span id="account-slot"></span><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
 <main class="shell">
   <div class="eyebrow">Creation console</div><h1>Put an idea into the refinery.</h1>
   <section class="panel work-panel">

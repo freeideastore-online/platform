@@ -1,3 +1,4 @@
+import { brandHead, brandLockup } from './brand';
 import { contributorByHandle, contributionsByProfile, ideasByProfile, listContributors } from './data';
 import { escapeHtml, SECURITY_HEADERS } from './http';
 import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
@@ -61,7 +62,7 @@ function renderContributorShell(title: string, body: string, request: Request) {
 <title>${escapeHtml(title)} - FreeIdeaStore</title>
 <meta name="description" content="FreeIdeaStore contributor reputation, ideas, critiques, support, pivots, and research activity.">
 <link rel="canonical" href="${escapeHtml(new URL(request.url).origin)}${escapeHtml(new URL(request.url).pathname)}">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+${brandHead()}
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 ${THEME_BOOT}
 <style>
@@ -74,7 +75,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem
 ${navCss(860)}
 </style>
 </head>
-<body><header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header><main class="shell">${body}</main>${THEME_SCRIPT}${NAV_SCRIPT}</body></html>`, {
+<body><header>${brandLockup()}<nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header><main class="shell">${body}</main>${THEME_SCRIPT}${NAV_SCRIPT}</body></html>`, {
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'public, max-age=60' },
   });
 }

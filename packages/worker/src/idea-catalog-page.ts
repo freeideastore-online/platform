@@ -1,3 +1,4 @@
+import { brandHead, brandLockup, brandCss } from './brand';
 import { listIdeas } from './data';
 import { escapeHtml, htmlResponse } from './http';
 import { chapterId } from './markdown';
@@ -19,6 +20,7 @@ export async function renderIdeasCatalogPage(env: Env, request: Request) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Idea Publications - FreeIdeaStore</title>
+${brandHead()}
 <meta name="description" content="Dynamic FreeIdeaStore idea publications rendered from the platform database.">
 <link rel="canonical" href="${escapeHtml(new URL(request.url).origin)}/ideas/">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -29,7 +31,7 @@ ${THEME_CSS}
 body{font-family:Manrope,system-ui,sans-serif;line-height:1.62}
 a{color:inherit;text-decoration:none}
 header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}
-.brand{display:flex;align-items:center;gap:.6rem;font-weight:900;margin-right:auto}.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9)}
+${brandCss()}
 nav{display:flex;align-items:center;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}
 .shell{max-width:1120px;margin:0 auto;padding:2rem 1.25rem 4rem}.crumb{color:var(--accent-strong);font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem}
 h1{font-family:Fraunces,serif;font-size:clamp(2.1rem,5vw,4.4rem);line-height:.96;margin-bottom:.75rem}.lead{max-width:760px;color:var(--muted)}
@@ -39,7 +41,7 @@ ${navCss(820)}
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
+<header>${brandLockup()}<nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav><button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
 <main class="shell">
   <div class="crumb">Dynamic publications</div>
   <h1>Idea publications.</h1>

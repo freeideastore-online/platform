@@ -1,3 +1,4 @@
+import { brandHead, brandLockup } from './brand';
 import { AUTH_PREFIX } from './auth';
 import { contributionCount, contributionsByIdea, derivedIdeas, ideaBody, ideaById } from './data';
 import { escapeHtml, FIELD_LIMITS, htmlResponse, SECURITY_HEADERS } from './http';
@@ -58,6 +59,7 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${escapeHtml(idea.title)} - FreeIdeaStore</title>
+${brandHead()}
 <meta name="description" content="${escapeHtml(idea.summary)}">
 <link rel="canonical" href="${escapeHtml(new URL(request.url).origin)}/ideas/${escapeHtml(idea.id)}/">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -66,7 +68,7 @@ ${ideaHomeStyles()}
 </head>
 <body>
 <header class="book-topbar">
-  <div class="top-brand"><a href="/" class="logo" aria-label="Home">FI</a><a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
+  <div class="top-brand">${brandLockup({ compact: true })}<a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
   <nav id="site-nav" class="topbar-nav site-nav"><a href="/">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a></nav>
   <button class="theme-toggle" type="button" data-reader-theme-toggle aria-label="Toggle theme" title="Toggle theme">&#9790;</button>
   ${NAV_TOGGLE}

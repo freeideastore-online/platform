@@ -1,3 +1,4 @@
+import { brandHead, brandLockup, brandCss } from './brand';
 import { ideaBody, ideaById } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
 import { ideaChapterById, ideaChapters, isPaginated, MARKDOWN_CSS, markdownHeadings, markdownToHtml } from './markdown';
@@ -45,6 +46,7 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${escapeHtml(chapter.title)} - ${escapeHtml(idea.title)} - FreeIdeaStore</title>
+${brandHead()}
 <meta name="description" content="${escapeHtml(chapter.excerpt || idea.summary)}">
 <link rel="canonical" href="${escapeHtml(canonical)}">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -56,7 +58,7 @@ body{background:var(--page);color:var(--ink);font-family:Manrope,system-ui,sans-
 a{color:inherit;text-decoration:none}
 .book-topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.5rem .95rem;backdrop-filter:blur(14px)}
 .top-brand{display:flex;align-items:center;gap:.65rem;min-width:0;font-weight:900;margin-right:auto}.top-brand strong{display:block;max-width:min(60vw,540px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.logo{display:grid;flex:0 0 auto;width:34px;height:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9);font-weight:900}
+${brandCss()}
 .topbar-nav{display:flex;align-items:center;gap:.15rem}.topbar-nav a{padding:.4rem .6rem;border-radius:6px;color:var(--muted);font-size:.78rem;font-weight:700}.topbar-nav a:hover{background:var(--mark);color:var(--accent-strong)}.book-shell{display:grid;grid-template-columns:292px minmax(0,1fr) 238px;min-height:calc(100vh - 52px)}
 .book-sidebar{position:sticky;top:52px;height:calc(100vh - 52px);overflow:auto;border-right:1px solid var(--line);background:var(--panel);padding:1rem}
 .book-search{position:relative;margin:.75rem 0}.book-search input{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--panel-alt);color:var(--ink);font:inherit;font-size:.8rem;padding:.58rem .65rem}.book-search input:focus{border-color:var(--hover-line);outline:2px solid var(--focus)}
@@ -84,7 +86,7 @@ ${readerSettingsCss()}
 </head>
 <body>
 <header class="book-topbar">
-  <div class="top-brand"><a href="/" class="logo" aria-label="Home">FI</a><a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
+  <div class="top-brand">${brandLockup({ compact: true })}<a href="/ideas/${escapeHtml(idea.id)}/" aria-label="${escapeHtml(idea.title)}"><strong>${escapeHtml(idea.title)}</strong></a></div>
   <nav id="site-nav" class="topbar-nav site-nav"><a href="/">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a></nav>
   <button class="theme-toggle" type="button" data-reader-theme-toggle aria-label="Toggle theme" title="Toggle theme">&#9790;</button>
   ${NAV_TOGGLE}

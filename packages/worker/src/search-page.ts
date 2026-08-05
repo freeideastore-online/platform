@@ -1,3 +1,4 @@
+import { brandHead, brandLockup, brandCss } from './brand';
 import { escapeHtml, htmlResponse } from './http';
 import { search } from './search';
 import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
@@ -48,7 +49,7 @@ export async function renderSearchPage(env: Env, request: Request) {
 <title>${query ? `${escapeHtml(query)} — Search` : 'Search'} - FreeIdeaStore</title>
 <meta name="description" content="Search FreeIdeaStore idea documents and research entries.">
 <meta name="robots" content="noindex">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+${brandHead()}
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 ${THEME_BOOT}
 <style>
@@ -57,7 +58,7 @@ ${THEME_CSS}
 body{background:var(--page);color:var(--ink);font-family:Manrope,system-ui,sans-serif;line-height:1.6}
 a{color:inherit;text-decoration:none}
 header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}
-.brand{display:flex;align-items:center;gap:.6rem;font-weight:900;margin-right:auto}.logo{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;box-shadow:inset 0 -4px 0 rgba(245,158,11,.9)}
+${brandCss()}
 nav{display:flex;align-items:center;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}
 .shell{max-width:860px;margin:0 auto;padding:2rem 1.25rem 4rem}
 h1{font-family:Fraunces,serif;font-size:clamp(1.8rem,4vw,2.8rem);line-height:1.05;margin-bottom:.75rem}
@@ -79,7 +80,7 @@ ${navCss(760)}
 </head>
 <body>
 <header>
-  <a href="/" class="brand"><span class="logo">FI</span><span>FreeIdeaStore</span></a>
+  ${brandLockup()}
   <nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav>
   <button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>
   ${NAV_TOGGLE}

@@ -2808,3 +2808,26 @@ describe('mobile navigation', () => {
     expect(html).toContain('</nav><span id="account-slot"></span>');
   });
 });
+
+describe('branding', () => {
+  it('serves one brand mark and favicon on every rendered page', async () => {
+    // Worker-rendered routes only; '/' is a static asset served from store/.
+    const paths = ['/ideas/', '/search', '/contributors/serge-the-dev/', '/ideas/asx-filings-analyst/'];
+    for (const path of paths) {
+      const html = await (await worker.fetch(new Request(`https://fis.test${path}`), env())).text();
+      // The mark is a glyph, never the old "FI" initials — they are illegible at 16px.
+      expect(html, `${path} mark`).toContain('class="brand-mark"');
+      expect(html, `${path} initials`).not.toContain('>FI<');
+      // Every page links the favicon. Idea and catalog pages previously did not.
+      expect(html, `${path} favicon`).toContain('rel="icon" type="image/svg+xml" href="/favicon.svg"');
+      expect(html, `${path} theme-color`).toContain('name="theme-color"');
+    }
+  });
+
+  it('keeps the favicon artwork identical to the header mark', async () => {
+    const { faviconSvg, brandMark } = await import('./brand');
+    const shapes = (svg: string) => (svg.match(/d="[^"]+"|cx="\d+"/g) || []).sort();
+    // Same paths in both, so the tab icon and the header can never drift apart.
+    expect(shapes(faviconSvg())).toEqual(shapes(brandMark()));
+  });
+});

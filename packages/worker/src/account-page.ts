@@ -1,3 +1,4 @@
+import { brandHead, brandLockup } from './brand';
 import { contributorByHandle, contributionsByProfile, ideasByProfile } from './data';
 import { AUTH_PREFIX, authUserFor } from './auth';
 import { escapeHtml, SECURITY_HEADERS } from './http';
@@ -41,7 +42,7 @@ export async function renderAccountPage(env: Env, request: Request) {
 <title>Profile - FreeIdeaStore</title>
 <meta name="description" content="Manage your FreeIdeaStore account, public profile, appearance, and sign-in state.">
 <link rel="canonical" href="${escapeHtml(new URL(request.url).origin)}/profile/">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+${brandHead()}
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 ${THEME_BOOT}
 <style>
@@ -51,7 +52,7 @@ ${navCss(760)}
 </style>
 </head>
 <body>
-<header><a href="/" class="brand"><span class="mark">FI</span><span>FreeIdeaStore</span></a><nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a class="account-link" href="/console/">Sign in</a>`}<button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
+<header>${brandLockup()}<nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a class="account-link" href="/console/">Sign in</a>`}<button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
 <main class="shell">
   ${
     user
