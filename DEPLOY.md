@@ -64,14 +64,15 @@ env:
 
 Do not add IP filtering: GitHub Actions runners have dynamic addresses.
 
-**If a run fails with "necessary to set a CLOUDFLARE_API_TOKEN":** the org secret is missing or empty — the env var is being set to an unresolved `secrets.CF_API_TOKEN`. An invalid token and an absent one look identical here. Writing org secrets needs `admin:org` on the active `gh` account:
+**If a run fails with "necessary to set a CLOUDFLARE_API_TOKEN":** the secret is missing or empty — the env var is being set to an unresolved `secrets.CF_API_TOKEN`. An invalid token and an absent one look identical here. Re-place it from `~/dev/ops`:
 
 ```bash
-gh auth refresh -h github.com -s admin:org
-cd ~/dev/ops && ./bin/ops push fis CF_API_TOKEN gh freeideastore-online
+cd ~/dev/ops && ./bin/ops push fis CF_API_TOKEN gh freeideastore-online/platform
 ```
 
-A `403` on `gh secret list --org` means a missing token scope, not a missing secret.
+FIS holds these at **repo** level (`freeideastore-online/platform`), not org level — one repo in the org deploys, and a repo secret needs only `repo` scope. Use `gh <owner/repo>` for that; `gh-org <org>` is the org-level form.
+
+To check rather than guess, `./bin/ops verify fis` reports whether the secret GitHub actually holds matches what `inventory.yaml` claims. That needs `admin:org` on the active `gh` account (granted 2026-08-05); a `403` on `gh secret list --org` means a missing token scope, not a missing secret.
 
 Legacy Doppler path (no longer active — the `pas` project was removed from the workspace):
 
