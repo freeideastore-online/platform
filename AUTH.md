@@ -47,6 +47,7 @@ password database — the providers are still GitHub and Google.
 | Google callback | `https://freeideastore.online/.fis/auth/callback/google` | registered with Google |
 | Session signing key | 64-hex, HS256 | Worker secret on `freeideastore` **and** `freeideastore-mcp` |
 | Identity rows | `identities` table | D1 `freeideastore`, migration `0016_identities.sql` |
+| Legacy profile claims | `profiles.claim_email` | D1 `freeideastore`, migration `0018_profile_claims.sql` |
 
 Both OAuth clients belong to FreeIdeaStore, not to a personal account and not to another
 store. The Google client asks only for `openid email profile`; all three scopes are
@@ -160,16 +161,17 @@ returning contributor is issued a different handle, their own history silently d
 them — nothing errors, the work simply stops being theirs. So:
 
 - A new identity prefers the plain slug of its GitHub login, or of the local part of its
-  Google email address. That is exactly what the FreeAppStore-era `normalizeAuthUser` did,
-  which is what makes a pre-cutover contributor land back on the profile they already had.
+  Google email address. That is exactly what the FreeAppStore-era `normalizeAuthUser` did.
 - Creating an identity also does an `INSERT OR IGNORE` into `profiles`, so the handle is
   claimed in both tables at once. `OR IGNORE` means an existing FreeAppStore-era profile row
   is **adopted** rather than overwritten — that adoption is the migration path for existing
-  contributors.
-- A handle already held by *another identity* is never reassigned. A second person whose
-  login also slugs to `alice` gets `alice-github` (provider-qualified, because that says
-  something about who the account is, where `alice-2` says nothing), and only then
-  `alice-2`, `alice-3`, and so on up to 50 before `upsertIdentity` gives up and throws.
+  contributors. Which of the two things that statement does is decided entirely by which
+  branch picked the handle, and that is the only control over it.
+- A handle already held by *another identity, or by any `profiles` row*, is never
+  reassigned. A second person whose login also slugs to `alice` gets `alice-github`
+  (provider-qualified, because that says something about who the account is, where `alice-2`
+  says nothing), and only then `alice-2`, `alice-3`, and so on up to 50 before
+  `upsertIdentity` gives up and throws.
 
 ## Account linking
 
@@ -198,14 +200,74 @@ no unlink path short of manual SQL; and an email address that a provider recycle
 Workspace does this, `@gmail.com` does not) would let a new owner inherit the previous
 owner's profile.
 
-Note that `availableHandle` checks the `identities` table only. A handle that exists in
-`profiles` with no identity behind it is precisely a pre-cutover or anonymous profile, and
-being claimable is the intended behaviour, not a gap.
+## Claiming a legacy profile
 
-Anonymous contribution still works and is unaffected: `profileFor` falls back to the
-`x-idea-handle` request header, and then to `guest`, when there is no session. That header is
-only trusted when the caller is unauthenticated — a signed-in caller always gets their
-verified handle, so attribution cannot be spoofed by sending the header.
+**This section used to say the opposite, and that was [#42](https://github.com/freeideastore-online/platform/issues/42).**
+It said `availableHandle` checked `identities` only, and that a handle existing in
+`profiles` with no identity behind it was claimable by design. It was claimable by anyone.
+A pre-cutover contributor has a `profiles` row and no identity row until they sign in again,
+so their handle read as free; the first GitHub or Google account whose login slugged to it
+was issued the handle, the `INSERT OR IGNORE` then adopted their profile row, and because
+authorization follows the handle — `ownedIdea` compares `ideas.created_by` against
+`contributorByHandle(user.handle)` — the stranger inherited their ideas and edit rights.
+Nothing distinguished the rightful owner from someone who picked a matching username.
+
+So **a handle is free only when neither table holds it.** `availableHandle` probes both, and
+every existing profile is reserved. Adoption still happens, but only for a caller carrying
+proof, and there are exactly two kinds of proof. `upsertIdentity` tries them in order:
+
+1. `linkedHandle` — an existing **identity** with the same email address, verified on both
+   sides. This is the account-linking rule above.
+2. `claimableProfileHandle` — a **profile** whose `claim_email` (migration `0018`) matches
+   the incoming verified address, and which still has no identity behind it.
+
+Only then does `availableHandle` run, and by then it can only return a handle nothing owns.
+
+`profiles.claim_email` is **NULL for every row that existed before 0018, and must stay that
+way unless a human sets it.** Nothing recorded an address against a profile before now, and
+guessing one — from the handle, from a GitHub login that resembles it, from an address on a
+contribution — would rebuild the defect with a schema column lending it authority. NULL
+means "reserved, and unclaimable by signing in", which is the safe default. `system`,
+`guest` and `fis-mcp` are not people and should keep it forever.
+
+**The claim path for a real legacy owner** is therefore an operator action. Establish who
+they are, then record their verified address, lower-cased to match what
+`oauth-providers.ts` stores:
+
+```sql
+UPDATE profiles SET claim_email = 'simon@example.com' WHERE handle = 'simon';
+```
+
+Their next sign-in with a provider that verifies that address binds the new identity to the
+existing profile, and their work is theirs again. The claim is single-use: once an identity
+holds the handle, `NOT EXISTS (... identities ...)` closes the door, and a second provider
+account belonging to the same person is picked up earlier by `linkedHandle` instead.
+
+**A colliding new user is suffixed, not refused.** Someone whose GitHub login genuinely
+slugs to a reserved handle signs up normally and gets `simon-github`, then `simon-2`. Failing
+the sign-in instead would surface at the OAuth callback as `provider_error`, a dead end with
+no self-serve recovery, in order to protect a profile the caller has no connection to;
+suffixing is also already what happens when two live identities collide, so this is one rule
+rather than two.
+
+Anonymous contribution still works: `profileFor` falls back to the `x-idea-handle` request
+header, and then to `guest`, when there is no session. That header is only trusted when the
+caller is unauthenticated — a signed-in caller always gets their verified handle. It is
+additionally **refused when it names a handle a registered identity holds**, falling back to
+`guest`: sign-in is not the only place a profile gets selected by name, and without that
+check a stranger could file ideas under any contributor's profile simply by asserting the
+header. It still falls back rather than erroring because the MCP client sends this header on
+every call, signed in or not, defaulting it to `fis-mcp`.
+
+> **Not fixed by #42, and still open: the FreeAppStore fallback.** `authUserFor` falls
+> through to `/v1/auth/me` for a token that is not FIS-minted, and `normalizeAuthUser` builds
+> the handle by slugging whatever login that returns — with no identity row involved, so none
+> of the guards above are on that path. A FreeAppStore account whose login slugs to a legacy
+> handle still resolves to that profile and still passes `ownedIdea`. The window closes on
+> its own when the last pre-cutover session expires (30 days from the 2026-08-13 cutover),
+> and [#38](https://github.com/freeideastore-online/platform/issues/38) deletes the path
+> outright. It cannot be closed by tightening it, because honouring pre-cutover handles is
+> precisely what it is for.
 
 ## Secrets and configuration
 

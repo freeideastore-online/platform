@@ -23,19 +23,36 @@ export async function identityById(env: Env, id: string): Promise<IdentityRow | 
 }
 
 /**
- * Pick a handle for a brand-new identity.
+ * Pick a handle for a brand-new identity that no one has proven a claim to.
  *
- * The plain handle is preferred, because a contributor who was known as `alice`
- * in the FreeAppStore era must land back on `alice` and rejoin their existing
- * profile. It is only varied when another *identity* already holds it, which —
- * by the time this runs — means a different person: `upsertIdentity` calls this
- * only after the verified-email link found nothing, so the two accounts have no
- * evidence connecting them and sharing a handle would merge two people's work.
+ * A handle is free only when NEITHER table holds it. Checking `identities`
+ * alone was #42: a pre-cutover contributor has a `profiles` row and no identity
+ * row until they sign in again, so their handle read as free, and the first
+ * stranger whose login slugged to it was issued the handle — after which the
+ * `INSERT OR IGNORE INTO profiles` below adopted their profile row and
+ * `ownedIdea` handed over their ideas, because authorization follows the
+ * handle. Reading both tables is what makes "unclaimed" mean unclaimed rather
+ * than merely "no identity row yet".
+ *
+ * This function no longer has any way to return a handle someone else's work
+ * hangs off, which means it can no longer perform the migration either. That is
+ * deliberate: rejoining an existing profile is now exclusively the job of the
+ * two proof-carrying lookups `upsertIdentity` runs first — `linkedHandle` for a
+ * verified email shared with an existing identity, `claimableProfileHandle` for
+ * a verified email recorded against the legacy profile. By the time control
+ * reaches here there is no evidence connecting this account to anything, and
+ * the only safe answer is a handle nothing else owns.
  */
 async function availableHandle(env: Env, profile: ProviderProfile): Promise<string> {
   const taken = async (handle: string) =>
     Boolean(
-      await env.DB.prepare('SELECT 1 FROM identities WHERE handle = ?').bind(handle).first(),
+      await env.DB.prepare(
+        `SELECT 1 FROM identities WHERE handle = ?
+         UNION ALL
+         SELECT 1 FROM profiles WHERE handle = ?`,
+      )
+        .bind(handle, handle)
+        .first(),
     );
   if (!(await taken(profile.handle))) return profile.handle;
   // Qualify by provider before falling back to counting: `alice-github` says
@@ -78,6 +95,46 @@ async function linkedHandle(env: Env, profile: ProviderProfile): Promise<string 
     `SELECT handle FROM identities
      WHERE email = ? AND email_verified = 1
      ORDER BY created_at ASC, id ASC LIMIT 1`,
+  )
+    .bind(profile.email)
+    .first<{ handle: string }>();
+  return match?.handle ?? null;
+}
+
+/**
+ * The handle of a legacy profile this person has a recorded claim to, or null.
+ *
+ * This is the door in the wall `availableHandle` now puts around every existing
+ * profile (#42, migration 0018). Reserving legacy handles stops a stranger
+ * walking onto one; without a way back in it would also strand the genuine
+ * pre-cutover contributor on `alice-github`, detached from the ideas and
+ * contributions filed under `profile-alice`. So a profile with no identity
+ * behind it is adoptable — but only by an identity that arrives carrying the
+ * verified address an operator has already recorded against it.
+ *
+ * The security argument is `linkedHandle`'s, unchanged: BOTH sides must be
+ * trustworthy. `profiles.claim_email` is written by a human who established who
+ * the owner is, never derived from a handle or a login; and the incoming
+ * address must be one the *provider* asserts is verified, which is checked here
+ * and again by the caller. Drop either half and this becomes a more convenient
+ * version of the takeover it exists to prevent.
+ *
+ * `NOT EXISTS (... identities ...)` is the third condition and it is what makes
+ * the claim single-use. Once an identity holds the handle, the profile has an
+ * owner who signs in, and any later address match is a different person — or
+ * the same person's second provider account, which `linkedHandle` has already
+ * handled by then, because `upsertIdentity` runs it first.
+ */
+async function claimableProfileHandle(
+  env: Env,
+  profile: ProviderProfile,
+): Promise<string | null> {
+  if (!profile.emailVerified || !profile.email) return null;
+  const match = await env.DB.prepare(
+    `SELECT p.handle FROM profiles p
+     WHERE p.claim_email = ?
+       AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.handle = p.handle)
+     ORDER BY p.created_at ASC, p.id ASC LIMIT 1`,
   )
     .bind(profile.email)
     .first<{ handle: string }>();
@@ -139,11 +196,16 @@ export async function upsertIdentity(env: Env, profile: ProviderProfile): Promis
     return existing;
   }
 
-  // Adopt the handle of an identity already proven to be the same person, and
-  // only mint a fresh one when there is no such proof. `availableHandle` cannot
-  // do this itself: it varies the handle precisely to keep two *people* apart,
-  // which is the opposite question.
-  const handle = (await linkedHandle(env, profile)) ?? (await availableHandle(env, profile));
+  // Three lookups, in descending order of how strong the evidence is that this
+  // new account belongs to someone already here. Only the first two may return
+  // a handle that other work hangs off, and both demand a verified email; the
+  // third can only ever return a handle nothing owns. `availableHandle` cannot
+  // do the adopting itself, because it varies the handle precisely to keep two
+  // *people* apart, which is the opposite question.
+  const handle =
+    (await linkedHandle(env, profile)) ??
+    (await claimableProfileHandle(env, profile)) ??
+    (await availableHandle(env, profile));
   const id = `identity-${crypto.randomUUID()}`;
   await env.DB.prepare(
     `INSERT INTO identities (id, provider, provider_user_id, handle, display_name, avatar_url, email, email_verified)
@@ -164,6 +226,14 @@ export async function upsertIdentity(env: Env, profile: ProviderProfile): Promis
   // Make sure the profile row exists so the handle is claimed in both tables at
   // once. INSERT OR IGNORE means an existing FreeAppStore-era profile is adopted
   // rather than overwritten — that adoption is the whole migration path.
+  //
+  // Which branch above chose the handle decides which of those two things this
+  // statement does, and that is now the only control over it. A handle from
+  // `availableHandle` is held by neither table, so this inserts a fresh row. A
+  // handle from `linkedHandle` or `claimableProfileHandle` is held by a row
+  // that already exists, so this ignores and the identity joins it. Before #42
+  // `availableHandle` could also land on an occupied handle, and this same
+  // statement then silently handed a stranger someone else's profile.
   await env.DB.prepare(
     `INSERT OR IGNORE INTO profiles (id, handle, display_name, reputation, badges_json)
      VALUES (?, ?, ?, 0, '[]')`,
