@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { fisApi } from "./fis-api.js";
+import { DOCUMENT_CHARS, DOCUMENT_LIMIT_NOTE } from "./limits.js";
 import { CONTRIBUTION_KINDS, REACTION_TYPES, STAGES, text, type Env, type McpProps } from "./mcp-types.js";
 
 export function registerCollaborationTools(server: McpServer, env: Env, getProps: () => McpProps) {
@@ -16,7 +17,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
       preview: z.string().optional(),
       next_step: z.string().optional(),
       risk: z.string().optional(),
-      body: z.string().optional().describe("Optional markdown body for the idea page."),
+      body: z.string().max(DOCUMENT_CHARS).optional().describe(`Optional markdown body for the idea page. ${DOCUMENT_LIMIT_NOTE}`),
       source_url: z.string().optional(),
       contributor_handle: z.string().optional().describe("Optional profile handle to attribute the created idea through the current API fallback."),
     },
@@ -77,7 +78,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
       idea_id: z.string().min(2).describe("The parent idea to derive from."),
       title: z.string().min(3).max(80).optional().describe("Title for the fork. Defaults to the parent title plus '(derived)'."),
       summary: z.string().min(10).max(1000).optional(),
-      body: z.string().max(200000).optional().describe("Optional replacement body. Defaults to a copy of the parent body."),
+      body: z.string().max(DOCUMENT_CHARS).optional().describe(`Optional replacement body. Defaults to a copy of the parent body. ${DOCUMENT_LIMIT_NOTE}`),
       stage: z.enum(STAGES).optional(),
       category: z.string().max(60).optional(),
       contributor_handle: z.string().optional().describe("Optional profile handle to attribute the derived idea. This handle owns the fork."),

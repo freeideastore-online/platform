@@ -85,7 +85,7 @@ MCP provisioning follows the same cheap path through `packages/mcp`:
 
 - `free_idea_template` returns the one-page free idea template.
 - `list_idea_skills`, `get_idea_skill`, and `apply_idea_skill` expose the published interviewing, critique, competitor-finding, research, refinement, pivot, and Pro assessment playbooks.
-- `get_idea` reads an existing idea body, metadata, and optional contribution history.
+- `get_idea` reads an idea's metadata, chapter list and document budget (`usage`). It returns **no body by default** — pass `body: 'full'` for the whole document, or `body: 'preamble'` for its lead-in. Contribution history is optional and paged.
 - `create_free_idea` creates a D1/R2-backed idea page.
 - `derive_idea` forks a new idea from an existing one, seeded with the parent body and linked back to the source (open to anyone; you own the fork).
 - `add_idea_contribution` records evidence, risk, pivot, prototype, refinement, or kill-signal notes.
@@ -116,7 +116,7 @@ Claude/Codex user flow:
 2. Complete the browser sign-in opened by the MCP OAuth flow.
 3. Ask the agent to call `create_free_idea` with a useful summary and starting markdown.
 4. Share the returned `https://freeideastore.online/ideas/:id/` URL.
-5. Ask the agent to call `get_idea` before every major edit.
+5. Ask the agent to call `get_idea` before every major edit — it returns the chapter list and the remaining budget; add `body: 'full'` only when the whole document is genuinely needed.
 6. Use `add_idea_contribution` or `propose_idea_refinement` for history, evidence, risks, and alternate directions.
 7. Use `publish_idea_update` when the owner wants the public document to become more complete.
 8. Use `promote_to_pro_candidate` only when the idea deserves ProIdeaStore diligence.
