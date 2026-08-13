@@ -139,9 +139,14 @@ Token lifetime is 30 days (`SESSION_TTL_SECONDS`), matching the cookie's `Max-Ag
 
 ## Identity, profiles, and handle stability
 
-`identities` (migration `0016`) holds `id`, `provider`, `provider_user_id`, `handle`,
-`display_name`, `avatar_url`, and timestamps, with unique indexes on
-`(provider, provider_user_id)` and on `handle`.
+`identities` (migrations `0016` and `0017`) holds `id`, `provider`, `provider_user_id`,
+`handle`, `display_name`, `avatar_url`, `email`, `email_verified`, and timestamps. There is
+one unique index, on `(provider, provider_user_id)`.
+
+**The index on `handle` is deliberately NOT unique**, and re-adding the constraint would
+break account linking — several identities belonging to the same person share one handle on
+purpose. Migration `0017` removed it for exactly that reason; `0016` had it, and that is the
+state to avoid returning to.
 
 **Matching is on the provider's immutable user id** — GitHub's numeric `id`, Google's `sub`
 — never on the login or the email address. People rename their GitHub account and change
@@ -165,6 +170,33 @@ them — nothing errors, the work simply stops being theirs. So:
   login also slugs to `alice` gets `alice-github` (provider-qualified, because that says
   something about who the account is, where `alice-2` says nothing), and only then
   `alice-2`, `alice-3`, and so on up to 50 before `upsertIdentity` gives up and throws.
+
+## Account linking
+
+One person signing in with GitHub and with Google would otherwise get two unrelated
+contributor profiles, because a handle is minted per provider account. That is not
+hypothetical — it happened in production and orphaned 29 items (issue #40).
+
+Before minting a handle for a new identity, `linkedHandle` looks for an existing identity
+carrying the **same email address, verified on both sides**. On a match the new identity
+adopts that handle, so both provider logins resolve to one profile. Oldest match wins, so
+someone with several linkable identities converges on the profile that has been accumulating
+work longest.
+
+**The verification requirement is the entire security boundary.** `email_verified = 1` is
+checked on the stored row *and* on the incoming profile. Linking on an unverified address
+would be an account takeover: register a throwaway account, claim someone else's address,
+sign in, inherit their ideas and contributions. This is why GitHub's address comes from
+`/user/emails` (primary **and** verified) rather than `/user`, which carries no verification
+signal, and why Google's `email_verified` must be literally `true`.
+
+A returning user's `(provider, provider_user_id)` match always wins over any email match, so
+a shared or re-issued address cannot move an established identity onto a different profile.
+
+Two known limits, neither of which has a fix in the product today: linking is one-way, with
+no unlink path short of manual SQL; and an email address that a provider recycles (Google
+Workspace does this, `@gmail.com` does not) would let a new owner inherit the previous
+owner's profile.
 
 Note that `availableHandle` checks the `identities` table only. A handle that exists in
 `profiles` with no identity behind it is precisely a pre-cutover or anonymous profile, and
