@@ -19,9 +19,11 @@ import {
 
   authConfirmPage,
   authErrorPage,
+  authPairedPage,
   authProvider,
   authStartRedirect,
 } from "./oauth-pages.js";
+import { completePairing, readPairing, reauthGuidance, startPairing } from "./reauth.js";
 
 export interface OAuthConfig {
   issuer: string;
@@ -37,17 +39,48 @@ export interface OAuthStore {
   delete(key: string): Promise<void>;
 }
 
-export function createAuthChallenge(config: Pick<OAuthConfig, "issuer">, error?: "invalid_token"): Response {
+/**
+ * The 401 an unauthenticated or expired caller gets.
+ *
+ * The body used to be the two words "Authentication required" — a correct
+ * statement of the problem with nothing in it about the fix, which is what #26
+ * called out: a session died mid-migration and the error told the agent only
+ * that it had died. It now carries the URL a human can open and the name of the
+ * tool an agent can call, and `detail` distinguishes "you never signed in" from
+ * "you signed in and it ran out", because only the second is a re-authorization.
+ *
+ * The `WWW-Authenticate` header is untouched: MCP clients key their own OAuth
+ * flow off it, and that flow already works.
+ */
+export function createAuthChallenge(
+  config: Pick<OAuthConfig, "issuer">,
+  error?: "invalid_token",
+  detail?: "expired" | "invalid",
+): Response {
   const metadata = new URL("/.well-known/oauth-protected-resource/mcp", config.issuer);
   const params = [`resource_metadata="${metadata.toString()}"`];
   if (error) params.push(`error="${error}"`);
-  return new Response("Authentication required", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": `Bearer ${params.join(", ")}`,
-      "Access-Control-Allow-Origin": "*",
+  const description =
+    detail === "expired"
+      ? "Authentication required: this authorization has expired. FreeIdeaStore MCP access tokens live for 24 hours."
+      : detail === "invalid"
+        ? "Authentication required: this token could not be verified."
+        : "Authentication required.";
+  return new Response(
+    JSON.stringify({
+      error: error ?? "unauthorized",
+      error_description: description,
+      ...reauthGuidance(config.issuer),
+    }),
+    {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": `Bearer ${params.join(", ")}`,
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
     },
-  });
+  );
 }
 
 export async function handleOAuthRoute(request: Request, config: OAuthConfig): Promise<Response | null> {
@@ -60,6 +93,7 @@ export async function handleOAuthRoute(request: Request, config: OAuthConfig): P
       path === "/register" ||
       path === "/authorize" ||
       path === "/authorize/continue" ||
+      path === "/reauthorize" ||
       path === "/oauth/callback" ||
       path === "/token"
     ) {
@@ -96,6 +130,7 @@ export async function handleOAuthRoute(request: Request, config: OAuthConfig): P
   if (path === "/register" && request.method === "POST") return register(request, config);
   if (path === "/authorize" && request.method === "GET") return authorize(request, config);
   if (path === "/authorize/continue" && request.method === "GET") return continueAuthorize(request, config);
+  if (path === "/reauthorize" && request.method === "GET") return reauthorize(request, config);
   if (path === "/oauth/callback" && request.method === "GET") return oauthCallback(request, config);
   if (path === "/token" && request.method === "POST") return tokenExchange(request, config);
   return null;
@@ -210,6 +245,45 @@ async function continueAuthorize(request: Request, config: OAuthConfig): Promise
   return Response.redirect(authStartRedirect(config, nonce, provider), 302);
 }
 
+/**
+ * Sign a *running* MCP session back in, without the client redoing OAuth (#26).
+ *
+ * The difference from `/authorize` is what happens at the end: there is no
+ * registered client and no redirect_uri to hand a code to, because the party
+ * waiting for this is an agent holding an open MCP session. So the callback
+ * attaches the minted session to a pairing code instead, and the agent redeems
+ * it through `complete_authentication`.
+ *
+ * `?code=` is optional, and the version without it is the one that matters
+ * most: when a token expires, MCP clients withdraw the server's tools, so there
+ * is no `authenticate` call to have produced a code. That is the URL the 401
+ * body carries — the human signs in, and the page hands them a code to read
+ * back to the agent.
+ */
+async function reauthorize(request: Request, config: OAuthConfig): Promise<Response> {
+  const url = new URL(request.url);
+  const supplied = url.searchParams.get("code");
+  let pairingCode: string;
+  if (supplied) {
+    const existing = await readPairing(config.store, supplied);
+    if (!existing) {
+      return authErrorPage(
+        "This sign-in link has expired",
+        "Re-authorization links are only valid for fifteen minutes. Ask your agent to call the authenticate tool again, or open this page without the code on the end.",
+      );
+    }
+    pairingCode = supplied;
+  } else {
+    pairingCode = await startPairing(config.store);
+  }
+
+  const nonce = crypto.randomUUID();
+  await config.store.put(`authreq:${nonce}`, JSON.stringify({ pairing: pairingCode }), {
+    expirationTtl: 600,
+  });
+  return authConfirmPage(config, nonce, null, "reauthorize");
+}
+
 /** What to tell the user for each way a handed-back session can fail to verify. */
 const SESSION_FAILURE_ADVICE: Record<SessionFailure, string> = {
   expired: "The sign-in took too long to come back. Start the connection again from your MCP client.",
@@ -283,7 +357,24 @@ async function oauthCallback(request: Request, config: OAuthConfig): Promise<Res
     redirectUri: string;
     codeChallenge: string;
     state: string | null;
+    /** Set only by /reauthorize: a live MCP session waiting on this sign-in. */
+    pairing?: string;
   };
+
+  // Re-authorization ends here rather than at a redirect_uri. There is no OAuth
+  // client on the other side of this one — the party waiting is an agent whose
+  // MCP session is already open and only needs its identity back (#26).
+  if (authReq.pairing) {
+    const session = await mintSession(check.payload.uid, config.sessionSigningKey, {
+      ttlSeconds: MCP_SESSION_TTL_SECONDS,
+    });
+    await completePairing(config.store, authReq.pairing, {
+      session,
+      uid: check.payload.uid,
+      expiresAt: Math.floor(Date.now() / 1000) + MCP_SESSION_TTL_SECONDS,
+    });
+    return authPairedPage(authReq.pairing);
+  }
 
   const code = crypto.randomUUID();
   await config.store.put(

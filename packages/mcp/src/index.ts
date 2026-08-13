@@ -2,10 +2,12 @@ import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createAuthChallenge, handleOAuthRoute } from "./oauth-provider.js";
 import { hasIdentity, SessionAuth, type AuthStorage } from "./do-auth.js";
-import { authenticateRequest, oauthStore } from "./mcp-auth.js";
+import { authenticateRequest, challengeFor, oauthStore } from "./mcp-auth.js";
 import { mintSession, verifySession } from "./session.js";
 import type { Env, McpProps } from "./mcp-types.js";
 import { registerAllTools, toolCount, toolNames } from "./tool-registry.js";
+import type { AuthControls } from "./register-auth-tools.js";
+import { mcpIssuer } from "./reauth.js";
 
 /** Sign-in on the FreeIdeaStore site. FIS's own since #37 — see oauth-provider.ts. */
 const AUTH_START_PATH = "/.fis/auth/start";
@@ -25,7 +27,10 @@ function rootText(): string {
     "FreeIdeaStore MCP Server\n\n" +
     "Connect: npx mcp-remote https://mcp.freeideastore.online/mcp\n\n" +
     `Tools (${toolCount()}): ${toolNames().join(", ")}\n\n` +
-    "Auth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FreeIdeaStore session token>.\n");
+    "Auth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FreeIdeaStore session token>.\n" +
+    "Access tokens live 24 hours. Call the authenticate tool to read expires_at for the current\n" +
+    "session before starting a long multi-write task, and to renew it without reconnecting.\n" +
+    "Lost authorization mid-task? Open https://mcp.freeideastore.online/reauthorize in a browser.\n");
 }
 
 export class FisMcp extends McpAgent<Env, unknown, McpProps> {
@@ -79,18 +84,45 @@ export class FisMcp extends McpAgent<Env, unknown, McpProps> {
       const restored = this.sessionAuth().current();
       return hasIdentity(restored) ? restored : this.props || {};
     };
-    registerAllTools(this.server, this.env, getProps);
+    registerAllTools(this.server, this.env, getProps, this.authControls(getProps));
+  }
+
+  /**
+   * What `authenticate` / `complete_authentication` are allowed to do to this
+   * session. Every other tool only reads identity; these two replace it, and
+   * they write it through the same storage-backed path the worker uses, so a
+   * recovered identity survives the next hibernation as well (#26).
+   */
+  private authControls(getProps: () => McpProps): AuthControls {
+    return {
+      issuer: mcpIssuer(this.env),
+      store: oauthStore(this.env),
+      current: getProps,
+      adopt: async (props) => {
+        this.props = props;
+        await this.sessionAuth().set(props);
+      },
+      beginPairing: (code) => this.sessionAuth().beginPairing(code),
+      pendingPairing: () => this.sessionAuth().pendingPairing(),
+      clearPairing: () => this.sessionAuth().clearPairing(),
+    };
   }
 }
 
 async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext, issuer: string) {
   const auth = await authenticateRequest(request, env);
+  // A token that arrived and did not work is not the same as no token at all,
+  // and answering it with "you are not signed in" is how an expiry used to
+  // surface as an unexplained write failure several calls later. Say which one
+  // it was, and put the way back into the body (#26).
+  const rejected = challengeFor(auth.status);
+  if (rejected) return createAuthChallenge({ issuer }, "invalid_token", rejected);
   const sessionId = request.headers.get("mcp-session-id");
-  if (auth.token && sessionId) {
+  if (auth.props.token && sessionId) {
     try {
       const id = env.MCP_OBJECT.idFromName(`streamable-http:${sessionId}`);
       const stub = env.MCP_OBJECT.get(id) as unknown as { setAuth(p: McpProps): Promise<void> };
-      await stub.setAuth(auth);
+      await stub.setAuth(auth.props);
     } catch (error) {
       // Tool handlers fall back to unsigned/public behavior, which reads to the
       // caller as "you are not signed in" on a request that carried a valid
@@ -100,7 +132,7 @@ async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContex
       );
     }
   }
-  if (!auth.token && request.method !== "OPTIONS" && env.SESSION_SIGNING_KEY) {
+  if (!auth.props.token && request.method !== "OPTIONS" && env.SESSION_SIGNING_KEY) {
     return createAuthChallenge({ issuer });
   }
   return FisMcp.serve("/mcp").fetch(request, env, ctx);

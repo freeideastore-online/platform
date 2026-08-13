@@ -310,6 +310,35 @@ Because the key on `freeideastore-mcp` is now FIS's own, the MCP server can only
 FIS-minted tokens. The two halves are not independently deployable: they must agree on both
 the key and the issuer.
 
+### Re-authorizing a session that is already open
+
+The OAuth flow above is a *client* flow: the MCP client registers, holds the PKCE verifier,
+and swaps the code at `/token`. Nothing the server hands back mid-session lets an agent
+complete that exchange, so a token that expires part-way through a task used to end the task
+— once leaving fifteen half-written chapters on a live public page
+([#26](https://github.com/freeideastore-online/platform/issues/26)).
+
+`/reauthorize` is the other shape, modelled on the OAuth device grant: a **pairing code**
+stands in for the redirect the agent cannot receive.
+
+1. `GET /reauthorize` — optionally `?code=` a pairing an agent already minted through the
+   `authenticate` tool; without one the route mints its own, which is the form the 401 body
+   advertises, because an expired token means no tool call was possible.
+2. The page offers GitHub and Google and goes through `/authorize/continue` and
+   `/oauth/callback` exactly as the client flow does — same nonce, same
+   `fis_mcp_oauth_inflight` cookie, same local verification of the returned session. The
+   cookie check is not optional here either: without it, an attacker's pairing could collect
+   a victim's sign-in.
+3. Instead of redirecting to a `redirect_uri`, the callback mints a session for the verified
+   uid, stores it against the pairing code, and prints that code for the human to read back.
+4. `complete_authentication` redeems the code and binds the identity to the MCP session's
+   Durable Object storage, so it survives hibernation like any other.
+
+Pairing codes are 60 bits from `crypto.getRandomValues`, single-use, and expire in fifteen
+minutes. Between sign-in and redemption the code *is* a write credential, so a code may only
+be redeemed by the MCP session that started it — except when that session started none, which
+is the human-initiated case.
+
 ## The FreeAppStore fallback
 
 The FreeAppStore path has not been deleted yet. It is still reachable in two situations, both

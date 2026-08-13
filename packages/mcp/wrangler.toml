@@ -15,6 +15,7 @@ PLATFORM_REPO = "platform"
 PUBLIC_BASE = "https://freeideastore.online"
 FIS_API_BASE = "https://freeideastore.online"
 FIS_AUTH_BASE = "https://freeideastore.online"
+MCP_ISSUER = "https://mcp.freeideastore.online"
 
 # Secrets:
 #   GITHUB_TOKEN - optional PAT for future pro-book export tooling.
