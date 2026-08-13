@@ -1,6 +1,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createAuthChallenge, handleOAuthRoute } from "./oauth-provider.js";
+import { hasIdentity, SessionAuth, type AuthStorage } from "./do-auth.js";
 import { TOOL_COUNT } from "./idea-skills.js";
 import { authenticateRequest, oauthStore } from "./mcp-auth.js";
 import { mintSession, verifySession } from "./session.js";
@@ -22,13 +23,24 @@ const ROOT_TEXT =
 export class FisMcp extends McpAgent<Env, unknown, McpProps> {
   server = new McpServer({ name: "FreeIdeaStore", version: "0.1.0" });
 
+  /**
+   * This session's identity, persisted to Durable Object storage and read back
+   * on every reconstruction of the object. Created lazily because `ctx` is only
+   * available once the Durable Object has been constructed. See do-auth.ts for
+   * why an in-memory-only copy is not enough (#26).
+   */
+  private auth?: SessionAuth;
+
+  private sessionAuth(): SessionAuth {
+    this.auth ??= new SessionAuth(
+      (this as unknown as { ctx: { storage: AuthStorage } }).ctx.storage,
+    );
+    return this.auth;
+  }
+
   async setAuth(props: McpProps): Promise<void> {
     this.props = props;
-    try {
-      await (this as unknown as { ctx: { storage: { put(k: string, v: unknown): Promise<void> } } }).ctx.storage.put("props", props);
-    } catch {
-      // In-memory assignment is enough for the immediately following tool call.
-    }
+    await this.sessionAuth().set(props);
   }
 
   async oauthGet(key: string): Promise<string | null> {
@@ -51,7 +63,14 @@ export class FisMcp extends McpAgent<Env, unknown, McpProps> {
   }
 
   async init() {
-    const getProps = () => this.props || {};
+    // Runs on every construction of this Durable Object, including the one after
+    // Cloudflare evicts an idle session — which is exactly when the in-memory
+    // identity was lost, and exactly why the auth is read back here (#26).
+    await this.sessionAuth().rehydrate();
+    const getProps = () => {
+      const restored = this.sessionAuth().current();
+      return hasIdentity(restored) ? restored : this.props || {};
+    };
     registerSkillTools(this.server, this.env);
     registerAccountTools(this.server, this.env, getProps);
     registerCollaborationTools(this.server, this.env, getProps);
@@ -67,8 +86,13 @@ async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContex
       const id = env.MCP_OBJECT.idFromName(`streamable-http:${sessionId}`);
       const stub = env.MCP_OBJECT.get(id) as unknown as { setAuth(p: McpProps): Promise<void> };
       await stub.setAuth(auth);
-    } catch {
-      // Tool handlers will still fall back to unsigned/public behavior.
+    } catch (error) {
+      // Tool handlers fall back to unsigned/public behavior, which reads to the
+      // caller as "you are not signed in" on a request that carried a valid
+      // token. Say so in the log rather than letting it vanish (#26).
+      console.error(
+        `mcp: could not hand session auth to the session object (${error instanceof Error ? error.message : String(error)})`,
+      );
     }
   }
   if (!auth.token && request.method !== "OPTIONS" && env.SESSION_SIGNING_KEY) {
