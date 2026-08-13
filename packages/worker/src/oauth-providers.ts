@@ -34,7 +34,24 @@ export type ProviderProfile = {
   handle: string;
   displayName: string;
   avatarUrl: string | null;
+  /** Lower-cased, or null when the provider gave us nothing usable. */
+  email: string | null;
+  /**
+   * Whether the *provider* asserts it owns this address, not whether it looks
+   * well-formed. `upsertIdentity` links two provider accounts into one profile
+   * on a matching email, so an unverified address here would let anyone claim
+   * anyone's contributions by typing their address into a throwaway account.
+   * Anything short of an explicit assertion from the provider is `false`.
+   */
+  emailVerified: boolean;
 };
+
+/** Lower-case and trim, so `Alice@Example.com` and `alice@example.com` link. */
+function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const email = value.trim().toLowerCase();
+  return email.includes('@') ? email : null;
+}
 
 export type ProviderCredentials = { clientId: string; clientSecret: string };
 
@@ -107,6 +124,32 @@ async function exchangeCode(
   return typeof token === 'string' && token ? token : null;
 }
 
+/**
+ * GitHub's verified primary address.
+ *
+ * /user reports `email: null` whenever the address is private, which is the
+ * default for a lot of accounts, and it carries no verification flag either way.
+ * /user/emails carries both, and the `user:email` scope we already request is
+ * what buys access to it. Only the entry that is *both* primary and verified is
+ * usable: a verified secondary address may be a work address the person shares
+ * with colleagues, and an unverified one is just a string they typed.
+ *
+ * A failure here is not a sign-in failure — it costs linking, not access.
+ */
+async function githubVerifiedEmail(headers: Record<string, string>): Promise<string | null> {
+  const response = await fetch('https://api.github.com/user/emails', { headers });
+  if (!response.ok) return null;
+  const list = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(list)) return null;
+  for (const entry of list as Record<string, unknown>[]) {
+    if (entry?.primary === true && entry?.verified === true) {
+      const email = normalizeEmail(entry.email);
+      if (email) return email;
+    }
+  }
+  return null;
+}
+
 async function githubProfile(token: string): Promise<ProviderProfile | null> {
   // A User-Agent is mandatory on the GitHub API; without one it returns 403.
   const headers = { Authorization: `Bearer ${token}`, 'User-Agent': 'freeideastore', Accept: 'application/vnd.github+json' };
@@ -118,12 +161,18 @@ async function githubProfile(token: string): Promise<ProviderProfile | null> {
   if (id === undefined || id === null || !login) return null;
   const handle = slug(login);
   if (!handle) return null;
+  // Note we do NOT fall back to `user.email` when this returns null. That field
+  // is unverified as far as this response is concerned, and an address we cannot
+  // prove is worse than no address at all — see ProviderProfile.emailVerified.
+  const email = await githubVerifiedEmail(headers);
   return {
     provider: 'github',
     providerUserId: String(id),
     handle,
     displayName: (typeof user?.name === 'string' && user.name.trim()) || login,
     avatarUrl: typeof user?.avatar_url === 'string' ? user.avatar_url : null,
+    email,
+    emailVerified: email !== null,
   };
 }
 
@@ -135,12 +184,20 @@ async function googleProfile(token: string): Promise<ProviderProfile | null> {
   const user = (await response.json().catch(() => null)) as Record<string, unknown> | null;
   const sub = typeof user?.sub === 'string' ? user.sub : '';
   if (!sub) return null;
-  // Google has no username. Derive the handle from the email local part, which
-  // is what the FreeAppStore-era normalizeAuthUser did, so handles stay stable
-  // for anyone who signed in before the cutover.
-  const email = typeof user?.email === 'string' ? user.email : '';
+  // Google has no username, so the handle is slugged from the email local part.
+  //
+  // This was once described as keeping handles stable across the FreeAppStore
+  // cutover. It does not, and #40 is the counterexample: FreeAppStore supplied a
+  // handle of its own derived from the display name, so `Serge Ivy` had been
+  // `serge-ivy` for a year, and `serge.the.dev@gmail.com` slugs to
+  // `serge-the-dev`. The sign-in minted a second, empty profile and orphaned 27
+  // contributions. The derivation below is a reasonable *default* for a brand-new
+  // Google user and nothing more; what actually keeps a returning contributor on
+  // their existing profile is the verified-email link in `upsertIdentity`, and
+  // the handle picked here is only used when that finds no match.
+  const email = normalizeEmail(user?.email);
   const name = typeof user?.name === 'string' ? user.name : '';
-  const handle = slug(email.split('@')[0] || name);
+  const handle = slug((email ?? '').split('@')[0] || name);
   if (!handle) return null;
   return {
     provider: 'google',
@@ -148,6 +205,11 @@ async function googleProfile(token: string): Promise<ProviderProfile | null> {
     handle,
     displayName: name.trim() || handle,
     avatarUrl: typeof user?.picture === 'string' ? user.picture : null,
+    email,
+    // Strictly `true`. Google sends this as a real boolean on OIDC userinfo, but
+    // the string "true" has been seen from other OIDC surfaces, and a truthiness
+    // check would also accept a non-empty string like "false".
+    emailVerified: email !== null && user?.email_verified === true,
   };
 }
 

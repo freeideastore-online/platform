@@ -58,9 +58,17 @@ export type IdentityRow = {
   id: string;
   provider: string;
   provider_user_id: string;
+  /**
+   * The profile this identity resolves to. NOT unique since 0017 — several
+   * identities belonging to the same person deliberately share one handle.
+   */
   handle: string;
   display_name: string;
   avatar_url?: string | null;
+  /** Lower-cased. Null on rows created before 0017, until the owner signs in again. */
+  email?: string | null;
+  /** 1 only when the provider asserted it. Never link on a 0 — see 0017. */
+  email_verified?: number;
   created_at: string;
   updated_at: string;
 };

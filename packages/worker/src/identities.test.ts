@@ -21,11 +21,22 @@ function fakeEnv() {
     if (q.startsWith('SELECT 1 FROM identities WHERE handle =')) {
       return identities.some((r) => r.handle === args[0]) ? { 1: 1 } : null;
     }
+    if (q.startsWith('SELECT handle FROM identities WHERE email =')) {
+      // email_verified = 1 is part of the query, not an afterthought: the fake
+      // has to enforce it or the test proving unverified addresses do not link
+      // would pass against a lookup that had quietly dropped the condition.
+      const match = identities
+        .filter((r) => r.email === args[0] && r.email_verified === 1)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0];
+      return match ? { handle: match.handle } : null;
+    }
     if (q.startsWith('UPDATE identities SET display_name')) {
-      const row = identities.find((r) => r.id === args[2]);
+      const row = identities.find((r) => r.id === args[4]);
       if (row) {
         row.display_name = args[0] as string;
         row.avatar_url = args[1] as string | null;
+        row.email = args[2] as string | null;
+        row.email_verified = args[3] as number;
       }
       return null;
     }
@@ -37,7 +48,11 @@ function fakeEnv() {
         handle: args[3] as string,
         display_name: args[4] as string,
         avatar_url: args[5] as string | null,
-        created_at: 'now',
+        email: args[6] as string | null,
+        email_verified: args[7] as number,
+        // Insertion order stands in for wall-clock: identities created later in
+        // a test sort later, which is what the oldest-match tie-break needs.
+        created_at: String(identities.length).padStart(4, '0'),
         updated_at: 'now',
       });
       return null;
@@ -75,6 +90,24 @@ const github = (id: string, handle: string): ProviderProfile => ({
   handle,
   displayName: handle,
   avatarUrl: null,
+  email: null,
+  emailVerified: false,
+});
+
+const google = (id: string, handle: string): ProviderProfile => ({
+  provider: 'google',
+  providerUserId: id,
+  handle,
+  displayName: handle,
+  avatarUrl: null,
+  email: null,
+  emailVerified: false,
+});
+
+const verified = (profile: ProviderProfile, email: string): ProviderProfile => ({
+  ...profile,
+  email,
+  emailVerified: true,
 });
 
 describe('identity upsert', () => {
@@ -127,15 +160,9 @@ describe('identity upsert', () => {
   it('separates identities from different providers with the same id', async () => {
     const { env } = fakeEnv();
     const gh = await upsertIdentity(env, github('1', 'alice'));
-    const google = await upsertIdentity(env, {
-      provider: 'google',
-      providerUserId: '1',
-      handle: 'bob',
-      displayName: 'Bob',
-      avatarUrl: null,
-    });
-    expect(google.id).not.toBe(gh.id);
-    expect(google.provider).toBe('google');
+    const goog = await upsertIdentity(env, { ...google('1', 'bob'), displayName: 'Bob' });
+    expect(goog.id).not.toBe(gh.id);
+    expect(goog.provider).toBe('google');
   });
 
   it('round-trips through identityById and authUserFromIdentity', async () => {
@@ -149,6 +176,97 @@ describe('identity upsert', () => {
       provider: 'github',
       avatarUrl: 'https://x/a.png',
     });
+  });
+});
+
+describe('account linking on a verified email', () => {
+  it('lands both providers on one handle and one profile', async () => {
+    // The #40 scenario: the same human signs in with GitHub, then with Google.
+    // The Google handle derives from the email local part and would otherwise
+    // mint a second, empty contributor profile.
+    const { env, identities, profiles } = fakeEnv();
+    const gh = await upsertIdentity(env, verified(github('1', 'serge-ivo'), 'serge@example.com'));
+    const goog = await upsertIdentity(
+      env,
+      verified(google('sub-1', 'serge-the-dev'), 'serge@example.com'),
+    );
+    expect(goog.id).not.toBe(gh.id);
+    expect(goog.handle).toBe('serge-ivo');
+    expect(identities).toHaveLength(2);
+    // One profile, so contributions from either sign-in attribute to the same
+    // contributor page. A second row here is exactly the data loss in #40.
+    expect(profiles).toEqual([{ id: 'profile-serge-ivo', handle: 'serge-ivo' }]);
+  });
+
+  it('does NOT link an unverified email', async () => {
+    // The whole security argument. If this passes by linking, anyone can take
+    // over any account by putting its address on a throwaway provider account.
+    const { env, profiles } = fakeEnv();
+    const alice = await upsertIdentity(env, verified(github('1', 'alice'), 'alice@example.com'));
+    const attacker = await upsertIdentity(env, {
+      ...google('sub-666', 'mallory'),
+      email: 'alice@example.com',
+      emailVerified: false,
+    });
+    expect(attacker.handle).toBe('mallory');
+    expect(attacker.handle).not.toBe(alice.handle);
+    expect(profiles.map((p) => p.handle)).toEqual(['alice', 'mallory']);
+  });
+
+  it('does NOT link to a stored identity whose email was never verified', async () => {
+    // The other half of the same condition: the *stored* row must be verified
+    // too, not just the incoming profile.
+    const { env } = fakeEnv();
+    await upsertIdentity(env, {
+      ...github('1', 'alice'),
+      email: 'alice@example.com',
+      emailVerified: false,
+    });
+    const later = await upsertIdentity(env, verified(google('sub-1', 'bob'), 'alice@example.com'));
+    expect(later.handle).toBe('bob');
+  });
+
+  it('still varies the handle for two people with no email match', async () => {
+    // Linking must not weaken the collision guard: different verified addresses
+    // are positive evidence these are different people.
+    const { env } = fakeEnv();
+    const alice = await upsertIdentity(env, verified(github('1', 'alice'), 'alice@example.com'));
+    const other = await upsertIdentity(env, verified(github('2', 'alice'), 'other@example.com'));
+    expect(other.id).not.toBe(alice.id);
+    expect(other.handle).toBe('alice-github');
+  });
+
+  it('keeps a returning identity on its own handle even when an email match exists', async () => {
+    // (provider, provider_user_id) wins. Otherwise a person who changed their
+    // verified address to one someone else already holds would be silently
+    // moved onto that person's profile on their next sign-in.
+    const { env } = fakeEnv();
+    const alice = await upsertIdentity(env, verified(github('1', 'alice'), 'alice@example.com'));
+    const bob = await upsertIdentity(env, verified(google('sub-2', 'bob'), 'bob@example.com'));
+    const bobAgain = await upsertIdentity(env, verified(google('sub-2', 'bob'), 'alice@example.com'));
+    expect(bobAgain.id).toBe(bob.id);
+    expect(bobAgain.handle).toBe('bob');
+    expect(bobAgain.handle).not.toBe(alice.handle);
+  });
+
+  it('adopts the oldest linkable identity when several match', async () => {
+    const { env } = fakeEnv();
+    const first = await upsertIdentity(env, verified(github('1', 'alice'), 'alice@example.com'));
+    await upsertIdentity(env, verified(github('2', 'alice-two'), 'alice@example.com'));
+    const third = await upsertIdentity(env, verified(google('sub-3', 'zzz'), 'alice@example.com'));
+    expect(third.handle).toBe(first.handle);
+  });
+
+  it('backfills the email of a pre-linking identity on the next sign-in', async () => {
+    // Rows created before 0017 carry no email, so they cannot be linked to until
+    // their owner signs in again — this is what makes that sign-in count.
+    const { env } = fakeEnv();
+    await upsertIdentity(env, github('1', 'alice'));
+    const back = await upsertIdentity(env, verified(github('1', 'alice'), 'alice@example.com'));
+    expect(back.email).toBe('alice@example.com');
+    expect(back.email_verified).toBe(1);
+    const goog = await upsertIdentity(env, verified(google('sub-1', 'bob'), 'alice@example.com'));
+    expect(goog.handle).toBe('alice');
   });
 });
 
