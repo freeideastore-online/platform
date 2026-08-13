@@ -51,6 +51,13 @@ class FakeD1 {
   reactions: unknown[][] = [];
   listQuery = '';
   listBinds: unknown[] = [];
+  /**
+   * Statements whose SQL contains this string reject instead of running, so a
+   * test can stand in for the D1 error or subrequest ceiling that #71 is about.
+   */
+  failOn: string | null = null;
+  /** Round trips spent on batched writes. */
+  batches = 0;
   private readonly ideas = new Map<string, Record<string, unknown>>();
   private readonly profiles = new Map<string, Record<string, unknown>>();
   private readonly contributions: Array<Record<string, unknown>> = [];
@@ -166,7 +173,32 @@ class FakeD1 {
     });
   }
 
+  /**
+   * D1 runs a batch as one round trip, in order. The fake runs the statements
+   * in order too, so a `DELETE` followed by the rows replacing it behaves the
+   * way it does in production.
+   */
+  async batch(statements: FakeStatement[]) {
+    this.batches += 1;
+    const results = [];
+    for (const statement of statements) results.push(await statement.run());
+    return results;
+  }
+
   prepare(sql: string) {
+    if (this.failOn && sql.includes(this.failOn)) {
+      return new FakeStatement({
+        all: () => {
+          throw new Error(`D1 unavailable for: ${sql}`);
+        },
+        first: () => {
+          throw new Error(`D1 unavailable for: ${sql}`);
+        },
+        run: () => {
+          throw new Error(`D1 unavailable for: ${sql}`);
+        },
+      });
+    }
     if (sql.includes('SELECT COUNT(*) AS count FROM ideas')) {
       return new FakeStatement({ first: () => ({ count: this.ideas.size }) });
     }
@@ -373,12 +405,14 @@ class FakeD1 {
         },
       });
     }
-    if (sql.includes('SELECT id FROM sources WHERE url = ?')) {
+    if (sql.includes('SELECT id, url FROM sources WHERE url IN')) {
       return new FakeStatement({
-        first: ([url]) => {
-          const found = this.sources.find((source) => source.url === url);
-          return found ? { id: found.id } : null;
-        },
+        all: (urls) => ({
+          results: this.sources.filter((source) => urls.includes(source.url)).map((source) => ({
+            id: source.id,
+            url: source.url,
+          })),
+        }),
       });
     }
     if (sql.includes('INSERT OR IGNORE INTO source_links')) {
@@ -1843,6 +1877,89 @@ describe('FreeIdeaStore worker', () => {
     const data = (await response.json()) as { sources: unknown[] };
 
     expect(data.sources).toHaveLength(0);
+  });
+
+  /**
+   * #71: the re-index runs after the body has committed. If it can fail the
+   * request, the caller sees a 500 for a write that landed — and the obvious
+   * response to a 500 is a retry, which for a section merge is destructive.
+   */
+  describe('a post-commit re-index failure', () => {
+    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+
+    async function patchWhile(failOn: string, body: string) {
+      mockSignedInSerge();
+      const db = new FakeD1();
+      const testEnv = env(db);
+      db.failOn = failOn;
+      const response = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ body }),
+        }),
+        testEnv,
+      );
+      db.failOn = null;
+      const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+      return { response, stored: ((await read.json()) as { body: string }).body };
+    }
+
+    it('does not fail the write when the search index cannot be rebuilt', async () => {
+      const written = '## Snapshot\nA sentence that has to survive a broken index.';
+      const { response, stored } = await patchWhile('INSERT INTO search_index', written);
+      const data = (await response.json()) as { ok: boolean; reindexed?: boolean; warning?: string };
+
+      expect(response.status).toBe(200);
+      expect(data.ok).toBe(true);
+      // The write is durable; the caller is told the index is not.
+      expect(stored).toContain('has to survive a broken index');
+      expect(data.reindexed).toBe(false);
+      expect(data.warning).toContain('the document was saved');
+    });
+
+    it('does not fail the write when the source registry cannot be rebuilt', async () => {
+      const written = '## Snapshot\nCite https://example.com/source for the claim.';
+      const { response, stored } = await patchWhile('INSERT OR IGNORE INTO sources', written);
+
+      expect(response.status).toBe(200);
+      expect(stored).toContain('https://example.com/source');
+      expect(((await response.json()) as { reindexed?: boolean }).reindexed).toBe(false);
+    });
+
+    it('does not fail a section merge, whose retry would be destructive', async () => {
+      mockSignedInSerge();
+      const db = new FakeD1();
+      const testEnv = env(db);
+      await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ body: '## Findings\nThe finding.\n\n## Route Survey\nThe survey.' }),
+        }),
+        testEnv,
+      );
+
+      db.failOn = 'DELETE FROM search_index';
+      const merge = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/sections/findings/merge', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ into: 'route-survey' }),
+        }),
+        testEnv,
+      );
+      db.failOn = null;
+      const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+      const stored = ((await read.json()) as { body: string }).body;
+
+      expect(merge.status).toBe(200);
+      // The merge applied, so the source section is gone: a retry would 404 at
+      // best. The response has to say the write happened.
+      expect(stored).not.toContain('## Findings');
+      expect(stored).toContain('The finding.');
+      expect(((await merge.json()) as { reindexed?: boolean }).reindexed).toBe(false);
+    });
   });
 
   it('keeps a contribution citation even when the document drops the link', async () => {
