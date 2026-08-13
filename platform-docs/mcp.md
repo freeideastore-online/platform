@@ -90,6 +90,8 @@ Structure is editable at the same granularity. `patch_idea_section` and `append_
 
 Structural edits are ordinary canonical writes, so each one is snapshotted as a revision and re-indexes sources and search automatically.
 
+**Write responses do not carry the document tree.** A structural write used to answer with every chapter of the document, so a ten-call consolidation pass re-read the whole structure ten times — the O(document) cost section writes exist to remove, moved from the request to the response. On a 74-chapter document that was 11,209 characters per call; it is now 419. What comes back is the outcome plus `usage` — `chars`, `chars_remaining`, `chapters`, `chapters_remaining`, `below_floor`, `above_ceiling` — so budget and chapter health stay visible without a second call, and `add_idea_section` and a rename still name the section id they produced in `section`. Pass `verbose: true` for the tree, or call `list_idea_sections`, which is the deliberate way to fetch it.
+
 Section ids stay stable under content edits, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.
 
 ### Headings In Section Content Split The Section
