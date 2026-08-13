@@ -106,26 +106,34 @@ export async function upsertIdentity(env: Env, profile: ProviderProfile): Promis
     // not. Refreshing the email also backfills rows created before 0017, which
     // is the only way those ever become linkable — the access token that could
     // have read the address was never stored.
-    const emailVerified = profile.emailVerified ? 1 : 0;
+    // Only positive information overwrites the stored address. `githubProfile`
+    // yields a null email whenever GET /user/emails fails — a rate limit, a 5xx,
+    // a revoked user:email scope — and letting that clear a verified address
+    // would un-link the account on one unlucky sign-in, so the next sign-in with
+    // the other provider would mint a second empty profile. That is exactly the
+    // failure #40 exists to prevent, arriving silently and days later.
+    const incomingIsUsable = profile.emailVerified && Boolean(profile.email);
+    const nextEmail = incomingIsUsable ? profile.email : existing.email ?? null;
+    const nextVerified = incomingIsUsable ? 1 : existing.email_verified ?? 0;
     if (
       existing.display_name !== profile.displayName ||
       (existing.avatar_url ?? null) !== profile.avatarUrl ||
-      (existing.email ?? null) !== profile.email ||
-      (existing.email_verified ?? 0) !== emailVerified
+      (existing.email ?? null) !== nextEmail ||
+      (existing.email_verified ?? 0) !== nextVerified
     ) {
       await env.DB.prepare(
         `UPDATE identities SET display_name = ?, avatar_url = ?, email = ?, email_verified = ?,
            updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
       )
-        .bind(profile.displayName, profile.avatarUrl, profile.email, emailVerified, existing.id)
+        .bind(profile.displayName, profile.avatarUrl, nextEmail, nextVerified, existing.id)
         .run();
       return {
         ...existing,
         display_name: profile.displayName,
         avatar_url: profile.avatarUrl,
-        email: profile.email,
-        email_verified: emailVerified,
+        email: nextEmail,
+        email_verified: nextVerified,
       };
     }
     return existing;

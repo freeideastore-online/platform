@@ -45,16 +45,24 @@ export function authStartRedirect(config: OAuthPageConfig, nonce: string, provid
   return startUrl.toString();
 }
 
-export function authAlreadyInProgress(): Response {
-  return new Response(
-    "<!doctype html><title>FreeIdeaStore sign-in</title><p>FreeIdeaStore MCP sign-in is already in progress in another tab. Complete that sign-in, then return to your MCP client.</p>",
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-      },
-    },
-  );
+/**
+ * Ties an authorization request to the browser that started it.
+ *
+ * The cookie carries the nonce itself, and `/oauth/callback` refuses any nonce
+ * that does not match it. Without that check the nonce is just a string in a URL
+ * that anyone may present: an attacker can register a client of their own
+ * (registration is open), call `/authorize` to mint a nonce bound to *their*
+ * redirect_uri, then send a victim to the site's sign-in with `return_to` set to
+ * this server's callback carrying that nonce. The victim signs in, their session
+ * arrives here against the attacker's authorization request, and the code is
+ * handed to the attacker's redirect_uri — an account takeover costing one click.
+ *
+ * The lifetime matches the `authreq:` record it guards. The old two minutes was
+ * shorter than a real sign-in takes, which was survivable only because nothing
+ * depended on the cookie still being there.
+ */
+export function authInFlightCookie(nonce: string): string {
+  return `${AUTH_IN_FLIGHT_COOKIE}=${nonce}; Max-Age=600; Path=/; Secure; HttpOnly; SameSite=Lax`;
 }
 
 const PAGE_STYLES = `
@@ -108,7 +116,7 @@ export function authConfirmPage(config: OAuthPageConfig, nonce: string, clientNa
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Set-Cookie": `${AUTH_IN_FLIGHT_COOKIE}=1; Max-Age=120; Path=/; Secure; HttpOnly; SameSite=Lax`,
+        "Set-Cookie": authInFlightCookie(nonce),
       },
     },
   );

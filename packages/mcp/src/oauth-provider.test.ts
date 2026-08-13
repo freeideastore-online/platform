@@ -86,7 +86,12 @@ describe("handleOAuthRoute", () => {
 
     expect(res?.status).toBe(200);
     expect(res?.headers.get("Location")).toBeNull();
-    expect(res?.headers.get("Set-Cookie")).toContain("fis_mcp_oauth_inflight=1");
+    // The cookie carries the nonce, not a flag: /oauth/callback compares the two
+    // so a nonce minted by somebody else cannot be redeemed in this browser.
+    const nonce = /\/authorize\/continue\?nonce=([0-9a-f-]+)/.exec(await res!.clone().text())?.[1];
+    expect(nonce).toBeTruthy();
+    expect(res?.headers.get("Set-Cookie")).toContain(`fis_mcp_oauth_inflight=${nonce}`);
+    expect(res?.headers.get("Set-Cookie")).toContain("HttpOnly");
     const html = await res!.text();
     expect(html).toContain("Connect FreeIdeaStore MCP");
     expect(html).toContain("Codex wants to use FreeIdeaStore MCP tools");
@@ -122,7 +127,11 @@ describe("handleOAuthRoute", () => {
     expect(location.searchParams.get("provider")).toBe("google");
   });
 
-  it("does not redirect duplicate browser authorization tabs to a provider", async () => {
+  it("lets a second authorization supersede an abandoned one", async () => {
+    // This used to answer "already in progress" whenever the cookie was set,
+    // which stranded anyone who abandoned an attempt until it aged out. The new
+    // confirm page re-issues the cookie, so the older nonce simply stops being
+    // redeemable.
     const store = makeStore({
       "client:client-1": JSON.stringify({ redirect_uris: ["http://127.0.0.1:9876/callback"] }),
     });
@@ -130,14 +139,51 @@ describe("handleOAuthRoute", () => {
     const res = await handleOAuthRoute(
       new Request(
         `${ISSUER}/authorize?response_type=code&client_id=client-1&redirect_uri=http%3A%2F%2F127.0.0.1%3A9876%2Fcallback&code_challenge=abc&code_challenge_method=S256`,
-        { headers: { Cookie: "fis_mcp_oauth_inflight=1" } },
+        { headers: { Cookie: "fis_mcp_oauth_inflight=stale-nonce" } },
       ),
       config(store),
     );
 
     expect(res?.status).toBe(200);
+    await expect(res?.clone().text()).resolves.toContain("Connect FreeIdeaStore MCP");
+    expect(res?.headers.get("Set-Cookie")).not.toContain("stale-nonce");
+  });
+
+  it("refuses a nonce that did not start in this browser", async () => {
+    // The account-takeover guard. An attacker registers their own client, calls
+    // /authorize to mint a nonce bound to THEIR redirect_uri, then lures a
+    // victim to the site's sign-in with return_to pointing here carrying that
+    // nonce. Without this check the victim's session is redeemed against the
+    // attacker's authorization request and the code lands on the attacker's
+    // redirect_uri — a full account takeover for one click.
+    const store = makeStore({ "authreq:attacker-nonce": authRequest });
+    const session = await mintSession("victim-identity", SIGNING_KEY, { ttlSeconds: 300 });
+
+    const res = await handleOAuthRoute(
+      // The victim's browser carries no cookie for the attacker's nonce.
+      new Request(`${ISSUER}/oauth/callback?nonce=attacker-nonce&fis_session=${session}`),
+      config(store),
+    );
+
+    expect(res?.status).not.toBe(302);
     expect(res?.headers.get("Location")).toBeNull();
-    await expect(res?.text()).resolves.toContain("already in progress");
+    // The authorization request must survive unconsumed rather than be spent.
+    expect(await store.get("authreq:attacker-nonce")).not.toBeNull();
+  });
+
+  it("refuses a nonce that does not match the cookie it was issued with", async () => {
+    const store = makeStore({ "authreq:nonce-1": authRequest, "authreq:other": authRequest });
+    const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
+
+    const res = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${session}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=other` },
+      }),
+      config(store),
+    );
+
+    expect(res?.status).not.toBe(302);
+    expect(await store.get("authreq:nonce-1")).not.toBeNull();
   });
 
   it("rejects unsupported providers on the continue endpoint", async () => {
@@ -161,7 +207,9 @@ describe("oauth callback", () => {
     const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
 
     const res = await handleOAuthRoute(
-      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${session}`),
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${session}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+      }),
       config(store),
     );
 
@@ -179,7 +227,9 @@ describe("oauth callback", () => {
       const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
 
       const res = await handleOAuthRoute(
-        new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&${param}=${session}`),
+        new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&${param}=${session}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+      }),
         config(store),
       );
 
@@ -194,15 +244,21 @@ describe("oauth callback", () => {
     const foreign = await mintSession("identity-1", "some-other-stores-key");
 
     const expiredRes = await handleOAuthRoute(
-      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${expired}`),
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${expired}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+      }),
       config(makeStore({ "authreq:nonce-1": authRequest })),
     );
     const foreignRes = await handleOAuthRoute(
-      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${foreign}`),
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${foreign}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+      }),
       config(makeStore({ "authreq:nonce-1": authRequest })),
     );
     const staleNonceRes = await handleOAuthRoute(
-      new Request(`${ISSUER}/oauth/callback?nonce=gone&fis_session=${valid}`),
+      new Request(`${ISSUER}/oauth/callback?nonce=gone&fis_session=${valid}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=gone` },
+      }),
       config(makeStore()),
     );
 
@@ -223,7 +279,9 @@ describe("oauth callback", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const res = await handleOAuthRoute(
-      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&auth_error=denied`),
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&auth_error=denied`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+      }),
       config(makeStore({ "authreq:nonce-1": authRequest })),
     );
 
@@ -235,7 +293,9 @@ describe("oauth callback", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const res = await handleOAuthRoute(
-      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1`),
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+      }),
       config(makeStore({ "authreq:nonce-1": authRequest })),
     );
 
@@ -261,7 +321,9 @@ describe("token exchange", () => {
     );
     const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
     const callback = await handleOAuthRoute(
-      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${session}`),
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${session}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+      }),
       config(store),
     );
     return new URL(callback?.headers.get("Location") ?? "").searchParams.get("code") ?? "";

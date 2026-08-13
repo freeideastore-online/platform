@@ -16,7 +16,7 @@
 import { inspectSession, mintSession, MCP_SESSION_TTL_SECONDS, type SessionFailure } from "./session.js";
 import {
   AUTH_IN_FLIGHT_COOKIE,
-  authAlreadyInProgress,
+
   authConfirmPage,
   authErrorPage,
   authProvider,
@@ -176,8 +176,10 @@ async function authorize(request: Request, config: OAuthConfig): Promise<Respons
   if (codeChallengeMethod && codeChallengeMethod !== "S256") {
     return new Response("only S256 is supported", { status: 400 });
   }
-  if (cookieValue(request, AUTH_IN_FLIGHT_COOKIE)) return authAlreadyInProgress();
-
+  // Starting a second authorization simply supersedes the first: the confirm
+  // page re-issues the cookie, so the older nonce can no longer be redeemed.
+  // This used to answer with an "already in progress" page instead, which left
+  // a user who abandoned one attempt locked out until the cookie aged out.
   const clientRaw = await config.store.get(`client:${clientId}`);
   if (!clientRaw) return new Response("invalid client_id", { status: 400 });
   const client = JSON.parse(clientRaw) as { redirect_uris: string[]; client_name?: string | null };
@@ -242,6 +244,18 @@ async function oauthCallback(request: Request, config: OAuthConfig): Promise<Res
     return authErrorPage(
       "Sign-in did not complete",
       "The sign-in came back without everything this server needs. Start the connection again from your MCP client.",
+    );
+  }
+
+  // The nonce alone proves nothing — it travels in a URL anyone can construct.
+  // Only the browser that called /authorize holds the matching cookie, and
+  // without this check a victim's session can be redeemed against an
+  // attacker-created authorization request. See authInFlightCookie().
+  if (cookieValue(request, AUTH_IN_FLIGHT_COOKIE) !== nonce) {
+    console.warn("mcp oauth callback: nonce does not match the in-flight cookie");
+    return authErrorPage(
+      "This sign-in could not be verified",
+      "The sign-in did not start in this browser. Start the connection again from your MCP client, and complete it in the window it opens.",
     );
   }
 

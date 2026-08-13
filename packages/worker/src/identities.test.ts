@@ -306,3 +306,29 @@ describe('provider authorize URLs', () => {
     expect(isProviderId(null)).toBe(false);
   });
 });
+
+describe('a provider hiccup must not erase a stored verified email', () => {
+  it('keeps the stored address when the provider returns none', async () => {
+    // githubVerifiedEmail returns null on a rate limit or 5xx. Clearing the row
+    // on that would un-link the account and re-open #40 days later, silently.
+    const { env } = fakeEnv();
+    const linked = await upsertIdentity(env, verified(github('1', 'alice'), 'alice@example.com'));
+    expect(linked.email).toBe('alice@example.com');
+
+    const afterHiccup = await upsertIdentity(env, github('1', 'alice'));
+    expect(afterHiccup.email).toBe('alice@example.com');
+    expect(afterHiccup.email_verified).toBe(1);
+
+    // Still linkable: a Google sign-in on the same address joins the profile.
+    const goog = await upsertIdentity(env, verified(google('9', 'alice-other'), 'alice@example.com'));
+    expect(goog.handle).toBe('alice');
+  });
+
+  it('still records an address the first time one arrives', async () => {
+    const { env } = fakeEnv();
+    await upsertIdentity(env, github('1', 'alice'));
+    const withEmail = await upsertIdentity(env, verified(github('1', 'alice'), 'alice@example.com'));
+    expect(withEmail.email).toBe('alice@example.com');
+    expect(withEmail.email_verified).toBe(1);
+  });
+});
