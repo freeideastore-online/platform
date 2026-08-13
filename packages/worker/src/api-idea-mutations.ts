@@ -29,6 +29,53 @@ const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'pro
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
 
 /**
+ * How much of THIS write's content the budget can actually take.
+ *
+ * The naive answer — `FIELD_LIMITS.body - current.length` — is right only for
+ * an append, because only an append leaves every character of the current
+ * document in place. A `patch_idea_section` replace and a section merge also
+ * FREE the outgoing section, so the allowance is measured against what the
+ * write keeps, not against what the document held before it. Telling a replace
+ * it "may add at most N more" when it is dropping a 40,000-character section
+ * asks the author to trim content they never had to trim.
+ *
+ * `resulting` already reflects everything the write frees, so the outgoing
+ * length never has to be threaded through the call sites:
+ *
+ *   allowance = incoming.length - (resulting.length - LIMIT)
+ *
+ * For an append that reduces to `LIMIT - current.length` (less the blank line
+ * the join inserts). For a replace it reduces to `LIMIT - (current.length -
+ * outgoing.length)`, which is the number the author needs. For a merge, where
+ * nothing is contributed and content only moves, the write cannot grow the
+ * document at all — so it can only overflow a document that was already over,
+ * and `incoming` is absent and the message says so.
+ */
+function overflowAdvice(
+  resulting: string,
+  options: { current?: string; incoming?: string },
+): string {
+  const excess = resulting.length - FIELD_LIMITS.body;
+  if (options.incoming !== undefined) {
+    const allowance = Math.max(0, options.incoming.length - excess);
+    return (
+      `this write may contribute at most ${allowance} of its ${options.incoming.length} characters` +
+      ` — ${excess} too many once what the document keeps is counted`
+    );
+  }
+  if (options.current !== undefined && resulting.length <= options.current.length) {
+    // A merge, move or removal: it did not grow the document, so the document
+    // was already over budget before this edit and trimming this edit is not
+    // the fix.
+    return (
+      `this edit does not grow the document — it is already ${options.current.length} characters` +
+      ` and must lose at least ${options.current.length - FIELD_LIMITS.body}`
+    );
+  }
+  return `trim at least ${excess} characters`;
+}
+
+/**
  * The free-tier document budget, checked in one place.
  *
  * Both ceilings are enforced here so a document cannot pass one write path and
@@ -37,29 +84,22 @@ const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
  * answer. Rejects, never truncates — see the note above FIELD_LIMITS; a silent
  * `.slice()` once destroyed the tail of four contributions.
  *
- * `current` is the body being EXTENDED, and only incremental writes pass it. A
- * section append leaves the rest of the document in place, so the actionable
- * number is how much may still be added; a whole-document publish replaces
- * everything, so the actionable number is how much to trim. Reporting the
- * wrong one is the failure in #46 — three agents each had to overflow once and
- * subtract from the error string to discover ~41,800 characters of headroom.
+ * `current` is the document as it stands and `incoming` is the content this
+ * write is contributing; only incremental writes pass them. A whole-document
+ * publish replaces everything, so the actionable number there is simply how
+ * much to trim. Reporting the wrong one is the failure in #46 — three agents
+ * each had to overflow once and subtract from the error string to discover
+ * ~41,800 characters of headroom.
  */
 export function documentOverflow(
   body: string,
   title = '',
-  options: { current?: string } = {},
+  options: { current?: string; incoming?: string } = {},
 ): string | null {
   if (body.length > FIELD_LIMITS.body) {
-    const headroom =
-      options.current === undefined
-        ? null
-        : Math.max(0, FIELD_LIMITS.body - options.current.length);
-    const advice =
-      headroom === null
-        ? `trim at least ${body.length - FIELD_LIMITS.body} characters`
-        : `this document may add at most ${headroom} more`;
     return (
-      `body is ${body.length} characters; the free limit is ${FIELD_LIMITS.body} (${advice})` +
+      `body is ${body.length} characters; the free limit is ${FIELD_LIMITS.body}` +
+      ` (${overflowAdvice(body, options)})` +
       ' — move the overflow into a derived annex document, or take the document to Pro'
     );
   }
@@ -412,7 +452,9 @@ export async function updateIdeaSection(
     );
   }
 
-  const budget = documentOverflow(next, idea.title, { current });
+  // `content` is what this write contributes; a replace also frees the section
+  // it overwrites, and passing both is what lets the error account for it.
+  const budget = documentOverflow(next, idea.title, { current, incoming: content });
   if (budget) return bad(budget);
 
   const result = await writeCanonicalBody(env, idea, next, idea.title, {
@@ -672,7 +714,7 @@ export async function applyRefinement(
     );
   }
 
-  const budget = documentOverflow(next, idea.title, { current });
+  const budget = documentOverflow(next, idea.title, { current, incoming: content });
   if (budget) return bad(budget);
 
   const result = await writeCanonicalBody(env, idea, next, idea.title, {
@@ -779,7 +821,11 @@ async function writeStructuralEdit(
       404,
     );
   }
-  const budget = documentOverflow(next, idea.title, { current });
+  // Only `add section` contributes author text; a merge, move, rename or
+  // removal reshapes what is already there, and passing an empty `incoming` for
+  // those would advertise an allowance of zero on a write that adds nothing.
+  const incoming = typeof input.content === 'string' && input.content ? input.content : undefined;
+  const budget = documentOverflow(next, idea.title, { current, incoming });
   if (budget) return bad(budget);
   if (next === current) {
     return json({ ok: true, idea: idea.id, note: 'no change' });

@@ -146,10 +146,40 @@ export function enumValue(value: unknown, allowed: Set<string>, fallback: string
 }
 
 /**
- * Ceiling on a single request. Comfortably above FIELD_LIMITS.body so a full
- * document write fits, while still bounding what one call can cost.
+ * Ceiling on a single request, measured in CHARACTERS of the decoded body.
+ *
+ * It has to sit above FIELD_LIMITS.body rather than at it: a whole-document
+ * write is the body plus a JSON envelope, and JSON only ever makes the payload
+ * longer. Every `"` and `\` becomes two characters, every newline in the
+ * markdown becomes the two characters `\n`, and a control character becomes the
+ * six characters `\u0000`. A document at the body limit therefore arrives as
+ * strictly more than FIELD_LIMITS.body characters, so a request ceiling EQUAL
+ * to the body limit would reject the largest document the body limit permits —
+ * with a 413 that names a different number than the one the author was told to
+ * write to.
+ *
+ * Doubling is the headroom: markdown runs roughly 2-4% escapable characters
+ * (mostly newlines), so 2x covers the envelope, the other fields, and a wide
+ * margin of quote-heavy prose, while still bounding what one call can cost.
+ * Derived from FIELD_LIMITS.body so the two cannot drift apart again.
  */
-export const MAX_REQUEST_CHARS = 1_000_000;
+export const MAX_REQUEST_CHARS = FIELD_LIMITS.body * 2;
+
+/**
+ * The same ceiling expressed in BYTES, for the `content-length` pre-check.
+ *
+ * `content-length` counts UTF-8 bytes; MAX_REQUEST_CHARS counts UTF-16 code
+ * units. They are not the same quantity, and comparing one against the other
+ * silently shrinks the real limit for any document that is not pure ASCII: `§`
+ * costs 2 bytes, `—` 3, `⚠️` 6, so a document of section marks and em dashes
+ * would be rejected at a third of the characters it is allowed. Research bodies
+ * in this corpus are full of exactly those characters.
+ *
+ * So the byte check uses the UTF-8 worst case — 4 bytes per character — which
+ * makes it a cheap early-out on an unverified header that can never reject a
+ * payload the authoritative character check below would accept.
+ */
+export const MAX_REQUEST_BYTES = MAX_REQUEST_CHARS * 4;
 
 export type JsonBodyResult =
   | { ok: true; data: Record<string, unknown> }
@@ -165,11 +195,13 @@ export type JsonBodyResult =
  * entirely the wrong place. Same silent-failure family as the truncation in #1.
  */
 export async function readJsonBody(request: Request): Promise<JsonBodyResult> {
+  // A byte header compared against a byte limit. See MAX_REQUEST_BYTES for why
+  // this is deliberately not MAX_REQUEST_CHARS.
   const declared = Number(request.headers.get('content-length') || '0');
-  if (Number.isFinite(declared) && declared > MAX_REQUEST_CHARS) {
+  if (Number.isFinite(declared) && declared > MAX_REQUEST_BYTES) {
     return {
       ok: false,
-      response: bad(`request body is ${declared} bytes; the limit is ${MAX_REQUEST_CHARS}`, 413),
+      response: bad(`request body is ${declared} bytes; the limit is ${MAX_REQUEST_BYTES} bytes`, 413),
     };
   }
 
@@ -182,7 +214,11 @@ export async function readJsonBody(request: Request): Promise<JsonBodyResult> {
   if (text.length > MAX_REQUEST_CHARS) {
     return {
       ok: false,
-      response: bad(`request body is ${text.length} characters; the limit is ${MAX_REQUEST_CHARS}`, 413),
+      response: bad(
+        `request body is ${text.length} characters; the limit is ${MAX_REQUEST_CHARS} characters` +
+          ` (a whole document is at most ${FIELD_LIMITS.body}, plus its JSON envelope)`,
+        413,
+      ),
     };
   }
   // An absent body is legitimate: several endpoints take no fields.

@@ -82,11 +82,19 @@ A total-word gate was part of this and has been dropped. At 3 chapters averaging
 
 Below any of those bars the idea renders as a single page with an in-page table of contents, and chapter deep links `302` to the matching heading anchor.
 
-This gate exists because splitting on `##` alone produced chapters that were not worth a page. Across all 11 published ideas, mean words per chapter ran 38-185, no chapter filled a laptop viewport, and the idea page — which renders the whole body inline — already showed 103% of the combined chapter content. Pagination was navigation wrapped around content the reader could already scroll, and it made the argument harder to critique by spreading it across page loads.
+This gate exists because splitting on `##` alone produced chapters that were not worth a page. Across all 11 published ideas, mean words per chapter ran 38-185, no chapter filled a laptop viewport, and the idea page — which at the time inlined the whole body — already showed 103% of the combined chapter content. Pagination was navigation wrapped around content the reader could already scroll, and it made the argument harder to critique by spreading it across page loads.
 
 An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.
 
-Content before the first `##` is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence.
+## What The Idea Page Itself Renders
+
+A **single-page** idea renders its whole body inline, with an in-page table of contents.
+
+A **paginated** idea does not. The chapters have their own URLs, so re-rendering them on the index would publish every chapter twice and make the landing page grow without bound as the document deepens — render cost, not storage, is the real ceiling on how large a document can get. The index shows the **lead-in** instead: everything before the first chapter heading, which is where a document's framing lives.
+
+Most documents have no lead-in. `defaultIdeaBody()` and the canonical nine-section spine both open directly on `## Snapshot`, so a template-built document's lead-in is empty. In that case the idea page renders a **chapter summary list** — each chapter's title, linked, with the excerpt already computed for the sidebar — so the landing page always carries readable, indexable prose rather than a summary line and a list of bare titles.
+
+Content before the first `##` is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence. Both the lead-in and the chapter list come from the same parser (`sectionRanges()` in `packages/worker/src/markdown.ts`); nothing may re-derive "where the first chapter starts" with a regex of its own, or a heading the two disagree about gets published twice.
 
 ## The Research Record Is Paged
 

@@ -57,6 +57,13 @@ ${MARKDOWN_CSS}
 [data-theme="dark"] .research-tag.prov-confirmed,[data-theme="dark"] .research-tag.prov-extracted{background:#052e2b;color:#6ee7b7}
 [data-theme="dark"] .research-tag.prov-inferred,[data-theme="dark"] .research-tag.prov-human-asserted{background:#3a2a05;color:#fcd34d}
 [data-theme="dark"] .research-tag.conf-low{background:#3f1414;color:#fca5a5}
+/* A paginated document whose body opens straight on its first chapter heading
+   has no lead-in to inline, so the landing page shows what each chapter is
+   about instead of nothing at all. */
+.chapter-summary-lead{color:var(--muted);font-size:.82rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase;margin:0 0 .55rem}
+.chapter-summaries{list-style:none;margin:0;padding:0;gap:.6rem}
+.chapter-summaries li{border-left:3px solid var(--line);padding-left:.7rem;color:var(--body-text);font-size:.9rem;line-height:1.55}
+.chapter-summaries a{color:var(--accent-strong);font-weight:900}
 /* Short ideas render without the chapter sidebar — close the column it left. */
 .book-shell.single-page{grid-template-columns:minmax(0,1fr) 300px}
 @media(max-width:1180px){.book-shell.single-page{grid-template-columns:minmax(0,1fr)}}

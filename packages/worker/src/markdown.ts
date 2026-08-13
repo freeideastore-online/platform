@@ -137,9 +137,9 @@ export type IdeaChapter = {
  * Splitting used to happen on heading count alone, so every `##` became a page
  * regardless of size. Measured across all 11 published ideas, mean words per
  * chapter ran 38-185 — no chapter filled a laptop viewport, and the idea home
- * page (which renders the whole body inline) already showed 103% of the
- * combined chapter content. Pagination was navigation over content the reader
- * could already scroll.
+ * page (which then inlined the whole body, and now inlines only the lead-in)
+ * already showed 103% of the combined chapter content. Pagination was
+ * navigation over content the reader could already scroll.
  *
  * A chapter has to carry enough to stand alone, and there have to be enough of
  * them to be worth paging through. Below either bar the idea is one page with an
@@ -341,6 +341,39 @@ function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
   });
 
   return ranges;
+}
+
+/**
+ * The lead-in: everything before the first chapter heading. This is a
+ * document's framing, and on a paginated idea page it is the only body prose
+ * the index renders — the chapters themselves live on their own URLs.
+ *
+ * It is derived from `sectionRanges()` for the reason stated above that
+ * function: a second heading parser is a second opinion, and the two disagreeing
+ * is a bug, not a difference in taste. A `body.split(/^## /m)` would treat
+ * `# Chapter` before the first `##`, or an indented `  ## Chapter`, as lead-in
+ * while `sectionRanges()` treats both as chapters — so such a chapter would be
+ * inlined here AND served as its own page, which is exactly the duplication
+ * chapter pagination exists to remove.
+ */
+export function ideaPreamble(markdown: string, documentTitle = '') {
+  const lines = markdown.split(/\r?\n/);
+  const ranges = sectionRanges(markdown, documentTitle);
+  const first = ranges[0];
+  const preamble = lines.slice(0, first ? first.headingLine : lines.length);
+
+  // `sectionRanges()` skips a leading `# Document Title` — it is the page's own
+  // <h1>, not a chapter. It must not come back as lead-in prose either.
+  const firstContent = preamble.findIndex((line) => line.trim());
+  const repeatedTitle =
+    documentTitle && firstContent >= 0
+      ? (preamble[firstContent] || '').trim().match(/^#\s+(.+)$/)
+      : null;
+  if (repeatedTitle && slug((repeatedTitle[1] || '').trim()) === slug(documentTitle)) {
+    preamble.splice(firstContent, 1);
+  }
+
+  return preamble.join('\n').trim();
 }
 
 export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {

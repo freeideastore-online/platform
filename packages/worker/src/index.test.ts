@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
+import { FIELD_LIMITS, MAX_REQUEST_CHARS } from './http';
 import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection } from './idea-research';
 
 /**
@@ -849,6 +850,67 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('Post comment');
     expect(html).toContain('const ideaId = "asx-filings-analyst"');
     expect(html).toContain('/contributions');
+  });
+
+  it('renders chapter summaries when a paginated document has no lead-in to inline', async () => {
+    // This fixture opens on `## Snapshot`, exactly like defaultIdeaBody() and
+    // the canonical spine, so its lead-in is EMPTY — which is the normal case,
+    // not an edge case. Left at that the landing page carried a summary line, a
+    // diagram and a list of bare chapter titles, and not one sentence of the
+    // document: nothing to read and nothing for a crawler to index.
+    const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), env());
+    const html = await response.text();
+
+    expect(html).toContain('<div class="chapter-body">');
+    expect(html).toContain('This idea is published as 3 chapters.');
+    expect(html).toContain('class="chapter-summaries"');
+    // Each chapter's excerpt as visible prose, linked to the chapter page.
+    expect(html).toContain(
+      '<li><a href="/ideas/asx-filings-analyst/design-sketch/">Design Sketch</a> &mdash; Review filings. Cite sources.',
+    );
+    expect(html).toContain('Accidental financial advice.');
+    // Prose, but still not the chapters themselves.
+    expect(html).not.toContain('<h2 id="design-sketch">Design Sketch</h2>');
+  });
+
+  it('does not inline a `#`-headed chapter that also has its own chapter page', async () => {
+    // A lead-in derived from `body.split(/^## /m)` keeps everything before the
+    // first `##`, but sectionRanges() — which decides what gets a chapter URL —
+    // treats a `#` heading as a chapter. So this chapter was rendered inline on
+    // the index AND served at its own URL: the exact duplication chapter
+    // pagination exists to remove. The lead-in comes from the same parser now.
+    mockSignedInSerge();
+    const testEnv = env();
+    const update = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          body: [
+            '# Opening Chapter',
+            filler(55),
+            '',
+            '## Second Chapter',
+            filler(55),
+            '',
+            '## Third Chapter',
+            filler(55),
+          ].join('\n'),
+        }),
+      }),
+      testEnv,
+    );
+    const page = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), testEnv);
+    const html = await page.text();
+
+    expect(update.status).toBe(200);
+    expect(page.status).toBe(200);
+    // It is a chapter: linked, with a page of its own.
+    expect(html).toContain('href="/ideas/serge-idea-lab/opening-chapter/"');
+    // And therefore NOT also inlined here.
+    expect(html).not.toContain('<h2 id="opening-chapter">Opening Chapter</h2>');
+    // With no lead-in left over, the index falls back to chapter summaries.
+    expect(html).toContain('This idea is published as 3 chapters.');
   });
 
   it('renders non-comment contributions as a server-side research section', async () => {
@@ -1720,13 +1782,44 @@ describe('FreeIdeaStore worker', () => {
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
-        body: JSON.stringify({ title: 'Huge', summary: 'x'.repeat(20), body: 'y'.repeat(1_000_001) }),
+        body: JSON.stringify({
+          title: 'Huge',
+          summary: 'x'.repeat(20),
+          body: 'y'.repeat(MAX_REQUEST_CHARS + 1),
+        }),
       }),
       env(),
     );
 
     expect(response.status).toBe(413);
-    expect((await response.json() as { error: string }).error).toContain('the limit is 1000000');
+    expect((await response.json()) as { error: string }).toMatchObject({
+      error: expect.stringContaining(`the limit is ${MAX_REQUEST_CHARS} characters`),
+    });
+  });
+
+  it('rejects an over-budget document with 400 and the budget, not 413', async () => {
+    // The request ceiling and the document ceiling are different limits with
+    // different remedies. A document one character over the free cap fits in a
+    // request comfortably, so the author must be told about the DOCUMENT budget
+    // rather than being handed a transport error.
+    mockSignedInSerge();
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Over Budget',
+          summary: 'A document one character past the free-tier character cap.',
+          body: 'y'.repeat(FIELD_LIMITS.body + 1),
+        }),
+      }),
+      env(),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()) as { error: string }).toMatchObject({
+      error: expect.stringContaining('trim at least 1 characters'),
+    });
   });
 
   it('still treats an absent body as no fields', async () => {
@@ -2401,17 +2494,24 @@ describe('FreeIdeaStore worker', () => {
     expect(update.status).toBe(200);
     // Writes now carry the document budget back to the author, so an agent can
     // see how much room is left instead of discovering the cap by hitting it.
-    await expect(update.json()).resolves.toMatchObject({
+    //
+    // Asserted as a closed shape with REAL numbers. `expect.any(Number)` on
+    // every field would have passed on a usage block that reported the wrong
+    // document, the wrong limit, or subtracted in the wrong direction — which
+    // is the entire thing this block exists to get right. The body written
+    // above is 83 characters and two chapters, both far under CHAPTER_SIZE's
+    // 500-word floor.
+    await expect(update.json()).resolves.toEqual({
       ok: true,
       idea: 'serge-idea-lab',
       url: '/ideas/serge-idea-lab/',
       usage: {
-        chars: expect.any(Number),
-        chars_remaining: expect.any(Number),
-        chapters: expect.any(Number),
-        chapters_remaining: expect.any(Number),
-        below_floor: expect.any(Number),
-        above_ceiling: expect.any(Number),
+        chars: 83,
+        chars_remaining: FIELD_LIMITS.body - 83,
+        chapters: 2,
+        chapters_remaining: FIELD_LIMITS.chapters - 2,
+        below_floor: 2,
+        above_ceiling: 0,
       },
     });
     expect(data.idea.stage).toBe('researching');

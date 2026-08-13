@@ -9,7 +9,7 @@ import { ideaHomeStyles } from './idea-home-styles';
 import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
 import { openRefinementCount } from './refinements';
 import { listIdeaSources } from './sources';
-import { ideaChapters, isPaginated, markdownHeadings, markdownToHtml } from './markdown';
+import { ideaChapters, ideaPreamble, isPaginated, markdownHeadings, markdownToHtml } from './markdown';
 import { readerSettingsBootScript } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE } from './site-nav';
 import type { Env } from './types';
@@ -56,12 +56,33 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   // the whole body here as well re-presents every chapter on the index page —
   // measured at 103% of the combined chapter content — and makes this page grow
   // without bound as the document deepens, since the entire markdown is parsed
-  // and emitted on every request. Show only the preamble: whatever precedes the
+  // and emitted on every request. Show only the lead-in: whatever precedes the
   // first chapter heading, which is where a document's framing lives.
   //
   // This is what makes FIELD_LIMITS.body safe to raise. Render cost, not
   // storage, is the real ceiling on document size.
-  const inlineBody = paginated ? (body.split(/^## /m)[0] ?? '').trim() : body;
+  //
+  // `ideaPreamble()` and not a local split: the lead-in has to be exactly the
+  // text no chapter page claims, decided by the one parser chapters and section
+  // edits already share, or a heading the two disagree about is published twice.
+  const inlineBody = paginated ? ideaPreamble(body, idea.title) : body;
+  // Most documents have NO lead-in — `defaultIdeaBody()` and the canonical nine
+  // section spine both open on `## Snapshot`, so every template-built document
+  // has an empty preamble. Left at that, the landing page of a paginated idea
+  // would carry a summary line, a diagram and a list of chapter titles, and not
+  // one sentence of the document itself: nothing to read, and nothing for a
+  // crawler or a reader deciding whether to open a chapter. The chapter
+  // excerpts are that prose, and they are already computed for the sidebar.
+  const chapterSummaries = paginated && !inlineBody
+    ? `<p class="chapter-summary-lead">This idea is published as ${chapters.length} ${chapters.length === 1 ? 'chapter' : 'chapters'}.</p>
+      <ul class="chapter-summaries">${chapters
+        .map(
+          (chapter) =>
+            `<li><a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/">${escapeHtml(chapter.title)}</a> &mdash; ${escapeHtml(chapter.excerpt)}</li>`,
+        )
+        .join('')}</ul>`
+    : '';
+  const articleBody = chapterSummaries || markdownToHtml(inlineBody);
   // The Sections rail links in-page anchors, which only exist for the markdown
   // actually rendered on this page. Once the body is not inlined those anchors
   // point at nothing, so a paginated document has to link its chapter pages
@@ -117,7 +138,7 @@ ${
       <div class="meta"><span class="pill">${escapeHtml(idea.stage)}</span><span class="pill">${escapeHtml(idea.category)}</span><span class="pill">${idea.pro_candidate ? 'pro candidate' : 'free idea'}</span></div>
       ${parent ? `<p class="crumb">Derived from <a href="/ideas/${escapeHtml(parent.id)}/">${escapeHtml(parent.title)}</a></p>` : ''}
       ${ideaDiagram(idea.id)}
-      ${inlineBody ? `<div class="chapter-body">${markdownToHtml(inlineBody)}</div>` : ''}
+      ${articleBody ? `<div class="chapter-body">${articleBody}</div>` : ''}
     </article>
     ${researchSection(contributions, idea.id, {
       page: researchPage,
