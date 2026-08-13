@@ -3,7 +3,7 @@
   "servers": [
     {
       "name": "FreeIdeaStore",
-      "description": "AI agent tools for FreeIdeaStore. Use published idea skills, create ideas, read idea research, add evidence, propose refinements, publish owner-approved canonical updates, soft-delete owner ideas, react with support/trash/pivot signals, and promote mature ideas toward ProIdeaStore.",
+      "description": "AI agent tools for FreeIdeaStore. Use published idea skills, create ideas, read idea research, add evidence, propose and resolve refinements, publish owner-approved canonical updates section by section, browse and revert document revisions, soft-delete owner ideas, react with support/trash/pivot signals, and promote mature ideas toward ProIdeaStore.",
       "endpoint": "https://mcp.freeideastore.online/mcp",
       "transport": "streamable-http",
       "auth": {
@@ -26,6 +26,14 @@
         {
           "name": "apply_idea_skill",
           "description": "Apply a skill to a rough idea or existing idea context and return questions, a checklist, or tool plan."
+        },
+        {
+          "name": "dynamic_idea_book_template",
+          "description": "Return the canonical Markdown heading spine used by dynamic FreeIdeaStore idea books."
+        },
+        {
+          "name": "dry_run_dynamic_idea_book",
+          "description": "Preview canonical Markdown and dynamic chapter URLs for a FreeIdeaStore idea without writing files."
         },
         {
           "name": "get_idea",
@@ -56,28 +64,80 @@
           "description": "Record a structured section-level refinement proposal without overwriting the canonical body."
         },
         {
+          "name": "react_to_idea",
+          "description": "Add a support, trash, or pivot signal to an idea."
+        },
+        {
           "name": "publish_idea_update",
-          "description": "Replace the authenticated owner's canonical public idea document after refinement, or update only its metadata when body is omitted."
+          "description": "Replace the authenticated owner's canonical public idea document, or update only its metadata when body is omitted. Prefer the section tools for anything short of a full rewrite."
         },
         {
           "name": "delete_idea",
           "description": "Soft-delete an authenticated owner's idea from public FreeIdeaStore surfaces."
         },
         {
-          "name": "react_to_idea",
-          "description": "Add a support, trash, or pivot signal to an idea."
-        },
-        {
           "name": "promote_to_pro_candidate",
           "description": "Mark an authenticated owner's idea as a ProIdeaStore candidate and return a dossier draft."
         },
         {
-          "name": "dynamic_idea_book_template",
-          "description": "Return the canonical Markdown heading spine used by dynamic FreeIdeaStore idea books."
+          "name": "list_idea_sections",
+          "description": "List an idea document's sections with their ids and word counts. Start here before reading or writing a section."
         },
         {
-          "name": "dry_run_dynamic_idea_book",
-          "description": "Preview canonical Markdown and dynamic chapter URLs for a FreeIdeaStore idea without writing files."
+          "name": "read_idea_section",
+          "description": "Read one section of an idea document instead of pulling the whole document into context."
+        },
+        {
+          "name": "patch_idea_section",
+          "description": "Replace one section of the authenticated owner's document, leaving the rest byte-identical."
+        },
+        {
+          "name": "append_to_idea_section",
+          "description": "Add markdown to the end of one section of the authenticated owner's document."
+        },
+        {
+          "name": "list_idea_revisions",
+          "description": "List past versions of an idea document, newest first, with author and write kind."
+        },
+        {
+          "name": "read_idea_revision",
+          "description": "Read the full markdown of one past revision of an idea document."
+        },
+        {
+          "name": "diff_idea_revision",
+          "description": "Show added and removed lines between a past revision and the current document."
+        },
+        {
+          "name": "revert_idea_to_revision",
+          "description": "Restore a past revision as the authenticated owner's current document. The revert is itself recorded."
+        },
+        {
+          "name": "list_pending_refinements",
+          "description": "List refinement proposals on an idea that have not been merged or closed yet."
+        },
+        {
+          "name": "apply_refinement",
+          "description": "Merge a queued refinement into the authenticated owner's canonical document and close it."
+        },
+        {
+          "name": "resolve_refinement",
+          "description": "Close a refinement without merging it, recording why."
+        },
+        {
+          "name": "add_idea_section",
+          "description": "Add a new section to the authenticated owner's document, optionally positioned with after/before."
+        },
+        {
+          "name": "edit_idea_section",
+          "description": "Rename and/or move a section. Renaming changes the section id, so the old chapter URL stops resolving."
+        },
+        {
+          "name": "merge_idea_sections",
+          "description": "Fold one section's content into another and drop the source."
+        },
+        {
+          "name": "delete_idea_section",
+          "description": "Remove a section and its content. Recoverable through revisions."
         }
       ]
     }

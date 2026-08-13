@@ -2,23 +2,31 @@ import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createAuthChallenge, handleOAuthRoute } from "./oauth-provider.js";
 import { hasIdentity, SessionAuth, type AuthStorage } from "./do-auth.js";
-import { TOOL_COUNT } from "./idea-skills.js";
 import { authenticateRequest, oauthStore } from "./mcp-auth.js";
 import { mintSession, verifySession } from "./session.js";
 import type { Env, McpProps } from "./mcp-types.js";
-import { registerAccountTools } from "./register-account-tools.js";
-import { registerCollaborationTools } from "./register-collaboration-tools.js";
-import { registerPublishingTools } from "./register-publishing-tools.js";
-import { registerSkillTools } from "./register-skill-tools.js";
+import { registerAllTools, toolCount, toolNames } from "./tool-registry.js";
 
 /** Sign-in on the FreeIdeaStore site. FIS's own since #37 — see oauth-provider.ts. */
 const AUTH_START_PATH = "/.fis/auth/start";
 
-const ROOT_TEXT =
-  "FreeIdeaStore MCP Server\n\n" +
-  "Connect: npx mcp-remote https://mcp.freeideastore.online/mcp\n\n" +
-  "Tools: free_idea_template, list_idea_skills, get_idea_skill, apply_idea_skill, get_idea, my_ideas, my_activity, create_free_idea, derive_idea, add_idea_contribution, propose_idea_refinement, publish_idea_update, delete_idea, react_to_idea, promote_to_pro_candidate, dynamic_idea_book_template, dry_run_dynamic_idea_book\n\n" +
-  "Auth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FreeIdeaStore session token>.\n";
+let rootTextCache: string | undefined;
+
+/**
+ * What an agent reads at `/` before it connects.
+ *
+ * The tool list is read out of the registrations rather than restated beside
+ * them (#72). A hand-written copy went stale at 17 of 32 and stayed there,
+ * hiding every section-write, revision and refinement tool from the agents most
+ * likely to need them.
+ */
+function rootText(): string {
+  return (rootTextCache ??=
+    "FreeIdeaStore MCP Server\n\n" +
+    "Connect: npx mcp-remote https://mcp.freeideastore.online/mcp\n\n" +
+    `Tools (${toolCount()}): ${toolNames().join(", ")}\n\n` +
+    "Auth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FreeIdeaStore session token>.\n");
+}
 
 export class FisMcp extends McpAgent<Env, unknown, McpProps> {
   server = new McpServer({ name: "FreeIdeaStore", version: "0.1.0" });
@@ -71,10 +79,7 @@ export class FisMcp extends McpAgent<Env, unknown, McpProps> {
       const restored = this.sessionAuth().current();
       return hasIdentity(restored) ? restored : this.props || {};
     };
-    registerSkillTools(this.server, this.env);
-    registerAccountTools(this.server, this.env, getProps);
-    registerCollaborationTools(this.server, this.env, getProps);
-    registerPublishingTools(this.server, this.env, getProps);
+    registerAllTools(this.server, this.env, getProps);
   }
 }
 
@@ -120,14 +125,14 @@ export default {
       return Response.json({
         ok: true,
         service: "freeideastore-mcp",
-        tools: TOOL_COUNT,
+        tools: toolCount(),
         auth: await authHealth(env),
       });
     }
 
     if (url.pathname === "/" || url.pathname === "") {
       if (isProtocolClient(request)) return wrongEndpoint();
-      return new Response(ROOT_TEXT, { headers: { "content-type": "text/plain; charset=utf-8" } });
+      return new Response(rootText(), { headers: { "content-type": "text/plain; charset=utf-8" } });
     }
 
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {

@@ -8,18 +8,42 @@ FreeIdeaStore exposes an MCP server for agents that need to create, inspect, ref
 
 ## Discovery
 
-The public MCP discovery manifest is available at `/.well-known/mcp.json`.
+The public MCP discovery manifest is available at `/.well-known/mcp.json`. It lists every tool the server registers, and a test fails the build if the two ever disagree — an unlisted tool is an uncallable tool in practice, because an agent picks what to call from the list it can read.
 
 ## Important Tools
 
+All 32 tools the server registers, grouped by what they are for.
+
+**Skills and templates**
+
+- `free_idea_template`
 - `list_idea_skills`
 - `get_idea_skill`
 - `apply_idea_skill`
-- `create_free_idea`
+- `dynamic_idea_book_template`
+- `dry_run_dynamic_idea_book`
+
+**Reading**
+
 - `get_idea`
 - `my_ideas`
+- `my_activity`
+
+**Creating and contributing**
+
+- `create_free_idea`
+- `derive_idea`
 - `add_idea_contribution`
+- `react_to_idea`
+
+**Whole-document writes**
+
 - `publish_idea_update`
+- `delete_idea`
+- `promote_to_pro_candidate`
+
+**Section reads and writes** — the cheap path for everything short of a full rewrite
+
 - `list_idea_sections`
 - `read_idea_section`
 - `patch_idea_section`
@@ -28,15 +52,20 @@ The public MCP discovery manifest is available at `/.well-known/mcp.json`.
 - `edit_idea_section`
 - `merge_idea_sections`
 - `delete_idea_section`
+
+**Revision history**
+
 - `list_idea_revisions`
 - `read_idea_revision`
 - `diff_idea_revision`
 - `revert_idea_to_revision`
-- `delete_idea`
-- `react_to_idea`
-- `promote_to_pro_candidate`
-- `dynamic_idea_book_template`
-- `dry_run_dynamic_idea_book`
+
+**Refinement queue** — proposing a change and closing it are different tools
+
+- `propose_idea_refinement`
+- `list_pending_refinements`
+- `apply_refinement`
+- `resolve_refinement`
 
 ## Prefer Section Writes Over Whole-Document Rewrites
 
@@ -81,6 +110,14 @@ Every canonical write records the document as it was **before** the write, so th
 An unchanged body is not recorded. Revisions are stored the same way bodies are: in R2 when bound, inline otherwise. A failed snapshot never blocks the author's write.
 
 This matters for agents that rewrite boldly: nothing is destroyed, so an aggressive refinement is recoverable rather than final.
+
+## Refinements Are Opened And Closed By Different Tools
+
+`propose_idea_refinement` records a section-level change without touching the canonical body, which is the right move for a contributor who is not the owner. It leaves an item in a queue, and the queue is worked with three other tools:
+
+- `list_pending_refinements` — proposals on an idea that have not been merged or closed. Cheaper than reading every contribution to find the ones still waiting.
+- `apply_refinement` — merge one into the canonical document and close it. Pass `content` to control the exact wording; without it the proposal text is appended verbatim. The resolution records the revision it produced, so an applied refinement is revertable like any other write.
+- `resolve_refinement` — close one without merging it, recording why. A queue nobody can close is a queue that stops being read.
 
 ## Auth Rule
 
