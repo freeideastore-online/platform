@@ -23,7 +23,6 @@ export type IdeaRow = {
   signal?: string;
   body_md?: string;
   body_key?: string;
-  render_key?: string;
   source_url?: string;
   visibility?: string;
   stage: string;
@@ -93,6 +92,16 @@ export type ProfileIdeaRow = {
   category: string;
   updated_at: string;
   pro_candidate?: number;
+  /**
+   * The idea this one was derived from, or `''` for a root idea (the column
+   * default from migration 0009 — NOT null). Projected so a caller reading its
+   * own ideas can rebuild the parent/child tree it just built; without it
+   * `my_ideas` returns a flat list and the derivation is invisible (#80).
+   *
+   * Same representation as `IdeaRow.parent_id`, deliberately: two endpoints
+   * describing the same column must not disagree about what "no parent" is.
+   */
+  parent_id?: string;
 };
 
 export type ProfileContributionRow = {
