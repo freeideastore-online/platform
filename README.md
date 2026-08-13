@@ -10,7 +10,7 @@ It is where raw ideas are submitted, critiqued, researched, supported, pivoted, 
 - Worker Assets serving the UI from `store/`.
 - D1-backed collaboration API for ideas, profiles, contributions, and reactions.
 - Cheap dynamic idea pages at `/ideas/:id/`, backed by D1 metadata and optional R2 idea bodies/render cache.
-- GitHub/Google sign-in through the shared FreeAppStore auth service.
+- GitHub/Google sign-in that FreeIdeaStore owns end to end: its own OAuth applications, its own session signing key, and its own `identities` table. See [AUTH.md](./AUTH.md) for the flow, the token format, and why the independence matters.
 - Account-owned profile workspace at `/profile/` with “My ideas” and “My recent contributions”.
 - Seed data in `packages/worker/migrations/0001_collaboration.sql`.
 

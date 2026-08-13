@@ -74,6 +74,29 @@ FIS holds these at **repo** level (`freeideastore-online/platform`), not org lev
 
 To check rather than guess, `./bin/ops verify fis` reports whether the secret GitHub actually holds matches what `inventory.yaml` claims. That needs `admin:org` on the active `gh` account (granted 2026-08-05); a `403` on `gh secret list --org` means a missing token scope, not a missing secret.
 
+### Secrets the Workers need at runtime
+
+Those two are the deploy credentials. Sign-in needs a separate set, held as **Cloudflare Worker secrets** rather than GitHub secrets, because they are read by the running Worker and never by CI:
+
+| Secret | Worker | What it is for |
+|---|---|---|
+| `SESSION_SIGNING_KEY` | `freeideastore` **and** `freeideastore-mcp` | 64-hex HS256 key that signs and verifies FIS session tokens |
+| `GH_OAUTH_CLIENT_SECRET` | `freeideastore` | secret half of FIS's own GitHub OAuth App |
+| `GOOGLE_CLIENT_SECRET` | `freeideastore` | secret half of FIS's own Google OAuth client |
+
+The matching client ids are **not** secrets — they travel in every authorize redirect — so they live in version control as `[vars]` in `packages/worker/wrangler.toml`, where a reader can see what the deployed Worker is actually using.
+
+All three are managed from `~/dev/ops` and recorded under the `fis:` section of `inventory.yaml`:
+
+```bash
+cd ~/dev/ops && ./bin/ops put  fis SESSION_SIGNING_KEY
+cd ~/dev/ops && ./bin/ops push fis SESSION_SIGNING_KEY wrangler freeideastore-mcp
+```
+
+`ops put` stores the value and pushes it to every consumer the inventory names, so the `consumers:` list has to be right *before* the put — it pushes to those and nothing else. `ops push` re-places one value on one target, which is the recovery path when a single Worker is out of step.
+
+`SESSION_SIGNING_KEY` is the one to be careful with: the site Worker mints sessions with it and the MCP Worker verifies them, so the two must hold the *same* value. A rotation that reaches one and not the other breaks MCP sign-in with a bare `invalid session` — which is [#34](https://github.com/freeideastore-online/platform/issues/34), the bug that caused FIS to take ownership of its identity in the first place. It shares a name with a FreeAppStore secret and is deliberately unrelated to it; see [AUTH.md](./AUTH.md).
+
 Legacy Doppler path (no longer active — the `pas` project was removed from the workspace):
 
 ```bash
