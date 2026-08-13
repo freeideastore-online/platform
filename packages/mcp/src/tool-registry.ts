@@ -3,6 +3,7 @@ import type { Env, McpProps } from "./mcp-types.js";
 import { registerAccountTools } from "./register-account-tools.js";
 import { registerAuthTools, type AuthControls } from "./register-auth-tools.js";
 import { registerCollaborationTools } from "./register-collaboration-tools.js";
+import { registerDiscoveryTools } from "./register-discovery-tools.js";
 import { registerPublishingTools } from "./register-publishing-tools.js";
 import { registerSkillTools } from "./register-skill-tools.js";
 
@@ -38,6 +39,7 @@ const REGISTRARS: readonly Registrar[] = [
   registerAccountTools,
   registerCollaborationTools,
   registerPublishingTools,
+  registerDiscoveryTools,
 ];
 
 export function registerAllTools(

@@ -16,6 +16,69 @@ const HEADING_CONTRACT =
 const DEMOTE_HEADINGS =
   "Shift every heading in `content` below chapter level so the whole block lands as ONE chapter instead of splitting into siblings. The shift is uniform and taken from the shallowest heading present: a `#`-topped file moves two levels (`#`→`###`, `##`→`####`, `###`→`#####`), a `##`-topped file one (`##`→`###`). Content already topped at `###` is untouched. Nothing is pushed past `######`. Off by default.";
 
+const VERBOSE_SECTIONS =
+  "Return the document's full section list alongside the result, the way list_idea_sections would. Off by default: the tree is O(document) tokens on a response whose useful content is the write's outcome, so a ten-call consolidation pass would re-read the whole structure ten times.";
+
+/** One row of the section list a structural write returns. */
+type SectionRow = { id: string; title: string; words: number; verdict?: string };
+
+/**
+ * Trims the section list off a write response (#47).
+ *
+ * Structural writes answer with `sections: ideaSectionList(...)` — every chapter
+ * of the document, pretty-printed, on every call. #16 justified section-level
+ * writes as removing the O(document) token cost per edit; the request side
+ * achieved that and the response side did not, which punished consolidation
+ * hardest because folding a fragmented document together is inherently many
+ * small calls against a document with many sections.
+ *
+ * What stays is the compact result plus `usage` — the budget block PR #56 added
+ * deliberately, so an agent can still see its headroom and chapter health
+ * without a second call. Only the tree goes, and only until a caller asks for it.
+ */
+function sectionWriteResult(
+  data: Record<string, unknown>,
+  options: { verbose?: boolean; newTitle?: string } = {},
+): string {
+  if (options.verbose) return JSON.stringify(data, null, 2);
+  const { sections, ...rest } = data;
+  // Writes that carry no tree (a section replace, or a structural edit that
+  // changed nothing) pass straight through. Stripping runs on every write path
+  // regardless, so a response that starts carrying a tree later is trimmed by
+  // construction rather than by someone noticing.
+  if (!Array.isArray(sections)) return JSON.stringify(rest, null, 2);
+  const rows = sections as SectionRow[];
+  return JSON.stringify(
+    {
+      ...rest,
+      ...resolvedSection(rows, options.newTitle),
+      sections_omitted: rows.length,
+      note: `Section list omitted (${rows.length} chapters). Call list_idea_sections for the tree, or pass verbose: true.`,
+    },
+    null,
+    2,
+  );
+}
+
+/**
+ * The id of the section an add or a rename just produced.
+ *
+ * This is the one thing the tree was load-bearing for: a caller that adds a
+ * section needs its id to write into it, and the id is NOT derivable from the
+ * title on the client. `ideaChapters()` maps some titles onto canonical ids by
+ * keyword, and a collision falls back to the plain slug and then to a numbered
+ * suffix. So the id is read out of the list the API returned rather than
+ * guessed — and when two chapters genuinely share a title, every candidate is
+ * reported instead of one being picked arbitrarily.
+ */
+function resolvedSection(rows: SectionRow[], newTitle?: string) {
+  if (!newTitle) return {};
+  const matches = rows.filter((row) => row.title === newTitle).map((row) => row.id);
+  if (matches.length === 1) return { section: matches[0] };
+  if (matches.length > 1) return { section_candidates: matches };
+  return {};
+}
+
 export function registerPublishingTools(server: McpServer, env: Env, getProps: () => McpProps) {
   server.tool(
     "publish_idea_update",
@@ -212,7 +275,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       if (!res.ok || "error" in res.data) {
         return text(`Error patching section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
-      return text(JSON.stringify(res.data, null, 2));
+      return text(sectionWriteResult(res.data));
     },
   );
 
@@ -242,7 +305,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       if (!res.ok || "error" in res.data) {
         return text(`Error appending to section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
-      return text(JSON.stringify(res.data, null, 2));
+      return text(sectionWriteResult(res.data));
     },
   );
 
@@ -421,7 +484,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
 
   server.tool(
     "add_idea_section",
-    "Add a new section to the authenticated owner's idea document. Use this to grow a document's structure — patch_idea_section and append_to_idea_section only edit sections that already exist.",
+    "Add a new section to the authenticated owner's idea document. Use this to grow a document's structure — patch_idea_section and append_to_idea_section only edit sections that already exist. The response names the new section's id in `section`, so the next write needs no lookup.",
     {
       idea_id: z.string().min(2),
       title: z.string().min(1).max(120),
@@ -429,6 +492,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       after: z.string().optional().describe("Section id to insert after. Defaults to the end of the document."),
       before: z.string().optional().describe("Section id to insert before."),
       demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
+      verbose: z.boolean().optional().describe(VERBOSE_SECTIONS),
     },
     async (input) => {
       const props = getProps();
@@ -451,19 +515,20 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       if (!res.ok || "error" in res.data) {
         return text(`Error adding section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
-      return text(JSON.stringify(res.data, null, 2));
+      return text(sectionWriteResult(res.data, { verbose: input.verbose, newTitle: input.title }));
     },
   );
 
   server.tool(
     "edit_idea_section",
-    "Rename and/or move a section of the authenticated owner's idea document. Renaming changes the section id, so the old chapter URL stops resolving.",
+    "Rename and/or move a section of the authenticated owner's idea document. Renaming changes the section id, so the old chapter URL stops resolving — the response names the new id in `section`.",
     {
       idea_id: z.string().min(2),
       section: z.string().min(1),
       title: z.string().max(120).optional().describe("New title. Changes the section id."),
       after: z.string().optional().describe("Move to sit after this section id."),
       before: z.string().optional().describe("Move to sit before this section id."),
+      verbose: z.boolean().optional().describe(VERBOSE_SECTIONS),
     },
     async (input) => {
       const props = getProps();
@@ -480,7 +545,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       if (!res.ok || "error" in res.data) {
         return text(`Error editing section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
-      return text(JSON.stringify(res.data, null, 2));
+      return text(sectionWriteResult(res.data, { verbose: input.verbose, newTitle: input.title }));
     },
   );
 
@@ -491,6 +556,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       idea_id: z.string().min(2),
       from_section: z.string().min(1).describe("Section to fold in and remove."),
       into_section: z.string().min(1).describe("Section that receives the content."),
+      verbose: z.boolean().optional().describe(VERBOSE_SECTIONS),
     },
     async (input) => {
       const props = getProps();
@@ -503,7 +569,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       if (!res.ok || "error" in res.data) {
         return text(`Error merging sections (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
-      return text(JSON.stringify(res.data, null, 2));
+      return text(sectionWriteResult(res.data, { verbose: input.verbose }));
     },
   );
 
@@ -513,6 +579,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     {
       idea_id: z.string().min(2),
       section: z.string().min(1),
+      verbose: z.boolean().optional().describe(VERBOSE_SECTIONS),
     },
     async (input) => {
       const props = getProps();
@@ -525,7 +592,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       if (!res.ok || "error" in res.data) {
         return text(`Error deleting section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
-      return text(JSON.stringify(res.data, null, 2));
+      return text(sectionWriteResult(res.data, { verbose: input.verbose }));
     },
   );
 }

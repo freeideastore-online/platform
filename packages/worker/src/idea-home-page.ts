@@ -1,6 +1,6 @@
 import { brandHead, brandLockup } from './brand';
 import { AUTH_PREFIX } from './auth';
-import { contributionCount, contributionsByIdea, derivedIdeas, ideaBody, ideaById } from './data';
+import { contributionCount, contributionsByIdea, derivedIdeas, DERIVED_CHILDREN_LIMIT, ideaBody, ideaById } from './data';
 import { escapeHtml, FIELD_LIMITS, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { sourcesSection } from './idea-sources-section';
@@ -24,7 +24,9 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
         .bind(idea.parent_id)
         .first<{ id: string; title: string }>()
     : null;
-  const derived = await derivedIdeas(env, idea.id);
+  // Children are listed oldest-first and capped, so the rail says how many of
+  // how many it is showing rather than dropping the rest in silence (#80).
+  const { children: derived, total: derivedTotal } = await derivedIdeas(env, idea.id);
   // The research record is paged: bodies are inlined, so rendering all of them
   // grows the page without bound as an idea deepens.
   const researchParam = new URL(request.url).searchParams.get('research') || '1';
@@ -167,7 +169,7 @@ ${
       ${pendingRefinements ? `<div><strong>Awaiting merge</strong><span><a href="#research">${pendingRefinements} proposed ${pendingRefinements === 1 ? 'refinement' : 'refinements'}</a> not yet in the document</span></div>` : ''}
       <div><strong>Next step</strong><span>${escapeHtml(idea.next_step || 'Needs a next validation step.')}</span></div>
       <div><strong>Risk</strong><span>${escapeHtml(idea.risk || 'Risk not yet named.')}</span></div>
-      ${derived.length ? `<div><strong>Derived ideas</strong><nav class="toc-box">${derived.map((child) => `<a href="/ideas/${escapeHtml(child.id)}/">${escapeHtml(child.title)}</a>`).join('')}</nav></div>` : ''}
+      ${derived.length ? `<div><strong>Derived ideas</strong><span>${derivedTotal > derived.length ? `Showing ${derived.length} of ${derivedTotal} derived ideas, oldest first` : `${derivedTotal} derived ${derivedTotal === 1 ? 'idea' : 'ideas'}`}</span><nav class="toc-box">${derived.map((child) => `<a href="/ideas/${escapeHtml(child.id)}/">${escapeHtml(child.title)}</a>`).join('')}</nav></div>` : ''}
       <div class="actions"><a class="button" href="/#ideas">Back to store</a><a class="button secondary" href="/api/ideas/${escapeHtml(idea.id)}">JSON</a></div>
     </div>
   </aside>

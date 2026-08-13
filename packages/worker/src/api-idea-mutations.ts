@@ -186,7 +186,6 @@ export async function createIdea(request: Request, env: Env) {
   const ideaId = await uniqueIdeaId(env, title);
   const profileId = await profileFor(request, env);
   const bodyKey = `ideas/${ideaId}/body.md`;
-  const renderKey = `ideas/${ideaId}/rendered.html`;
   let storedInR2 = false;
   if (body && env.IDEA_BUCKET) {
     try {
@@ -200,8 +199,8 @@ export async function createIdea(request: Request, env: Env) {
   }
   await env.DB.prepare(
     `INSERT INTO ideas
-     (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by, body_words, chapter_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, title, summary, preview, signal, body_md, body_key, source_url, visibility, stage, category, next_step, risk, created_by, body_words, chapter_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       ideaId,
@@ -211,7 +210,6 @@ export async function createIdea(request: Request, env: Env) {
       signal,
       storedInR2 ? '' : body,
       storedInR2 ? bodyKey : '',
-      storedInR2 ? renderKey : '',
       sourceUrl,
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
@@ -272,7 +270,6 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   if (budget) return bad(budget);
   const metrics = documentMetrics(seedBody, title);
   const bodyKey = `ideas/${ideaId}/body.md`;
-  const renderKey = `ideas/${ideaId}/rendered.html`;
   let storedInR2 = false;
   if (seedBody && env.IDEA_BUCKET) {
     try {
@@ -284,8 +281,8 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   }
   await env.DB.prepare(
     `INSERT INTO ideas
-     (id, title, summary, preview, signal, body_md, body_key, render_key, source_url, visibility, stage, category, next_step, risk, created_by, parent_id, body_words, chapter_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, title, summary, preview, signal, body_md, body_key, source_url, visibility, stage, category, next_step, risk, created_by, parent_id, body_words, chapter_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       ideaId,
@@ -295,7 +292,6 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
       signal,
       storedInR2 ? '' : seedBody,
       storedInR2 ? bodyKey : '',
-      storedInR2 ? renderKey : '',
       sourceUrl,
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
@@ -340,11 +336,7 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
     .run();
   if (env.IDEA_BUCKET) {
     const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
-    const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
-    await Promise.all([
-      env.IDEA_BUCKET.delete(bodyKey).catch(() => undefined),
-      env.IDEA_BUCKET.delete(renderKey).catch(() => undefined),
-    ]);
+    await env.IDEA_BUCKET.delete(bodyKey).catch(() => undefined);
   }
   await removeIdeaFromIndex(env, idea.id);
   return json({ ok: true, idea: idea.id, status: 'removed' });
@@ -444,7 +436,6 @@ async function writeCanonicalBody(
   }
   const metrics = documentMetrics(body, title);
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
-  const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
   let storedInR2 = false;
   if (env.IDEA_BUCKET) {
     try {
@@ -452,21 +443,19 @@ async function writeCanonicalBody(
         httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
       });
       storedInR2 = true;
-      await env.IDEA_BUCKET.delete(renderKey).catch(() => undefined);
     } catch {
       // Fall back to storing the body inline in D1 if the R2 write fails.
     }
   }
   await env.DB.prepare(
     `UPDATE ideas
-     SET body_md = ?, body_key = ?, render_key = ?, body_words = ?, chapter_count = ?,
+     SET body_md = ?, body_key = ?, body_words = ?, chapter_count = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
   )
     .bind(
       storedInR2 ? '' : body,
       storedInR2 ? bodyKey : '',
-      storedInR2 ? renderKey : '',
       metrics.words,
       metrics.chapters,
       idea.id,
@@ -619,7 +608,6 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     });
   }
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
-  const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
   let storedInR2 = false;
   // A metadata-only update does not touch object storage at all. Rewriting the
   // document with a copy of itself would be a no-op at best, and at worst — when
@@ -632,7 +620,6 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
         httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
       });
       storedInR2 = true;
-      await env.IDEA_BUCKET.delete(renderKey).catch(() => undefined);
     } catch {
       // Fall back to storing body inline in D1 if R2 write fails.
     }
@@ -643,14 +630,12 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     ? {
         bodyMd: storedInR2 ? '' : body,
         bodyKey: storedInR2 ? bodyKey : '',
-        renderKey: storedInR2 ? renderKey : '',
         words: metrics.words,
         chapters: metrics.chapters,
       }
     : {
         bodyMd: idea.body_md ?? '',
         bodyKey: idea.body_key ?? '',
-        renderKey: idea.render_key ?? '',
         words: idea.body_words ?? metrics.words,
         chapters: idea.chapter_count ?? metrics.chapters,
       };
@@ -663,7 +648,6 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
          signal = ?,
          body_md = ?,
          body_key = ?,
-         render_key = ?,
          source_url = ?,
          visibility = ?,
          stage = ?,
@@ -682,7 +666,6 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
       signal,
       bodyColumns.bodyMd,
       bodyColumns.bodyKey,
-      bodyColumns.renderKey,
       sourceUrl,
       enumValue(input.visibility ?? idea.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage ?? idea.stage, IDEA_STAGES, idea.stage || 'raw'),

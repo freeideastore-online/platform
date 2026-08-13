@@ -146,6 +146,18 @@
         {
           "name": "delete_idea_section",
           "description": "Remove a section and its content. Recoverable through revisions."
+        },
+        {
+          "name": "search_ideas",
+          "description": "Full-text search across idea chapters and research entries; a section hit's ref is the argument read_idea_section takes."
+        },
+        {
+          "name": "list_idea_sources",
+          "description": "List every URL an idea cites, the sections citing each one, and its link-check status."
+        },
+        {
+          "name": "get_source",
+          "description": "Read one source and every idea, section and contribution citing it."
         }
       ]
     }

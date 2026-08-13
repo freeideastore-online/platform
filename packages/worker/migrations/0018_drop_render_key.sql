@@ -1,0 +1,34 @@
+-- Drop `render_key`: a cache key whose object never existed.
+--
+-- 0002 ("cheap idea pages") added the column and the write paths have carried it
+-- ever since: five sites computed `ideas/<id>/rendered.html`, four stored it, and
+-- three `IDEA_BUCKET.delete()`d it on every canonical write. There has never been
+-- a matching `IDEA_BUCKET.put()`. So the store has been paying invalidation cost
+-- on a cache with no producer and no consumer, for every write, since 0002 (#70).
+--
+-- We removed the code rather than finishing the cache, because the cache as named
+-- could not have been correct:
+--
+--  * ONE key cannot hold the pages. `/ideas/<id>/` and each `/ideas/<id>/<chapter>/`
+--    are different documents. A real cache needs a key per chapter, which the
+--    single `delete(renderKey)` written here does not invalidate.
+--  * The idea page is not a function of the body. It embeds reaction counts,
+--    contribution counts, the source registry, the open-refinement count, the
+--    derived-children list and the paged research record — all written by paths
+--    that never touched `render_key`. Serving it from R2 would have pinned those
+--    counts until the owner's next canonical write.
+--  * The rendered HTML also embeds worker-bundled CSS and JS, which a deploy
+--    changes and no document write invalidates.
+--
+-- Measured cost of NOT caching, on a synthetic 1,000,000-character 40-chapter
+-- document (the current `FIELD_LIMITS.body` ceiling): ~29 ms of parse for a
+-- chapter page and ~101 ms for the idea home page. The home-page number is
+-- dominated by re-parsing the same document four times in one request
+-- (markdownHeadings + ideaChapters + isPaginated + ideaPreamble), which one
+-- per-request memo removes far more cheaply — and more correctly — than an R2
+-- round trip would.
+--
+-- If a render cache is ever wanted, build it against the HTTP edge (Cache API /
+-- Cache-Control), keyed by the request URL, which is the thing that actually
+-- identifies a page. Do not re-add a column here.
+ALTER TABLE ideas DROP COLUMN render_key;

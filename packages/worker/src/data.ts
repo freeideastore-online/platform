@@ -85,13 +85,49 @@ export async function ideaById(env: Env, ideaId: string) {
     .first<IdeaRow>();
 }
 
+/**
+ * How many derived children a parent lists in its Signals rail.
+ *
+ * The same shape as RESEARCH_PAGE_SIZE in idea-research.ts: a bound on one
+ * rail's HTML, paired with the total so the page states what it is not showing.
+ * A silent cap is the bug — see #1, where a `.slice()` destroyed the tail of
+ * four contributions — not the cap itself.
+ */
+export const DERIVED_CHILDREN_LIMIT = 50;
+
+/**
+ * The children derived from an idea, plus how many there are in total.
+ *
+ * Ordered oldest-first and NOT by `updated_at`. Under `updated_at DESC` with a
+ * cap, *which* children a parent listed changed every time any child was
+ * edited, so a set of annexes rotated in and out of its own parent's index as
+ * work continued on them, and a reader refreshing mid-session saw a different
+ * list with no sign either was partial (#80). Creation order is stable: the
+ * same children appear in the same places until a new one is derived. `id` is
+ * the tiebreak because `created_at` has one-second granularity and a burst of
+ * `derive_idea` calls lands several children inside the same second.
+ *
+ * `total` is counted rather than inferred from `children.length`, which cannot
+ * distinguish "exactly at the cap" from "over it". The caller renders it.
+ */
 export async function derivedIdeas(env: Env, parentId: string) {
-  const rows = await env.DB.prepare(
-    `SELECT id, title FROM ideas WHERE parent_id = ? AND status != 'removed' ORDER BY updated_at DESC LIMIT 20`,
-  )
-    .bind(parentId)
-    .all<{ id: string; title: string }>();
-  return rows.results || [];
+  const [rows, count] = await Promise.all([
+    env.DB.prepare(
+      `SELECT id, title FROM ideas
+       WHERE parent_id = ? AND status != 'removed'
+       ORDER BY created_at ASC, id ASC
+       LIMIT ?`,
+    )
+      .bind(parentId, DERIVED_CHILDREN_LIMIT)
+      .all<{ id: string; title: string }>(),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM ideas WHERE parent_id = ? AND status != 'removed'`,
+    )
+      .bind(parentId)
+      .first<{ n: number }>(),
+  ]);
+  const children = rows.results || [];
+  return { children, total: count?.n ?? children.length };
 }
 
 export async function ideaBody(env: Env, idea: IdeaRow) {
@@ -149,9 +185,18 @@ export async function contributorByHandle(env: Env, handle: string) {
     .first<ContributorRow>();
 }
 
+/**
+ * A profile's own ideas.
+ *
+ * `parent_id` is in the projection so a caller can rebuild the tree it just
+ * built: an agent that derives four annexes and then calls `my_ideas` used to
+ * get four flat rows and no way to tell which of its own ideas were children of
+ * which, even though the column was on every row it read (#80). `''` means no
+ * parent, matching IdeaRow.
+ */
 export async function ideasByProfile(env: Env, profileId: string, limit = 500) {
   const rows = await env.DB.prepare(
-    `SELECT id, title, summary, stage, category, updated_at, pro_candidate
+    `SELECT id, title, summary, stage, category, updated_at, pro_candidate, parent_id
      FROM ideas
      WHERE created_by = ? AND status != 'removed'
      ORDER BY updated_at DESC

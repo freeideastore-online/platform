@@ -124,6 +124,13 @@ async function linkedHandle(env: Env, profile: ProviderProfile): Promise<string 
  * owner who signs in, and any later address match is a different person — or
  * the same person's second provider account, which `linkedHandle` has already
  * handled by then, because `upsertIdentity` runs it first.
+ *
+ * That same condition is what makes this safe to run for a *returning* identity
+ * too, which `upsertIdentity` now does (#40): a claim can only ever point at a
+ * profile nobody signs in as, so re-checking can move an identity onto an
+ * abandoned legacy profile but never off one person's profile and onto
+ * another's. It also cannot return the handle the caller already holds, so a
+ * claim recorded against a profile its owner is already on is a no-op.
  */
 async function claimableProfileHandle(
   env: Env,
@@ -150,6 +157,11 @@ async function claimableProfileHandle(
  * run; a returning user's own row always wins over any email match, which is
  * what stops a shared or re-issued address from moving an established identity
  * onto a different profile.
+ *
+ * The one thing that may move a returning identity's handle is an operator's
+ * recorded `claim_email`, which is re-checked on every sign-in rather than only
+ * on the first (#40) — see the comment on that branch for why the distinction
+ * between the two email lookups is the whole safety argument.
  */
 export async function upsertIdentity(env: Env, profile: ProviderProfile): Promise<IdentityRow> {
   const existing = await env.DB.prepare(
@@ -160,7 +172,7 @@ export async function upsertIdentity(env: Env, profile: ProviderProfile): Promis
 
   if (existing) {
     // Display name, avatar and email are the provider's to change; the handle is
-    // not. Refreshing the email also backfills rows created before 0017, which
+    // not — not by the provider. Refreshing the email also backfills rows created before 0017, which
     // is the only way those ever become linkable — the access token that could
     // have read the address was never stored.
     // Only positive information overwrites the stored address. `githubProfile`
@@ -172,21 +184,61 @@ export async function upsertIdentity(env: Env, profile: ProviderProfile): Promis
     const incomingIsUsable = profile.emailVerified && Boolean(profile.email);
     const nextEmail = incomingIsUsable ? profile.email : existing.email ?? null;
     const nextVerified = incomingIsUsable ? 1 : existing.email_verified ?? 0;
+
+    // A claim recorded AFTER this identity was minted still has to bind (#40).
+    //
+    // `claim_email` is the remedy for a legacy contributor stranded on a fresh,
+    // empty handle, and running it only on the insert branch put the door on the
+    // wrong side of the person. The sequence that actually happens is: the
+    // contributor signs in, `availableHandle` mints `serge-the-dev` because
+    // nothing yet connects them to `serge-ivy`, they notice their ideas are gone
+    // and say so, and only THEN does an operator establish who they are and set
+    // the column. By that point `(provider, provider_user_id)` matches on every
+    // subsequent sign-in and control never reached the claim lookup again — so
+    // the documented repair silently did nothing, for the one person it exists
+    // for. Re-checking here is what makes AUTH.md's "their next sign-in binds
+    // the identity to the existing profile" true rather than aspirational.
+    //
+    // This does not reopen #42. The evidence bar is identical to the first-time
+    // claim because it is literally the same lookup: an address the *provider*
+    // asserts it verified, matched against a `claim_email` a *human* recorded
+    // against that profile, on a profile that still has no identity behind it.
+    // A stranger cannot reach it without an operator first naming their verified
+    // address as the owner's. Note also that the NOT EXISTS makes it impossible
+    // for this to return the handle the identity already holds, so a claim
+    // recorded against a profile this identity already owns is a no-op.
+    //
+    // `linkedHandle` is deliberately NOT re-run here, and the asymmetry is the
+    // point: it needs no operator, so re-running it would let a re-issued or
+    // newly-verified address move an established identity onto a different
+    // profile with no human ever deciding that was right. Only the branch a
+    // human authorized may move a handle that already exists.
+    const claimed = await claimableProfileHandle(env, profile);
+    const nextHandle = claimed ?? existing.handle;
     if (
+      existing.handle !== nextHandle ||
       existing.display_name !== profile.displayName ||
       (existing.avatar_url ?? null) !== profile.avatarUrl ||
       (existing.email ?? null) !== nextEmail ||
       (existing.email_verified ?? 0) !== nextVerified
     ) {
       await env.DB.prepare(
-        `UPDATE identities SET display_name = ?, avatar_url = ?, email = ?, email_verified = ?,
+        `UPDATE identities SET handle = ?, display_name = ?, avatar_url = ?, email = ?, email_verified = ?,
            updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
       )
-        .bind(profile.displayName, profile.avatarUrl, nextEmail, nextVerified, existing.id)
+        .bind(
+          nextHandle,
+          profile.displayName,
+          profile.avatarUrl,
+          nextEmail,
+          nextVerified,
+          existing.id,
+        )
         .run();
       return {
         ...existing,
+        handle: nextHandle,
         display_name: profile.displayName,
         avatar_url: profile.avatarUrl,
         email: nextEmail,
