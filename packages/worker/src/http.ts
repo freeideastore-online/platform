@@ -52,10 +52,38 @@ export const FIELD_LIMITS = {
   category: 60,
   nextStep: 500,
   risk: 500,
-  // Bodies live in R2, not a D1 column value, so depth is not limited by the
-  // database. The remaining ceiling is the JSON request itself (MAX_BODY_BYTES);
-  // section-level writes lift that for incremental deepening.
-  body: 200_000,
+  // FREE-TIER document ceilings. Bodies live in R2, not a D1 column value, so
+  // neither number is inherited from a storage constraint — the database never
+  // bound this, and section-level writes already removed the request-size
+  // ceiling that once did. These are a product decision: the free store holds a
+  // quick idea and a normal research pass; a corpus the size of a book belongs
+  // on Pro.
+  //
+  // The two are chosen TOGETHER, and may not be changed independently. A char
+  // cap and a chapter cap imply a mean chapter size:
+  //
+  //   implied mean words per chapter = body / chapters / ~6.5 chars-per-word
+  //   1_000_000 / 100 / 6.5 ≈ 1_538 words
+  //
+  // 1,538 sits in the middle of the CHAPTER_SIZE target band (800–3,000), so an
+  // author who spends the whole chapter allowance writes chapters
+  // chapterHealth() calls `ok` — not merely above the floor. The previous
+  // 200_000 implied 308 words per chapter, BELOW floorWords (500), which made
+  // the two limits mutually unsatisfiable: the platform asked for 800-word
+  // chapters on a budget that only paid for 308. limits.test.ts asserts the
+  // rule so this cannot regress.
+  //
+  // Why this is safe to set this high: the ceiling that used to justify 200_000
+  // was cited in this comment as `MAX_BODY_BYTES`, a constant that does not
+  // exist anywhere in the codebase. Bodies are in R2 and section writes keep
+  // individual requests small, so the real remaining constraint is RENDER cost
+  // — which is why idea-home-page.ts no longer inlines the whole body once a
+  // document is paginated.
+  body: 1_000_000,
+  /** Free-tier chapter ceiling. Also near the practical limit of a FLAT chapter
+   * list — `###` are in-page anchors, so there is no level above the chapter to
+   * navigate by, and a few hundred entries stop being a table of contents. */
+  chapters: 100,
   contribution: 8000,
   contributionKind: 40,
   claim: 300,

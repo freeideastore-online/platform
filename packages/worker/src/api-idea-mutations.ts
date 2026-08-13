@@ -4,6 +4,7 @@ import { bad, enumValue, FIELD_LIMITS, json, pathId, readJsonBody, slug, tooLong
 import {
   addIdeaSection,
   appendToIdeaSection,
+  CHAPTER_SIZE,
   documentMetrics,
   mergeIdeaSections,
   moveIdeaSection,
@@ -27,6 +28,75 @@ import type { Env, IdeaRow } from './types';
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
 
+/**
+ * The free-tier document budget, checked in one place.
+ *
+ * Both ceilings are enforced here so a document cannot pass one write path and
+ * fail another: creating, deriving, publishing, writing a section and applying
+ * a refinement all end up with the same document, so they all owe the same
+ * answer. Rejects, never truncates — see the note above FIELD_LIMITS; a silent
+ * `.slice()` once destroyed the tail of four contributions.
+ *
+ * `current` is the body being EXTENDED, and only incremental writes pass it. A
+ * section append leaves the rest of the document in place, so the actionable
+ * number is how much may still be added; a whole-document publish replaces
+ * everything, so the actionable number is how much to trim. Reporting the
+ * wrong one is the failure in #46 — three agents each had to overflow once and
+ * subtract from the error string to discover ~41,800 characters of headroom.
+ */
+export function documentOverflow(
+  body: string,
+  title = '',
+  options: { current?: string } = {},
+): string | null {
+  if (body.length > FIELD_LIMITS.body) {
+    const headroom =
+      options.current === undefined
+        ? null
+        : Math.max(0, FIELD_LIMITS.body - options.current.length);
+    const advice =
+      headroom === null
+        ? `trim at least ${body.length - FIELD_LIMITS.body} characters`
+        : `this document may add at most ${headroom} more`;
+    return (
+      `body is ${body.length} characters; the free limit is ${FIELD_LIMITS.body} (${advice})` +
+      ' — move the overflow into a derived annex document, or take the document to Pro'
+    );
+  }
+  const { chapters } = documentMetrics(body, title);
+  if (chapters > FIELD_LIMITS.chapters) {
+    return (
+      `document would have ${chapters} chapters; the free limit is ${FIELD_LIMITS.chapters}` +
+      ` — merge chapters under the ${CHAPTER_SIZE.floorWords}-word floor, or move a run of them` +
+      ' into a derived annex document'
+    );
+  }
+  return null;
+}
+
+/**
+ * What the author could not see until a write failed: both budgets, what is
+ * spent, what is left, and how many chapters are the wrong size. Returned by
+ * every write that changes the document, so headroom is knowable before the
+ * write that would overflow it rather than only after (#46), and a document
+ * drifting into paragraph-per-page announces itself (#45).
+ */
+export type DocumentUsage = ReturnType<typeof documentUsage>;
+
+function documentUsage(
+  body: string,
+  metrics: { chapters: number; belowFloor: number; aboveCeiling: number },
+) {
+  return {
+    chars: body.length,
+    chars_remaining: Math.max(0, FIELD_LIMITS.body - body.length),
+    chapters: metrics.chapters,
+    chapters_remaining: Math.max(0, FIELD_LIMITS.chapters - metrics.chapters),
+    below_floor: metrics.belowFloor,
+    above_ceiling: metrics.aboveCeiling,
+  };
+}
+
 export async function createIdea(request: Request, env: Env) {
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
@@ -47,13 +117,14 @@ export async function createIdea(request: Request, env: Env) {
     ['summary', summary, FIELD_LIMITS.summary],
     ['preview', preview, FIELD_LIMITS.preview],
     ['signal', signal, FIELD_LIMITS.signal],
-    ['body', body, FIELD_LIMITS.body],
     ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
     ['category', category, FIELD_LIMITS.category],
     ['next step', nextStep, FIELD_LIMITS.nextStep],
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  const budget = documentOverflow(body, title);
+  if (budget) return bad(budget);
 
   const metrics = documentMetrics(body, title);
   const ideaId = await uniqueIdeaId(env, title);
@@ -133,13 +204,16 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
     ['summary', summary, FIELD_LIMITS.summary],
     ['preview', preview, FIELD_LIMITS.preview],
     ['signal', signal, FIELD_LIMITS.signal],
-    ['body', seedBody, FIELD_LIMITS.body],
     ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
     ['category', category, FIELD_LIMITS.category],
     ['next step', nextStep, FIELD_LIMITS.nextStep],
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  // A fork inherits the parent document, so an over-budget parent is caught
+  // here rather than at the fork's first section write.
+  const budget = documentOverflow(seedBody, title);
+  if (budget) return bad(budget);
   const metrics = documentMetrics(seedBody, title);
   const bodyKey = `ideas/${ideaId}/body.md`;
   const renderKey = `ideas/${ideaId}/rendered.html`;
@@ -294,7 +368,9 @@ async function writeCanonicalBody(
   // Re-index after the write so the registry and search reflect what is published.
   await syncDocumentSources(env, idea, body);
   await indexDocument(env, idea, body);
-  return { ...metrics, revisionId };
+  // Every canonical write reports the budget from the metrics it already
+  // computed, so no two write paths can disagree about what is left.
+  return { ...metrics, usage: documentUsage(body, metrics), revisionId };
 }
 
 /**
@@ -336,10 +412,10 @@ export async function updateIdeaSection(
     );
   }
 
-  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
-  if (overflow) return bad(overflow);
+  const budget = documentOverflow(next, idea.title, { current });
+  if (budget) return bad(budget);
 
-  const metrics = await writeCanonicalBody(env, idea, next, idea.title, {
+  const result = await writeCanonicalBody(env, idea, next, idea.title, {
     previousBody: current,
     authorProfileId: idea.created_by,
     source: mode === 'append' ? 'section-append' : 'section-replace',
@@ -351,8 +427,9 @@ export async function updateIdeaSection(
     idea: idea.id,
     section: sectionId,
     mode,
-    words: metrics.words,
-    chapters: metrics.chapters,
+    words: result.words,
+    chapters: result.chapters,
+    usage: result.usage,
     url: `/ideas/${idea.id}/`,
   });
 }
@@ -389,13 +466,16 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     ['summary', summary, FIELD_LIMITS.summary],
     ['preview', preview, FIELD_LIMITS.preview],
     ['signal', signal, FIELD_LIMITS.signal],
-    ['body', body, FIELD_LIMITS.body],
     ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
     ['category', category, FIELD_LIMITS.category],
     ['next step', nextStep, FIELD_LIMITS.nextStep],
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  // A publish replaces the whole document, so no `current` — the actionable
+  // number is what to trim, not what may still be added.
+  const budget = documentOverflow(body, title);
+  if (budget) return bad(budget);
   const metrics = documentMetrics(body, title);
   // publish_idea_update replaces the whole document; keep what it replaced.
   if (body !== previousBody) {
@@ -462,7 +542,12 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
 
   await syncDocumentSources(env, idea, body);
   await indexDocument(env, idea, body);
-  return json({ ok: true, idea: idea.id, url: `/ideas/${idea.id}/` });
+  return json({
+    ok: true,
+    idea: idea.id,
+    usage: documentUsage(body, metrics),
+    url: `/ideas/${idea.id}/`,
+  });
 }
 
 export async function promoteIdea(request: Request, env: Env, rawIdeaId: string) {
@@ -587,8 +672,8 @@ export async function applyRefinement(
     );
   }
 
-  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
-  if (overflow) return bad(overflow);
+  const budget = documentOverflow(next, idea.title, { current });
+  if (budget) return bad(budget);
 
   const result = await writeCanonicalBody(env, idea, next, idea.title, {
     previousBody: current,
@@ -613,6 +698,7 @@ export async function applyRefinement(
     mode,
     revision: result.revisionId,
     words: result.words,
+    usage: result.usage,
     url: `/ideas/${idea.id}/`,
   });
 }
@@ -693,8 +779,8 @@ async function writeStructuralEdit(
       404,
     );
   }
-  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
-  if (overflow) return bad(overflow);
+  const budget = documentOverflow(next, idea.title, { current });
+  if (budget) return bad(budget);
   if (next === current) {
     return json({ ok: true, idea: idea.id, note: 'no change' });
   }
@@ -710,6 +796,7 @@ async function writeStructuralEdit(
     idea: idea.id,
     revision: result.revisionId,
     sections: ideaSectionList(next, idea.title),
+    usage: result.usage,
     url: `/ideas/${idea.id}/`,
   });
 }

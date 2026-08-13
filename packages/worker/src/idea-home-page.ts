@@ -52,6 +52,25 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   // Short documents read as one page: the body is rendered inline below, so
   // chapter pages would only re-present content the reader can already scroll.
   const paginated = isPaginated(body, idea.title);
+  // A paginated document already lists its chapters as links above. Rendering
+  // the whole body here as well re-presents every chapter on the index page —
+  // measured at 103% of the combined chapter content — and makes this page grow
+  // without bound as the document deepens, since the entire markdown is parsed
+  // and emitted on every request. Show only the preamble: whatever precedes the
+  // first chapter heading, which is where a document's framing lives.
+  //
+  // This is what makes FIELD_LIMITS.body safe to raise. Render cost, not
+  // storage, is the real ceiling on document size.
+  const inlineBody = paginated ? (body.split(/^## /m)[0] ?? '').trim() : body;
+  // The Sections rail links in-page anchors, which only exist for the markdown
+  // actually rendered on this page. Once the body is not inlined those anchors
+  // point at nothing, so a paginated document has to link its chapter pages
+  // instead.
+  const sectionLinks = paginated
+    ? chapters
+        .map((chapter) => `<a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/">${escapeHtml(chapter.title)}</a>`)
+        .join('')
+    : headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('');
   const chapterLinks = chapters.map((chapter, index) => `<a class="chapter-link" data-title="${escapeHtml(chapter.title)} ${escapeHtml(chapter.excerpt)}" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/"><b>${index + 1}</b><span>${escapeHtml(chapter.title)}</span></a>`).join('');
   const page = `<!DOCTYPE html>
 <html lang="en">
@@ -98,7 +117,7 @@ ${
       <div class="meta"><span class="pill">${escapeHtml(idea.stage)}</span><span class="pill">${escapeHtml(idea.category)}</span><span class="pill">${idea.pro_candidate ? 'pro candidate' : 'free idea'}</span></div>
       ${parent ? `<p class="crumb">Derived from <a href="/ideas/${escapeHtml(parent.id)}/">${escapeHtml(parent.title)}</a></p>` : ''}
       ${ideaDiagram(idea.id)}
-      <div class="chapter-body">${markdownToHtml(body)}</div>
+      ${inlineBody ? `<div class="chapter-body">${markdownToHtml(inlineBody)}</div>` : ''}
     </article>
     ${researchSection(contributions, idea.id, {
       page: researchPage,
@@ -121,7 +140,7 @@ ${
   <aside class="toc-rail">
     <div class="toc-title">Signals</div>
     <div class="signal-box">
-      <div><strong>Sections</strong><nav class="toc-box">${headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('')}${researchTotal ? '<a href="#research">Research &amp; evidence</a>' : ''}${sources.length ? '<a href="#sources">Sources</a>' : ''}<a href="#comments">Comments</a></nav></div>
+      <div><strong>Sections</strong><nav class="toc-box">${sectionLinks}${researchTotal ? '<a href="#research">Research &amp; evidence</a>' : ''}${sources.length ? '<a href="#sources">Sources</a>' : ''}<a href="#comments">Comments</a></nav></div>
       <div><strong>Reactions</strong><span><span id="support-count">${escapeHtml(idea.support)}</span> supports / <span id="trash-count">${escapeHtml(idea.trash)}</span> trash / <span id="pivot-count">${escapeHtml(idea.pivot)}</span> pivots</span><div class="reaction-buttons" aria-label="React to idea"><button class="react-button" type="button" data-reaction="support">&#128077; Support</button><button class="react-button" type="button" data-reaction="trash">&#128465; Trash</button><button class="react-button" type="button" data-reaction="pivot">&#128260; Pivot</button></div><p id="reaction-status" class="reaction-status">Sign in to react.</p></div>
       <div><strong>Contributions</strong><span>${researchTotal ? `<a href="#research">${researchTotal} research ${researchTotal === 1 ? 'entry' : 'entries'}</a>` : 'No research entries yet'} / <a href="#comments">${commentTotal} ${commentTotal === 1 ? 'comment' : 'comments'}</a></span></div>
       ${pendingRefinements ? `<div><strong>Awaiting merge</strong><span><a href="#research">${pendingRefinements} proposed ${pendingRefinements === 1 ? 'refinement' : 'refinements'}</a> not yet in the document</span></div>` : ''}

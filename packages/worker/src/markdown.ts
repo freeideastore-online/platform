@@ -203,27 +203,50 @@ export type ChapterVerdict = 'merge' | 'thin' | 'ok' | 'split';
  */
 export function chapterHealth(markdown: string, documentTitle = '') {
   return ideaChapters(markdown, documentTitle).map((chapter) => {
-    // `chapter.markdown` carries its own `## Title` line. Counting that would
-    // credit every chapter with its heading, which flatters the shortest ones
-    // most — exactly the chapters this is meant to catch.
-    const words = wordCount(chapter.markdown.replace(/^##[^\n]*\n?/, ''));
-    let verdict: ChapterVerdict = 'ok';
-    if (words < CHAPTER_SIZE.floorWords) verdict = 'merge';
-    else if (words < CHAPTER_SIZE.targetMinWords) verdict = 'thin';
-    else if (words > CHAPTER_SIZE.ceilingWords) verdict = 'split';
-    return { id: chapter.id, title: chapter.title, words, verdict };
+    const words = chapterBodyWords(chapter.markdown);
+    return { id: chapter.id, title: chapter.title, words, verdict: chapterVerdict(words) };
   });
+}
+
+/**
+ * `chapter.markdown` carries its own `## Title` line. Counting that would
+ * credit every chapter with its heading, which flatters the shortest ones most
+ * — exactly the chapters this is meant to catch.
+ */
+function chapterBodyWords(chapterMarkdown: string) {
+  return wordCount(chapterMarkdown.replace(/^##[^\n]*\n?/, ''));
+}
+
+/**
+ * The single place a word count becomes a verdict, so every surface that shows
+ * one — chapterHealth(), ideaSectionList(), the usage block on writes — agrees
+ * about the same chapter.
+ */
+function chapterVerdict(words: number): ChapterVerdict {
+  if (words < CHAPTER_SIZE.floorWords) return 'merge';
+  if (words < CHAPTER_SIZE.targetMinWords) return 'thin';
+  if (words > CHAPTER_SIZE.ceilingWords) return 'split';
+  return 'ok';
 }
 
 /**
  * Metrics stored on the idea row so the catalog can evaluate
  * PUBLICATION_POLICY exactly. Bodies live in R2, so SQL cannot measure the
  * document itself — it reads these columns instead of guessing from text.
+ *
+ * `belowFloor`/`aboveCeiling` are the chapterHealth() distribution reduced to
+ * two numbers, so a write response can carry the diagnosis without carrying a
+ * row per chapter. They are counts of verdicts, not a second opinion: `merge`
+ * is a chapter that cannot stand alone, `split` one that has become two topics.
+ * `words` and `chapters` are unchanged — the catalog columns read them.
  */
 export function documentMetrics(markdown: string, documentTitle = '') {
+  const health = chapterHealth(markdown, documentTitle);
   return {
     words: wordCount(markdown),
-    chapters: ideaChapters(markdown, documentTitle).length,
+    chapters: health.length,
+    belowFloor: health.filter((chapter) => chapter.verdict === 'merge').length,
+    aboveCeiling: health.filter((chapter) => chapter.verdict === 'split').length,
   };
 }
 
@@ -392,12 +415,23 @@ function findSection(markdown: string, sectionId: string, documentTitle: string)
   return range && chapter ? { range, chapter } : null;
 }
 
-/** Section titles and ids, for callers deciding what to read or write. */
+/**
+ * Section titles, ids and sizing, for callers deciding what to read or write.
+ *
+ * `verdict` is the whole point of listing words at all: `words: 52` only means
+ * something next to the floor it misses. Without it an author sees a list of
+ * numbers and no diagnosis, which is how a 74-chapter document shipped with
+ * most of its chapters below the floor.
+ */
 export function ideaSectionList(markdown: string, documentTitle = '') {
   return ideaChapters(markdown, documentTitle).map((chapter) => ({
     id: chapter.id,
     title: chapter.title,
+    // Unchanged: this counts the heading, and callers depend on the number.
     words: wordCount(chapter.markdown),
+    // The verdict uses the heading-stripped count chapterHealth() uses, so a
+    // row here can never disagree with the health of the same chapter.
+    verdict: chapterVerdict(chapterBodyWords(chapter.markdown)),
   }));
 }
 

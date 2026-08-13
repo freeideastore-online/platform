@@ -835,10 +835,12 @@ describe('FreeIdeaStore worker', () => {
     expect(html).not.toContain('<small>Review filings. Cite sources.</small>');
     expect(html).toContain('theme-toggle');
     expect(html).toContain('data-theme');
-    expect(html).toContain('href="#design-sketch"');
-    expect(html).toContain('<h2 id="design-sketch">Design Sketch</h2>');
-    expect(html).toContain('<ol>');
-    expect(html).toContain('<li>Review filings.</li>');
+    // This fixture is paginated, so the index links its chapters instead of
+    // inlining them. Re-rendering the whole body here duplicated every chapter
+    // on the index and made the page grow without bound with the document.
+    expect(html).toContain('href="/ideas/asx-filings-analyst/design-sketch/"');
+    expect(html).not.toContain('<h2 id="design-sketch">Design Sketch</h2>');
+    expect(html).not.toContain('<li>Review filings.</li>');
     expect(html).toContain('<strong>Reactions</strong>');
     expect(html).toContain('data-reaction="support"');
     expect(html).toContain('data-reaction="trash"');
@@ -2397,7 +2399,21 @@ describe('FreeIdeaStore worker', () => {
     const data = (await read.json()) as { idea: { stage: string; next_step: string }; body: string };
 
     expect(update.status).toBe(200);
-    await expect(update.json()).resolves.toEqual({ ok: true, idea: 'serge-idea-lab', url: '/ideas/serge-idea-lab/' });
+    // Writes now carry the document budget back to the author, so an agent can
+    // see how much room is left instead of discovering the cap by hitting it.
+    await expect(update.json()).resolves.toMatchObject({
+      ok: true,
+      idea: 'serge-idea-lab',
+      url: '/ideas/serge-idea-lab/',
+      usage: {
+        chars: expect.any(Number),
+        chars_remaining: expect.any(Number),
+        chapters: expect.any(Number),
+        chapters_remaining: expect.any(Number),
+        below_floor: expect.any(Number),
+        above_ceiling: expect.any(Number),
+      },
+    });
     expect(data.idea.stage).toBe('researching');
     expect(data.idea.next_step).toBe('Use MCP to elaborate the public idea document.');
     expect(data.body).toContain('## Research');
