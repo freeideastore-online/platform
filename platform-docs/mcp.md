@@ -63,6 +63,12 @@ Structural edits are ordinary canonical writes, so each one is snapshotted as a 
 
 Section ids stay stable under content edits, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.
 
+### Headings In Section Content Split The Section
+
+**`#` and `##` both create sibling chapters; `###` and deeper stay inside the chapter.** The `content` you send to `add_idea_section`, `patch_idea_section` or `append_to_idea_section` is parsed by the same rule as the rest of the document, so every `#` and every `##` in it becomes a chapter with its own URL — not only the heading you were told not to repeat. Feeding a research file in unchanged is how a migration that intended 15 chapters produced 74.
+
+To write a whole source file as ONE chapter, pass `demote_headings: true`. It shifts every heading in `content` below chapter level, uniformly, by whatever the shallowest heading present requires — two levels for a `#`-topped file, one for a `##`-topped file, none for content already at `###`. Demoting only the `##` headings by hand does not work: the `#` headings still split. The full contract is in [Publications](idea-books.md#the-chapter-heading-contract).
+
 ## Document History Is Kept
 
 Every canonical write records the document as it was **before** the write, so the state preceding any change is recoverable — including the first change to a document that had no history. The live idea is always the head of the timeline.

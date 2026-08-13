@@ -5,6 +5,7 @@ import {
   addIdeaSection,
   appendToIdeaSection,
   CHAPTER_SIZE,
+  demoteHeadings,
   documentMetrics,
   mergeIdeaSections,
   moveIdeaSection,
@@ -27,6 +28,19 @@ import type { Env, IdeaRow } from './types';
 
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
+
+/**
+ * Opt-in: push the supplied content below chapter level so the whole block
+ * lands as ONE chapter.
+ *
+ * Off by default, because turning it on for everyone would re-level content
+ * already written against the contract and move published chapter URLs. It has
+ * to be asked for, which is the point — the caller who is writing a whole source
+ * file into a section is the one who knows it is one chapter.
+ */
+function demoteRequested(input: Record<string, unknown>) {
+  return input.demote_headings === true || input.demoteHeadings === true;
+}
 
 /**
  * How much of THIS write's content the budget can actually take.
@@ -488,8 +502,11 @@ export async function updateIdeaSection(
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
   const input = parsedBody.data;
-  const content = String(input.content ?? input.markdown ?? input.body ?? '');
-  if (!content.trim()) return bad('section content is required');
+  const supplied = String(input.content ?? input.markdown ?? input.body ?? '');
+  if (!supplied.trim()) return bad('section content is required');
+  // Demote before anything measures the content: the budget accounting below
+  // has to weigh what is actually written, and the demotion adds characters.
+  const content = demoteRequested(input) ? demoteHeadings(supplied) : supplied;
 
   const current = await ideaBody(env, idea);
   const next =
@@ -948,7 +965,8 @@ export function createIdeaSection(request: Request, env: Env, rawIdeaId: string)
   return writeStructuralEdit(request, env, rawIdeaId, 'add section', (body, idea, input) => {
     const title = String(input.title || '').trim();
     if (!title) return null;
-    return addIdeaSection(body, title, String(input.content || ''), {
+    const supplied = String(input.content || '');
+    return addIdeaSection(body, title, demoteRequested(input) ? demoteHeadings(supplied) : supplied, {
       after: String(input.after || '') || undefined,
       before: String(input.before || '') || undefined,
       documentTitle: idea.title,

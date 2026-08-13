@@ -1397,6 +1397,87 @@ describe('FreeIdeaStore worker', () => {
     expect(data.body).toContain('A later finding, appended.');
   });
 
+  /**
+   * #48: `#` AND `##` both create sibling chapters, so writing a whole research
+   * file into a section shattered it. `demote_headings` is how a caller says
+   * "this file is one chapter" without re-levelling it by hand.
+   */
+  describe('demote_headings', () => {
+    const sourceFile = [
+      '# Precedent hunt',
+      'Opening.',
+      '',
+      '## Bottom line',
+      'The finding.',
+      '',
+      '### Method',
+      'How it was gathered.',
+    ].join('\n');
+
+    const sectionIds = async (testEnv: ReturnType<typeof env>) => {
+      const list = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/sections'),
+        testEnv,
+      );
+      const data = (await list.json()) as { sections: Array<{ id: string }> };
+      return data.sections.map((section) => section.id);
+    };
+
+    const write = (testEnv: ReturnType<typeof env>, payload: Record<string, unknown>) =>
+      worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
+          method: 'PUT',
+          headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+        testEnv,
+      );
+
+    it('shatters a source file into siblings when the flag is absent', async () => {
+      mockSignedInSerge();
+      const testEnv = env();
+
+      expect((await write(testEnv, { content: sourceFile })).status).toBe(200);
+      // Three chapters from one file, and the first of them came from a `#`.
+      expect(await sectionIds(testEnv)).toEqual(['snapshot', 'precedent-hunt', 'bottom-line']);
+    });
+
+    it('writes the same file as one chapter when the flag is set', async () => {
+      mockSignedInSerge();
+      const testEnv = env();
+
+      expect((await write(testEnv, { content: sourceFile, demote_headings: true })).status).toBe(200);
+      expect(await sectionIds(testEnv)).toEqual(['snapshot']);
+
+      const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+      const data = (await read.json()) as { body: string };
+      // Everything is still there, two levels down, and none of it can split.
+      // Whole lines, since `'#### X'` contains `'### X'`.
+      const lines = data.body.split('\n');
+      expect(lines).toContain('### Precedent hunt');
+      expect(lines).toContain('#### Bottom line');
+      expect(lines).toContain('##### Method');
+      expect(data.body).toContain('How it was gathered.');
+    });
+
+    it('demotes a new section body too, not only a patched one', async () => {
+      mockSignedInSerge();
+      const testEnv = env();
+      const response = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ title: 'Evidence', content: sourceFile, demote_headings: true }),
+        }),
+        testEnv,
+      );
+
+      expect(response.status).toBe(200);
+      // The added section is one chapter, not four.
+      expect(await sectionIds(testEnv)).toEqual(['snapshot', 'evidence']);
+    });
+  });
+
   it('refuses a section write from someone who does not own the idea', async () => {
     mockSignedInSerge();
     const response = await worker.fetch(
