@@ -1,21 +1,32 @@
 /**
  * OAuth 2.1 provider for MCP servers.
- * Uses the shared FreeAppStore auth backend and stores OAuth access-token to
- * FAS session mappings in the MCP Durable Object store.
+ *
+ * Identity comes from the FreeIdeaStore site's own sign-in endpoint, and the
+ * access tokens issued here are mapped to FIS sessions in the MCP Durable Object
+ * store. Before #37 the identity source was FreeAppStore, which meant this
+ * worker had to hold a copy of *another store's* HMAC key to verify what it was
+ * handed — the coupling that broke sign-in in #34 and could not be repaired from
+ * inside this repo.
+ *
+ * Everything else here is provider-agnostic: dynamic client registration, PKCE,
+ * the nonce-keyed `authreq:` records and the code exchange were unaffected by
+ * that change.
  */
 
-import { verifySession } from "./session.js";
+import { inspectSession, mintSession, MCP_SESSION_TTL_SECONDS, type SessionFailure } from "./session.js";
 import {
   AUTH_IN_FLIGHT_COOKIE,
   authAlreadyInProgress,
   authConfirmPage,
+  authErrorPage,
   authProvider,
-  fasAuthStartUrl,
+  authStartRedirect,
 } from "./oauth-pages.js";
 
 export interface OAuthConfig {
   issuer: string;
-  fasAuthStart: string;
+  /** The site's `/.fis/auth/start`; the provider is chosen with a query param. */
+  authStartUrl: string;
   store: OAuthStore;
   sessionSigningKey: string;
 }
@@ -194,22 +205,64 @@ async function continueAuthorize(request: Request, config: OAuthConfig): Promise
   const reqRaw = await config.store.get(`authreq:${nonce}`);
   if (!reqRaw) return new Response("invalid or expired nonce", { status: 400 });
 
-  return Response.redirect(fasAuthStartUrl(config, nonce, provider), 302);
+  return Response.redirect(authStartRedirect(config, nonce, provider), 302);
 }
+
+/** What to tell the user for each way a handed-back session can fail to verify. */
+const SESSION_FAILURE_ADVICE: Record<SessionFailure, string> = {
+  expired: "The sign-in took too long to come back. Start the connection again from your MCP client.",
+  bad_signature:
+    "FreeIdeaStore signed you in, but this server could not confirm the result. That is a server-side configuration fault, not something you can fix by retrying — please report it.",
+  malformed: "The sign-in result came back unreadable. Start the connection again from your MCP client.",
+};
 
 async function oauthCallback(request: Request, config: OAuthConfig): Promise<Response> {
   const url = new URL(request.url);
   const nonce = url.searchParams.get("nonce");
-  const fasSession = url.searchParams.get("fas_session") || url.searchParams.get("session");
+  // `fis_session` is what the site sends. `fas_session` and `session` are the
+  // FreeAppStore-era names, kept so a sign-in already in flight across the
+  // cutover completes instead of dead-ending (#37).
+  const session =
+    url.searchParams.get("fis_session") || url.searchParams.get("fas_session") || url.searchParams.get("session");
+  // The site reports its own failures here, since a cross-origin redirect cannot
+  // carry a fragment back to a server.
+  const siteError = url.searchParams.get("auth_error");
 
-  if (!nonce || !fasSession) return new Response("missing nonce or fas_session", { status: 400 });
+  if (siteError) {
+    console.warn(`mcp oauth callback: site reported auth_error=${siteError}`);
+    return authErrorPage(
+      "Sign-in did not complete",
+      siteError === "denied"
+        ? "You declined the sign-in, or the provider refused it. Start the connection again if that was not what you meant."
+        : "FreeIdeaStore could not complete the sign-in. Start the connection again from your MCP client.",
+    );
+  }
+  if (!nonce || !session) {
+    console.warn(`mcp oauth callback: missing ${!nonce ? "nonce" : "session"} parameter`);
+    return authErrorPage(
+      "Sign-in did not complete",
+      "The sign-in came back without everything this server needs. Start the connection again from your MCP client.",
+    );
+  }
 
   const reqRaw = await config.store.get(`authreq:${nonce}`);
-  if (!reqRaw) return new Response("invalid or expired nonce", { status: 400 });
+  if (!reqRaw) {
+    console.warn("mcp oauth callback: nonce is unknown or expired");
+    return authErrorPage(
+      "This sign-in link has expired",
+      "Authorization requests are only valid for ten minutes. Start the connection again from your MCP client.",
+    );
+  }
   await config.store.delete(`authreq:${nonce}`);
 
-  const payload = await verifySession(fasSession, config.sessionSigningKey);
-  if (!payload) return new Response("invalid session", { status: 400 });
+  const check = await inspectSession(session, config.sessionSigningKey);
+  if (!check.ok) {
+    // The reason is the whole point of this log line. #34 was slow to diagnose
+    // because a key mismatch and an expiry were indistinguishable from outside,
+    // and nothing was written down inside.
+    console.warn(`mcp oauth callback: session rejected (${check.reason})`);
+    return authErrorPage("Sign-in could not be verified", SESSION_FAILURE_ADVICE[check.reason]);
+  }
 
   const authReq = JSON.parse(reqRaw) as {
     clientId: string;
@@ -222,7 +275,10 @@ async function oauthCallback(request: Request, config: OAuthConfig): Promise<Res
   await config.store.put(
     `code:${code}`,
     JSON.stringify({
-      fasSession,
+      // The identity, not the token that carried it. The token from the site is
+      // deliberately short-lived — it only has to survive one redirect — so the
+      // durable credential behind the access token is minted at exchange time.
+      uid: check.payload.uid,
       codeChallenge: authReq.codeChallenge,
       redirectUri: authReq.redirectUri,
       clientId: authReq.clientId,
@@ -264,7 +320,7 @@ async function tokenExchange(request: Request, config: OAuthConfig): Promise<Res
   await config.store.delete(`code:${code}`);
 
   const codeData = JSON.parse(codeRaw) as {
-    fasSession: string;
+    uid: string;
     codeChallenge: string;
     redirectUri: string;
     clientId: string;
@@ -282,14 +338,30 @@ async function tokenExchange(request: Request, config: OAuthConfig): Promise<Res
     return json({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
   }
 
+  // A code record written by the previous deploy carries no uid. Those are dead
+  // ten minutes after a release at worst, and refusing one is a retryable error
+  // for the client — minting from `undefined` would be a 500 instead.
+  if (!codeData.uid) {
+    console.warn("mcp token exchange: authorization code predates the identity cutover");
+    return json({ error: "invalid_grant", error_description: "authorization code is no longer valid" }, 400);
+  }
+
+  // Mint the session the access token stands for, rather than storing the one
+  // the site handed us: that one expires in minutes so the MCP client's tools
+  // would start failing almost immediately, while this one is issued for the
+  // same lifetime as the access token it sits behind. Both expire together, so
+  // there is no window where a live access token maps to a dead credential.
+  const session = await mintSession(codeData.uid, config.sessionSigningKey, {
+    ttlSeconds: MCP_SESSION_TTL_SECONDS,
+  });
   const accessToken = crypto.randomUUID();
-  await config.store.put(`token:${accessToken}`, codeData.fasSession, {
-    expirationTtl: 86_400,
+  await config.store.put(`token:${accessToken}`, session, {
+    expirationTtl: MCP_SESSION_TTL_SECONDS,
   });
 
   return json({
     access_token: accessToken,
     token_type: "bearer",
-    expires_in: 86_400,
+    expires_in: MCP_SESSION_TTL_SECONDS,
   });
 }

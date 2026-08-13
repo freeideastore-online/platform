@@ -21,7 +21,15 @@ describe("MCP deployment config", () => {
   it("points tools at the canonical FreeIdeaStore API and public site", () => {
     expect(wrangler).toContain('PUBLIC_BASE = "https://freeideastore.online"');
     expect(wrangler).toContain('FIS_API_BASE = "https://freeideastore.online"');
-    expect(wrangler).toContain('API_BASE = "https://api.freeappstore.online"');
+    expect(wrangler).toContain('FIS_AUTH_BASE = "https://freeideastore.online"');
+  });
+
+  it("takes identity from FreeIdeaStore alone", () => {
+    // #34 was only fixable by touching a FreeAppStore worker. Nothing in this
+    // package may name another store again — that dependency is the bug.
+    expect(wrangler).not.toContain("freeappstore");
+    expect(index).not.toContain("freeappstore");
+    expect(index).toContain('const AUTH_START_PATH = "/.fis/auth/start"');
   });
 
   it("advertises the canonical skill and document publishing tools", () => {

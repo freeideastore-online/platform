@@ -21,6 +21,28 @@ const AUTH_APP_ID = 'freeideastore';
 const NONCE_TTL_SECONDS = 10 * 60;
 const AUTH_PROVIDERS = new Set(['github', 'google']);
 
+// Origins that may receive a minted session on the redirect URL instead of in
+// the cookie, when they ask for it with `response_mode=query`.
+//
+// The MCP server lives on mcp.freeideastore.online, a *different origin* from
+// the site, so the `__Host-` cookie this file sets can never reach it — and a
+// cookie is the only channel a browser offers apart from the URL itself. That
+// leaves the redirect URL as the sole way to hand the MCP OAuth flow the session
+// it just earned. FreeAppStore used to perform exactly this handoff for us
+// (`response_mode=query` + `fas_session`); it now stays inside FIS (#37).
+//
+// A token in a URL is normally a mistake — URLs reach browser history, Referer
+// headers and access logs. It is an acceptable tradeoff only because all three
+// exposures are bounded here: the receiving endpoint exchanges the token for its
+// own access token on arrival, the token is minted with a TTL of minutes rather
+// than the cookie's 30 days, and nothing but an origin on this list can ever be
+// sent one. Adding an entry is a security decision, not a config tweak.
+const SESSION_HANDOFF_ORIGINS = new Set(['https://mcp.freeideastore.online']);
+// Long enough to survive the redirect and the immediate exchange, short enough
+// that a URL recovered from a log later is worthless.
+const HANDOFF_TTL_SECONDS = 5 * 60;
+const HANDOFF_SESSION_PARAM = 'fis_session';
+
 function credentialsFor(env: Env, provider: ProviderId): ProviderCredentials | null {
   const clientId = provider === 'github' ? env.GH_OAUTH_CLIENT_ID : env.GOOGLE_CLIENT_ID;
   const clientSecret = provider === 'github' ? env.GH_OAUTH_CLIENT_SECRET : env.GOOGLE_CLIENT_SECRET;
@@ -68,6 +90,40 @@ function sameOriginPath(baseUrl: URL, raw: string | null) {
   } catch {
     return '/';
   }
+}
+
+/**
+ * The absolute return target for a cross-origin session handoff, or null.
+ *
+ * Returning null is what routes everything else back through `sameOriginPath`,
+ * so an ordinary sign-in is still clamped to a path on this origin and cannot be
+ * pointed at an attacker's host. This is deliberately re-derived from the
+ * allowlist at both ends of the flow rather than remembered as a flag: the
+ * allowlist stays the only thing that can widen where a session may be sent.
+ */
+function handoffTarget(raw: string | null): URL | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return SESSION_HANDOFF_ORIGINS.has(parsed.origin) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where to send the browser when sign-in does not complete.
+ *
+ * A same-origin return keeps the reason in the fragment: the console reads it
+ * client-side and it never reaches a server or its logs. A handoff target is
+ * another origin's *server* route, which cannot see a fragment at all, so there
+ * the reason has to travel as a query parameter to be reported to the user.
+ */
+function authErrorUrl(url: URL, handoff: URL | null, returnPath: string, reason: string) {
+  if (!handoff) return `${url.origin}${returnPath}#auth_error=${reason}`;
+  const target = new URL(handoff.toString());
+  target.searchParams.set('auth_error', reason);
+  return target.toString();
 }
 
 function cookie(name: string, value: string, maxAge: number) {
@@ -208,22 +264,33 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     if (request.method !== 'GET') return methodNotAllowed('GET');
     const provider = url.searchParams.get('provider') || 'github';
     if (!AUTH_PROVIDERS.has(provider)) return new Response('unknown provider', { status: 404, headers: SECURITY_HEADERS });
-    const returnPath = sameOriginPath(url, url.searchParams.get('return_to') || '/console/');
+    const requestedReturn = url.searchParams.get('return_to');
+    // Only an explicit `response_mode=query` opts into the URL handoff, so an
+    // ordinary browser sign-in that happens to name an allowlisted origin still
+    // gets a cookie and nothing else.
+    const handoff = url.searchParams.get('response_mode') === 'query' ? handoffTarget(requestedReturn) : null;
+    const returnTarget = handoff ? handoff.toString() : sameOriginPath(url, requestedReturn || '/console/');
     const nonce = crypto.randomUUID();
 
     const credentials = env && isProviderId(provider) ? nativeCredentials(env, provider) : null;
     if (credentials && isProviderId(provider)) {
-      // The return path rides in the cookie, not the redirect URI, which has to
-      // match the provider's registration exactly.
+      // The return target rides in the cookie, not the redirect URI, which has
+      // to match the provider's registration exactly.
       return redirect(
         authorizeUrl(provider, credentials, callbackUri(url, provider), nonce),
         302,
-        [cookie(NONCE_COOKIE_NAME, `${nonce}|${returnPath}`, NONCE_TTL_SECONDS)],
+        [cookie(NONCE_COOKIE_NAME, `${nonce}|${returnTarget}`, NONCE_TTL_SECONDS)],
       );
     }
 
+    // Only the FIS-owned flow can honour a handoff. The FreeAppStore fallback
+    // hands back a FreeAppStore-signed token, and passing one of those to
+    // another FIS worker to verify is the exact cross-store key coupling that
+    // broke MCP sign-in in #34. Failing loudly beats re-creating that bug.
+    if (handoff) return new Response('sign-in is not configured', { status: 503, headers: SECURITY_HEADERS });
+
     const callback = new URL(`${AUTH_PREFIX}/callback`, url.origin);
-    callback.searchParams.set('return_to', returnPath);
+    callback.searchParams.set('return_to', returnTarget);
     callback.searchParams.set('nonce', nonce);
     const start = new URL(`/v1/auth/${provider}/start`, AUTH_API_BASE);
     start.searchParams.set('app_id', AUTH_APP_ID);
@@ -246,31 +313,39 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     const stored = readCookie(request.headers.get('Cookie'), NONCE_COOKIE_NAME) || '';
     const separator = stored.indexOf('|');
     const expected = separator < 0 ? stored : stored.slice(0, separator);
-    const returnPath = sameOriginPath(url, separator < 0 ? '/console/' : stored.slice(separator + 1));
+    const storedReturn = separator < 0 ? '/console/' : stored.slice(separator + 1);
+    const handoff = handoffTarget(storedReturn);
+    const returnPath = handoff ? '/console/' : sameOriginPath(url, storedReturn);
+    const fail = (reason: string) =>
+      redirect(authErrorUrl(url, handoff, returnPath, reason), 303, [clearCookie(NONCE_COOKIE_NAME)]);
     const state = url.searchParams.get('state');
     // Reject before spending a code exchange on a request we already distrust.
-    if (!expected || !state || state !== expected) {
-      return redirect(`${url.origin}${returnPath}#auth_error=invalid_state`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
-    }
+    if (!expected || !state || state !== expected) return fail('invalid_state');
 
     const code = url.searchParams.get('code');
-    if (!code) {
-      // The user declined consent, or the provider refused. Either way this is
-      // an ordinary outcome, not an error worth a stack trace.
-      return redirect(`${url.origin}${returnPath}#auth_error=denied`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
-    }
+    // No code means the user declined consent, or the provider refused. Either
+    // way this is an ordinary outcome, not an error worth a stack trace.
+    if (!code) return fail('denied');
 
     const profile = await profileFromCode(nativeCallback, credentials, code, callbackUri(url, nativeCallback));
-    if (!profile) {
-      return redirect(`${url.origin}${returnPath}#auth_error=provider_error`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
-    }
+    if (!profile) return fail('provider_error');
 
     const identity = await upsertIdentity(env, profile);
-    const session = await mintSession(identity.id, env.SESSION_SIGNING_KEY);
-    return redirect(`${url.origin}${returnPath}`, 303, [
-      cookie(SESSION_COOKIE_NAME, session, SESSION_TTL_SECONDS),
+    const cookies = [
+      cookie(SESSION_COOKIE_NAME, await mintSession(identity.id, env.SESSION_SIGNING_KEY), SESSION_TTL_SECONDS),
       clearCookie(NONCE_COOKIE_NAME),
-    ]);
+    ];
+    if (handoff) {
+      // A second, separately minted token — not the cookie's. The cookie has to
+      // last a browsing session; this one only has to survive one redirect, so
+      // it gets minutes. Signing into MCP still leaves the browser signed into
+      // the site, which is why the cookie is set here too.
+      const target = new URL(handoff.toString());
+      const session = await mintSession(identity.id, env.SESSION_SIGNING_KEY, { ttlSeconds: HANDOFF_TTL_SECONDS });
+      target.searchParams.set(HANDOFF_SESSION_PARAM, session);
+      return redirect(target.toString(), 303, cookies);
+    }
+    return redirect(`${url.origin}${returnPath}`, 303, cookies);
   }
 
   if (url.pathname === `${AUTH_PREFIX}/callback`) {

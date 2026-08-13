@@ -1,10 +1,11 @@
 export interface Env {
-  API_BASE?: string;
   GITHUB_TOKEN?: string;
   GITHUB_ORG?: string;
   PLATFORM_REPO?: string;
   PUBLIC_BASE?: string;
   FIS_API_BASE?: string;
+  /** Origin of the FreeIdeaStore site that signs users in for MCP OAuth. */
+  FIS_AUTH_BASE?: string;
   MCP_OBJECT: DurableObjectNamespace;
   SESSION_SIGNING_KEY?: string;
 }

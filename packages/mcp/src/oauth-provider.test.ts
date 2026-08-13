@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { createAuthChallenge, handleOAuthRoute, type OAuthStore } from "./oauth-provider.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAuthChallenge, handleOAuthRoute, resolveOAuthToken, type OAuthStore } from "./oauth-provider.js";
+import { mintSession, verifySession } from "./session.js";
+
+const ISSUER = "https://mcp.freeideastore.online";
+const SIGNING_KEY = "test-key";
 
 function makeStore(seed: Record<string, string> = {}): OAuthStore {
   const data = new Map(Object.entries(seed));
@@ -14,39 +18,54 @@ function makeStore(seed: Record<string, string> = {}): OAuthStore {
   };
 }
 
+function config(store: OAuthStore) {
+  return {
+    issuer: ISSUER,
+    authStartUrl: "https://freeideastore.online/.fis/auth/start",
+    store,
+    sessionSigningKey: SIGNING_KEY,
+  };
+}
+
+const authRequest = JSON.stringify({
+  clientId: "client-1",
+  redirectUri: "http://127.0.0.1:9876/callback",
+  codeChallenge: "abc",
+  state: null,
+});
+
 describe("createAuthChallenge", () => {
   it("returns an MCP OAuth protected-resource challenge", () => {
-    const res = createAuthChallenge({ issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev" });
+    const res = createAuthChallenge({ issuer: ISSUER });
 
     expect(res.status).toBe(401);
     expect(res.headers.get("WWW-Authenticate")).toBe(
-      'Bearer resource_metadata="https://freeideastore-mcp.serge-the-dev.workers.dev/.well-known/oauth-protected-resource/mcp"',
+      `Bearer resource_metadata="${ISSUER}/.well-known/oauth-protected-resource/mcp"`,
     );
   });
 
   it("can mark invalid bearer tokens", () => {
-    const res = createAuthChallenge({ issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev" }, "invalid_token");
+    const res = createAuthChallenge({ issuer: ISSUER }, "invalid_token");
 
     expect(res.headers.get("WWW-Authenticate")).toContain('error="invalid_token"');
   });
 });
 
 describe("handleOAuthRoute", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("serves protected resource metadata for the MCP endpoint", async () => {
     const res = await handleOAuthRoute(
-      new Request("https://freeideastore-mcp.serge-the-dev.workers.dev/.well-known/oauth-protected-resource/mcp"),
-      {
-        issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev",
-        fasAuthStart: "https://api.freeappstore.online/v1/auth/github/start",
-        store: makeStore(),
-        sessionSigningKey: "test-key",
-      },
+      new Request(`${ISSUER}/.well-known/oauth-protected-resource/mcp`),
+      config(makeStore()),
     );
 
     expect(res?.status).toBe(200);
     await expect(res?.json()).resolves.toEqual({
-      resource: "https://freeideastore-mcp.serge-the-dev.workers.dev/mcp",
-      authorization_servers: ["https://freeideastore-mcp.serge-the-dev.workers.dev"],
+      resource: `${ISSUER}/mcp`,
+      authorization_servers: [ISSUER],
     });
   });
 
@@ -60,14 +79,9 @@ describe("handleOAuthRoute", () => {
 
     const res = await handleOAuthRoute(
       new Request(
-        "https://freeideastore-mcp.serge-the-dev.workers.dev/authorize?response_type=code&client_id=client-1&redirect_uri=http%3A%2F%2F127.0.0.1%3A9876%2Fcallback&code_challenge=abc&code_challenge_method=S256",
+        `${ISSUER}/authorize?response_type=code&client_id=client-1&redirect_uri=http%3A%2F%2F127.0.0.1%3A9876%2Fcallback&code_challenge=abc&code_challenge_method=S256`,
       ),
-      {
-        issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev",
-        fasAuthStart: "https://api.freeappstore.online/v1/auth/github/start",
-        store,
-        sessionSigningKey: "test-key",
-      },
+      config(store),
     );
 
     expect(res?.status).toBe(200);
@@ -81,58 +95,31 @@ describe("handleOAuthRoute", () => {
     expect(html).toContain("provider=google");
   });
 
-  it("redirects to GitHub only after the user continues", async () => {
-    const store = makeStore({
-      "authreq:nonce-1": JSON.stringify({
-        clientId: "client-1",
-        redirectUri: "http://127.0.0.1:9876/callback",
-        codeChallenge: "abc",
-        state: null,
-      }),
-    });
-
+  it("hands sign-in to FreeIdeaStore, not another store, once the user continues", async () => {
     const res = await handleOAuthRoute(
-      new Request("https://freeideastore-mcp.serge-the-dev.workers.dev/authorize/continue?nonce=nonce-1&provider=github"),
-      {
-        issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev",
-        fasAuthStart: "https://api.freeappstore.online/v1/auth/github/start",
-        store,
-        sessionSigningKey: "test-key",
-      },
+      new Request(`${ISSUER}/authorize/continue?nonce=nonce-1&provider=github`),
+      config(makeStore({ "authreq:nonce-1": authRequest })),
     );
 
     expect(res?.status).toBe(302);
-    const location = res?.headers.get("Location") ?? "";
-    expect(location).toContain("https://api.freeappstore.online/v1/auth/github/start");
-    expect(location).toContain("response_mode=query");
-    expect(location).toContain("app_id=mcp");
-    expect(location).toContain("return_to=");
+    const location = new URL(res?.headers.get("Location") ?? "");
+    expect(location.origin + location.pathname).toBe("https://freeideastore.online/.fis/auth/start");
+    expect(location.searchParams.get("provider")).toBe("github");
+    // Without this the site would only set a cookie, which cannot cross origins
+    // to reach this server.
+    expect(location.searchParams.get("response_mode")).toBe("query");
+    expect(location.searchParams.get("return_to")).toBe(`${ISSUER}/oauth/callback?nonce=nonce-1`);
   });
 
-  it("can redirect to Google when selected on the confirmation page", async () => {
-    const store = makeStore({
-      "authreq:nonce-1": JSON.stringify({
-        clientId: "client-1",
-        redirectUri: "http://127.0.0.1:9876/callback",
-        codeChallenge: "abc",
-        state: null,
-      }),
-    });
-
+  it("selects the provider with a query param rather than a path", async () => {
     const res = await handleOAuthRoute(
-      new Request("https://freeideastore-mcp.serge-the-dev.workers.dev/authorize/continue?nonce=nonce-1&provider=google"),
-      {
-        issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev",
-        fasAuthStart: "https://api.freeappstore.online/v1/auth/github/start",
-        store,
-        sessionSigningKey: "test-key",
-      },
+      new Request(`${ISSUER}/authorize/continue?nonce=nonce-1&provider=google`),
+      config(makeStore({ "authreq:nonce-1": authRequest })),
     );
 
-    expect(res?.status).toBe(302);
-    const location = res?.headers.get("Location") ?? "";
-    expect(location).toContain("https://api.freeappstore.online/v1/auth/google/start");
-    expect(location).toContain("response_mode=query");
+    const location = new URL(res?.headers.get("Location") ?? "");
+    expect(location.pathname).toBe("/.fis/auth/start");
+    expect(location.searchParams.get("provider")).toBe("google");
   });
 
   it("does not redirect duplicate browser authorization tabs to a provider", async () => {
@@ -142,15 +129,10 @@ describe("handleOAuthRoute", () => {
 
     const res = await handleOAuthRoute(
       new Request(
-        "https://freeideastore-mcp.serge-the-dev.workers.dev/authorize?response_type=code&client_id=client-1&redirect_uri=http%3A%2F%2F127.0.0.1%3A9876%2Fcallback&code_challenge=abc&code_challenge_method=S256",
+        `${ISSUER}/authorize?response_type=code&client_id=client-1&redirect_uri=http%3A%2F%2F127.0.0.1%3A9876%2Fcallback&code_challenge=abc&code_challenge_method=S256`,
         { headers: { Cookie: "fis_mcp_oauth_inflight=1" } },
       ),
-      {
-        issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev",
-        fasAuthStart: "https://api.freeappstore.online/v1/auth/github/start",
-        store,
-        sessionSigningKey: "test-key",
-      },
+      config(store),
     );
 
     expect(res?.status).toBe(200);
@@ -159,26 +141,182 @@ describe("handleOAuthRoute", () => {
   });
 
   it("rejects unsupported providers on the continue endpoint", async () => {
-    const store = makeStore({
-      "authreq:nonce-1": JSON.stringify({
-        clientId: "client-1",
-        redirectUri: "http://127.0.0.1:9876/callback",
-        codeChallenge: "abc",
-        state: null,
-      }),
-    });
-
     const res = await handleOAuthRoute(
-      new Request("https://freeideastore-mcp.serge-the-dev.workers.dev/authorize/continue?nonce=nonce-1&provider=password"),
-      {
-        issuer: "https://freeideastore-mcp.serge-the-dev.workers.dev",
-        fasAuthStart: "https://api.freeappstore.online/v1/auth/github/start",
-        store,
-        sessionSigningKey: "test-key",
-      },
+      new Request(`${ISSUER}/authorize/continue?nonce=nonce-1&provider=password`),
+      config(makeStore({ "authreq:nonce-1": authRequest })),
     );
 
     expect(res?.status).toBe(400);
     await expect(res?.text()).resolves.toBe("unsupported provider");
+  });
+});
+
+describe("oauth callback", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("issues an authorization code for a session FreeIdeaStore signed", async () => {
+    const store = makeStore({ "authreq:nonce-1": authRequest });
+    const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
+
+    const res = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${session}`),
+      config(store),
+    );
+
+    expect(res?.status).toBe(302);
+    const location = new URL(res?.headers.get("Location") ?? "");
+    expect(location.origin + location.pathname).toBe("http://127.0.0.1:9876/callback");
+    expect(location.searchParams.get("code")).toBeTruthy();
+    // The nonce is single-use.
+    await expect(store.get("authreq:nonce-1")).resolves.toBeNull();
+  });
+
+  it("still accepts the pre-cutover parameter names", async () => {
+    for (const param of ["fas_session", "session"]) {
+      const store = makeStore({ "authreq:nonce-1": authRequest });
+      const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
+
+      const res = await handleOAuthRoute(
+        new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&${param}=${session}`),
+        config(store),
+      );
+
+      expect(res?.status).toBe(302);
+    }
+  });
+
+  it("names the reason a session was refused instead of saying only 'invalid session'", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const valid = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
+    const expired = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: -10 });
+    const foreign = await mintSession("identity-1", "some-other-stores-key");
+
+    const expiredRes = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${expired}`),
+      config(makeStore({ "authreq:nonce-1": authRequest })),
+    );
+    const foreignRes = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${foreign}`),
+      config(makeStore({ "authreq:nonce-1": authRequest })),
+    );
+    const staleNonceRes = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=gone&fis_session=${valid}`),
+      config(makeStore()),
+    );
+
+    expect(expiredRes?.status).toBe(400);
+    expect(foreignRes?.status).toBe(400);
+    expect(staleNonceRes?.status).toBe(400);
+    // The user gets a page, not four words of plain text (#34).
+    expect(foreignRes?.headers.get("Content-Type")).toContain("text/html");
+    await expect(foreignRes?.text()).resolves.toContain("FreeIdeaStore");
+    // The operator gets the distinction the browser cannot show them.
+    const logged = warn.mock.calls.map((call) => String(call[0]));
+    expect(logged.some((line) => line.includes("expired"))).toBe(true);
+    expect(logged.some((line) => line.includes("bad_signature"))).toBe(true);
+    expect(logged.some((line) => line.includes("nonce"))).toBe(true);
+  });
+
+  it("reports a failure the site sends back on the redirect", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const res = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&auth_error=denied`),
+      config(makeStore({ "authreq:nonce-1": authRequest })),
+    );
+
+    expect(res?.status).toBe(400);
+    await expect(res?.text()).resolves.toContain("declined");
+  });
+
+  it("clears the in-flight cookie on failure so a retry is not blocked", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const res = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1`),
+      config(makeStore({ "authreq:nonce-1": authRequest })),
+    );
+
+    expect(res?.headers.get("Set-Cookie")).toContain("fis_mcp_oauth_inflight=; Max-Age=0");
+  });
+});
+
+describe("token exchange", () => {
+  async function codeFor(store: OAuthStore, verifier: string) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+    const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    await store.put(
+      "authreq:nonce-1",
+      JSON.stringify({
+        clientId: "client-1",
+        redirectUri: "http://127.0.0.1:9876/callback",
+        codeChallenge: challenge,
+        state: null,
+      }),
+    );
+    const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
+    const callback = await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&fis_session=${session}`),
+      config(store),
+    );
+    return new URL(callback?.headers.get("Location") ?? "").searchParams.get("code") ?? "";
+  }
+
+  it("exchanges a code for an access token backed by a fresh long-lived session", async () => {
+    const store = makeStore();
+    const verifier = "verifier-abcdefghijklmnopqrstuvwxyz";
+    const code = await codeFor(store, verifier);
+
+    const res = await handleOAuthRoute(
+      new Request(`${ISSUER}/token`, {
+        method: "POST",
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: "http://127.0.0.1:9876/callback",
+          client_id: "client-1",
+          code_verifier: verifier,
+        }).toString(),
+      }),
+      config(store),
+    );
+
+    const body = (await res?.json()) as { access_token: string; expires_in: number };
+    expect(res?.status).toBe(200);
+    expect(body.expires_in).toBe(86_400);
+
+    // The credential behind the access token must outlive the minutes-long token
+    // the site handed over, or every tool call would fail shortly after sign-in.
+    const stored = await resolveOAuthToken(body.access_token, store);
+    const payload = await verifySession(stored ?? "", SIGNING_KEY);
+    expect(payload?.uid).toBe("identity-1");
+    expect((payload?.exp ?? 0) - Math.floor(Date.now() / 1000)).toBeGreaterThan(3600);
+  });
+
+  it("rejects a code redeemed with the wrong PKCE verifier", async () => {
+    const store = makeStore();
+    const code = await codeFor(store, "verifier-abcdefghijklmnopqrstuvwxyz");
+
+    const res = await handleOAuthRoute(
+      new Request(`${ISSUER}/token`, {
+        method: "POST",
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: "http://127.0.0.1:9876/callback",
+          client_id: "client-1",
+          code_verifier: "not-the-verifier",
+        }).toString(),
+      }),
+      config(store),
+    );
+
+    expect(res?.status).toBe(400);
+    await expect(res?.json()).resolves.toMatchObject({ error: "invalid_grant" });
   });
 });

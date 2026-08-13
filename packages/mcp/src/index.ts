@@ -3,17 +3,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createAuthChallenge, handleOAuthRoute } from "./oauth-provider.js";
 import { TOOL_COUNT } from "./idea-skills.js";
 import { authenticateRequest, oauthStore } from "./mcp-auth.js";
+import { mintSession, verifySession } from "./session.js";
 import type { Env, McpProps } from "./mcp-types.js";
 import { registerAccountTools } from "./register-account-tools.js";
 import { registerCollaborationTools } from "./register-collaboration-tools.js";
 import { registerPublishingTools } from "./register-publishing-tools.js";
 import { registerSkillTools } from "./register-skill-tools.js";
 
+/** Sign-in on the FreeIdeaStore site. FIS's own since #37 — see oauth-provider.ts. */
+const AUTH_START_PATH = "/.fis/auth/start";
+
 const ROOT_TEXT =
   "FreeIdeaStore MCP Server\n\n" +
   "Connect: npx mcp-remote https://mcp.freeideastore.online/mcp\n\n" +
   "Tools: free_idea_template, list_idea_skills, get_idea_skill, apply_idea_skill, get_idea, my_ideas, my_activity, create_free_idea, derive_idea, add_idea_contribution, propose_idea_refinement, publish_idea_update, delete_idea, react_to_idea, promote_to_pro_candidate, dynamic_idea_book_template, dry_run_dynamic_idea_book\n\n" +
-  "Auth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FAS session token>.\n";
+  "Auth: OAuth 2.1 via browser sign-in or Authorization: Bearer <FreeIdeaStore session token>.\n";
 
 export class FisMcp extends McpAgent<Env, unknown, McpProps> {
   server = new McpServer({ name: "FreeIdeaStore", version: "0.1.0" });
@@ -81,7 +85,7 @@ export default {
     if (env.SESSION_SIGNING_KEY) {
       const oauthRes = await handleOAuthRoute(request, {
         issuer,
-        fasAuthStart: `${env.API_BASE || "https://api.freeappstore.online"}/v1/auth/github/start`,
+        authStartUrl: `${env.FIS_AUTH_BASE || "https://freeideastore.online"}${AUTH_START_PATH}`,
         store: oauthStore(env),
         sessionSigningKey: env.SESSION_SIGNING_KEY,
       });
@@ -89,7 +93,12 @@ export default {
     }
 
     if (url.pathname === "/health") {
-      return Response.json({ ok: true, service: "freeideastore-mcp", tools: TOOL_COUNT });
+      return Response.json({
+        ok: true,
+        service: "freeideastore-mcp",
+        tools: TOOL_COUNT,
+        auth: await authHealth(env),
+      });
     }
 
     if (url.pathname === "/" || url.pathname === "") {
@@ -109,6 +118,32 @@ export default {
     return new Response("FreeIdeaStore MCP: use /mcp", { status: 404 });
   },
 };
+
+/**
+ * Can this worker actually sign and check a session with the key it was given?
+ *
+ * Mint a throwaway token and verify it. This catches a `SESSION_SIGNING_KEY`
+ * that is absent, empty, or otherwise unusable — the difference between "OAuth
+ * is off" and "OAuth is on but nothing can sign in", which is invisible from the
+ * outside because both simply refuse the client.
+ *
+ * What it deliberately does not claim: it cannot detect the key *disagreeing*
+ * with the site's, because both sides of the check use the same local value. The
+ * cross-service version of that check is what #34 wanted, and it stopped being
+ * expressible once identity moved in-store — sessions are now minted and
+ * verified by workers that both take the key from FIS's own secret, so a drifted
+ * copy shows up as a failed sign-in with a logged `bad_signature` reason rather
+ * than as something a health endpoint can see.
+ */
+async function authHealth(env: Env): Promise<"ok" | "broken" | "disabled"> {
+  if (!env.SESSION_SIGNING_KEY) return "disabled";
+  try {
+    const probe = await mintSession("health-probe", env.SESSION_SIGNING_KEY, { ttlSeconds: 60 });
+    return (await verifySession(probe, env.SESSION_SIGNING_KEY)) ? "ok" : "broken";
+  } catch {
+    return "broken";
+  }
+}
 
 /**
  * Is this an MCP protocol client rather than a person in a browser?

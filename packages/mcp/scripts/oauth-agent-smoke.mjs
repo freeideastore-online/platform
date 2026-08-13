@@ -4,7 +4,10 @@ import { createServer } from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const issuer = process.env.MCP_ISSUER || "https://freeideastore-mcp.serge-the-dev.workers.dev";
+// The canonical host, not the workers.dev one. Since #37 the site will only hand
+// a session back to an allowlisted origin, and mcp.freeideastore.online is the
+// only one on that list — a smoke run against workers.dev now stops at sign-in.
+const issuer = process.env.MCP_ISSUER || "https://mcp.freeideastore.online";
 const endpoint = process.env.MCP_URL || `${issuer}/mcp`;
 const redirectUri = process.env.MCP_REDIRECT_URI || "http://127.0.0.1:8792/callback";
 const writeSmoke = process.env.WRITE_SMOKE === "1";

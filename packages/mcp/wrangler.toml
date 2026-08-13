@@ -10,15 +10,18 @@ zone_name = "freeideastore.online"
 custom_domain = true
 
 [vars]
-API_BASE = "https://api.freeappstore.online"
 GITHUB_ORG = "freeideastore-online"
 PLATFORM_REPO = "platform"
 PUBLIC_BASE = "https://freeideastore.online"
 FIS_API_BASE = "https://freeideastore.online"
+FIS_AUTH_BASE = "https://freeideastore.online"
 
 # Secrets:
 #   GITHUB_TOKEN - optional PAT for future pro-book export tooling.
-#   SESSION_SIGNING_KEY - shared FAS auth HMAC key for MCP OAuth.
+#   SESSION_SIGNING_KEY - FreeIdeaStore's own HMAC key, the same value the
+#     freeideastore worker signs sessions with. Both workers must hold it: the
+#     site mints the session, this worker verifies it and mints the one behind
+#     each MCP access token.
 
 [durable_objects]
 bindings = [
