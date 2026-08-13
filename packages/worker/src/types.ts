@@ -7,6 +7,12 @@ export interface Env {
    * FreeAppStore path is still the live one; #38 makes it required.
    */
   SESSION_SIGNING_KEY?: string;
+  /** Public client ids — wrangler.toml vars, not secrets. */
+  GH_OAUTH_CLIENT_ID?: string;
+  GOOGLE_CLIENT_ID?: string;
+  /** Worker secrets, placed via `ops put fis <KEY>`. */
+  GH_OAUTH_CLIENT_SECRET?: string;
+  GOOGLE_CLIENT_SECRET?: string;
 }
 
 export type IdeaRow = {

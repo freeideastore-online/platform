@@ -184,7 +184,7 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
 export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) {
   const ideaId = pathId(rawIdeaId);
   if (!ideaId) return bad('invalid idea id', 400);
-  const user = await authUserFor(request);
+  const user = await authUserFor(request, env);
   if (!user) return json({ error: 'authentication required' }, { status: 401 });
   const profile = await contributorByHandle(env, user.handle);
   if (!profile) return json({ error: 'profile not found' }, { status: 403 });
@@ -227,7 +227,7 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
 async function ownedIdea(request: Request, env: Env, rawIdeaId: string): Promise<Response | IdeaRow> {
   const ideaId = pathId(rawIdeaId);
   if (!ideaId) return bad('invalid idea id', 400);
-  const user = await authUserFor(request);
+  const user = await authUserFor(request, env);
   if (!user) return json({ error: 'authentication required' }, { status: 401 });
   const profile = await contributorByHandle(env, user.handle);
   if (!profile) return json({ error: 'profile not found' }, { status: 403 });
@@ -360,7 +360,7 @@ export async function updateIdeaSection(
 export async function updateIdea(request: Request, env: Env, rawIdeaId: string) {
   const ideaId = pathId(rawIdeaId);
   if (!ideaId) return bad('invalid idea id', 400);
-  const user = await authUserFor(request);
+  const user = await authUserFor(request, env);
   if (!user) return json({ error: 'authentication required' }, { status: 401 });
   const profile = await contributorByHandle(env, user.handle);
   if (!profile) return json({ error: 'profile not found' }, { status: 403 });
@@ -468,7 +468,7 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
 export async function promoteIdea(request: Request, env: Env, rawIdeaId: string) {
   const ideaId = pathId(rawIdeaId);
   if (!ideaId) return bad('invalid idea id', 400);
-  const user = await authUserFor(request);
+  const user = await authUserFor(request, env);
   if (!user) return json({ error: 'authentication required' }, { status: 401 });
   const profile = await contributorByHandle(env, user.handle);
   if (!profile) return json({ error: 'profile not found' }, { status: 403 });

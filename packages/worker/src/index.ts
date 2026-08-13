@@ -27,7 +27,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    const authResponse = await handleAuth(request, url);
+    const authResponse = await handleAuth(request, url, env);
     if (authResponse) return authResponse;
 
     if (url.pathname === '/api/ai/elaborate') {

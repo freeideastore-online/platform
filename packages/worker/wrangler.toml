@@ -8,6 +8,14 @@ pattern = "freeideastore.online"
 zone_name = "freeideastore.online"
 custom_domain = true
 
+# FIS's own OAuth client ids. Public by design — they travel in every redirect
+# URL — so they belong here rather than in the secret store. The matching
+# secrets are Worker secrets, placed with `ops put fis <KEY>`.
+# See freeideastore-online/platform#39.
+[vars]
+GH_OAUTH_CLIENT_ID = "Ov23linw5p50f2c1onYZ"
+GOOGLE_CLIENT_ID = "236968108464-6ogtss96ht1f49odbadv5psvonanas0f.apps.googleusercontent.com"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "freeideastore"

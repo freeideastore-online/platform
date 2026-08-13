@@ -30,13 +30,13 @@ async function handleHealth(env: Env) {
   return json({ ok: true, service: 'freeideastore', ideas: row?.count ?? 0 });
 }
 
-async function handleSession(request: Request) {
-  const user = await authUserFor(request);
+async function handleSession(request: Request, env: Env) {
+  const user = await authUserFor(request, env);
   return user ? json({ user }) : json({ error: 'not signed in' }, { status: 401 });
 }
 
 async function handleMeIdeas(request: Request, env: Env, url: URL) {
-  const user = await authUserFor(request);
+  const user = await authUserFor(request, env);
   if (!user) return json({ error: 'not signed in' }, { status: 401 });
   const profile = await contributorByHandle(env, user.handle);
   return json({
@@ -46,7 +46,7 @@ async function handleMeIdeas(request: Request, env: Env, url: URL) {
 }
 
 async function handleMeActivity(request: Request, env: Env, url: URL) {
-  const user = await authUserFor(request);
+  const user = await authUserFor(request, env);
   if (!user) return json({ error: 'not signed in' }, { status: 401 });
   const profile = await contributorByHandle(env, user.handle);
   return json({
@@ -324,7 +324,7 @@ const routes: Route[] = [
   {
     pattern: /^\/api\/session$/,
     methods: {
-      GET: (request) => handleSession(request),
+      GET: (request, env) => handleSession(request, env),
     },
   },
   {

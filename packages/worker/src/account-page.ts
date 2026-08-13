@@ -29,7 +29,7 @@ function accountAvatar(user: AuthUser, size = 40) {
 }
 
 export async function renderAccountPage(env: Env, request: Request) {
-  const user = await authUserFor(request);
+  const user = await authUserFor(request, env);
   const profile = user ? await contributorByHandle(env, user.handle) : null;
   const myIdeas = profile ? await ideasByProfile(env, profile.id) : [];
   const myContributions = profile ? await contributionsByProfile(env, profile.id, 12) : [];
