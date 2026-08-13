@@ -238,10 +238,34 @@ they are, then record their verified address, lower-cased to match what
 UPDATE profiles SET claim_email = 'simon@example.com' WHERE handle = 'simon';
 ```
 
-Their next sign-in with a provider that verifies that address binds the new identity to the
+Their next sign-in with a provider that verifies that address binds the identity to the
 existing profile, and their work is theirs again. The claim is single-use: once an identity
 holds the handle, `NOT EXISTS (... identities ...)` closes the door, and a second provider
 account belonging to the same person is picked up earlier by `linkedHandle` instead.
+
+**It does not matter whether they have already signed in** — and until [#40](https://github.com/freeideastore-online/platform/issues/40)
+it did, which made this whole procedure a no-op for the only people who need it. The claim
+was consulted only when `upsertIdentity` was creating an identity, so it worked for a
+contributor an operator got to *before* their first sign-in and did nothing at all for one
+who had already been minted onto a fresh handle. The real sequence is the other one: the
+contributor signs in, lands on `serge-the-dev` because nothing yet connects them to
+`serge-ivy`, notices their ideas are missing and says so, and only then does anyone record a
+claim. `upsertIdentity` therefore re-checks `claimableProfileHandle` on **every** sign-in and
+moves the identity's handle when it matches, which costs one indexed lookup per sign-in.
+
+The two email lookups are deliberately asymmetric about this, and the asymmetry is the safety
+argument. `claimableProfileHandle` may move an existing identity because a human authorized
+it by writing `claim_email`, and because `NOT EXISTS` means the target profile has nobody
+signing in as it — so re-checking can move an identity *onto* an abandoned legacy profile but
+never *off* one person's profile onto another's. `linkedHandle` needs no human in the loop
+and so is never re-run for a returning identity; doing that would let a re-issued or
+newly-verified address move an established identity with nobody having decided it was right.
+
+One thing an operator should expect: the claim binds the identity that carries the claimed
+address. If the same person also signs in with the other provider on a *different* verified
+address, that second identity stays where it is, and once the first has bound, `NOT EXISTS`
+prevents the second from following. Record the claim against the address they actually sign
+in with, or move the second row by hand.
 
 **A colliding new user is suffixed, not refused.** Someone whose GitHub login genuinely
 slugs to a reserved handle signs up normally and gets `simon-github`, then `simon-2`. Failing

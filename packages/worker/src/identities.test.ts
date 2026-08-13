@@ -57,13 +57,23 @@ function fakeEnv() {
         .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0];
       return match ? { handle: match.handle } : null;
     }
-    if (q.startsWith('UPDATE identities SET display_name')) {
-      const row = identities.find((r) => r.id === args[4]);
+    // Parsed rather than positional, so the fake keeps working whichever columns
+    // the refresh writes. Hard-coding `args[4]` as the row id meant adding a
+    // column to the SET list threw `unexpected SQL` — red for a schema change
+    // and red for a real regression alike, which is the failure mode this file
+    // already warns about below.
+    const update = /^UPDATE identities SET (.+) WHERE id = \?$/.exec(q);
+    if (update?.[1]) {
+      const columns = update[1]
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.endsWith('= ?'))
+        .map((part) => part.slice(0, part.indexOf('=')).trim());
+      const row = identities.find((r) => r.id === args[columns.length]);
       if (row) {
-        row.display_name = args[0] as string;
-        row.avatar_url = args[1] as string | null;
-        row.email = args[2] as string | null;
-        row.email_verified = args[3] as number;
+        columns.forEach((column, index) => {
+          (row as unknown as Record<string, unknown>)[column] = args[index];
+        });
       }
       return null;
     }
