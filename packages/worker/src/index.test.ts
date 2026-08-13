@@ -2519,6 +2519,47 @@ describe('FreeIdeaStore worker', () => {
     expect(data.body).toContain('## Research');
   });
 
+  it('lets metadata be edited on a document that is already over a document cap', async () => {
+    // A document must never grow past the point where its own summary can be
+    // corrected. Before this guard, a metadata-only update measured the
+    // UNTOUCHED stored body against the caps, so any document at or over a
+    // limit became permanently undescribable — the complaint in #33.
+    //
+    // The chapter cap is used rather than the character cap because it makes a
+    // discriminating fixture cheap: 101 chapters is a few kilobytes, where an
+    // over-length body would be a megabyte. On the unguarded code this request
+    // returns 400 "document would have 101 chapters".
+    mockSignedInSerge();
+    const testEnv = env();
+    const overCap = Array.from(
+      { length: FIELD_LIMITS.chapters + 1 },
+      (_, i) => `## Chapter ${i}\nSome prose.`,
+    ).join('\n\n');
+    const seeded = testEnv.DB.ideas.get('serge-idea-lab');
+    seeded.body_md = overCap;
+    seeded.body_key = '';
+
+    const update = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer fas-session-token',
+          'content-type': 'application/json',
+        },
+        // No `body` key at all — this is the metadata-only path.
+        body: JSON.stringify({ summary: 'Corrected summary on an oversized document.' }),
+      }),
+      testEnv,
+    );
+
+    expect(update.status).toBe(200);
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const data = (await read.json()) as { idea: { summary: string }; body: string };
+    expect(data.idea.summary).toBe('Corrected summary on an oversized document.');
+    // The document itself must come through untouched.
+    expect(data.body).toBe(overCap);
+  });
+
   it('rejects an oversized contribution instead of silently truncating it', async () => {
     mockSignedInSerge();
     const testEnv = env();

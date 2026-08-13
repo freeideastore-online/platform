@@ -514,10 +514,19 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  // Only check the document budget when the document is actually being
+  // written. When `body` is omitted this call is a metadata-only update and
+  // `body` is just the stored document read back — measuring THAT against the
+  // cap would make a document which is already at or over the limit
+  // permanently undescribable, which is the whole complaint in #33.
+  //
   // A publish replaces the whole document, so no `current` — the actionable
   // number is what to trim, not what may still be added.
-  const budget = documentOverflow(body, title);
-  if (budget) return bad(budget);
+  const bodyProvided = typeof bodyInput === 'string';
+  if (bodyProvided) {
+    const budget = documentOverflow(body, title);
+    if (budget) return bad(budget);
+  }
   const metrics = documentMetrics(body, title);
   // publish_idea_update replaces the whole document; keep what it replaced.
   if (body !== previousBody) {
