@@ -267,12 +267,102 @@ export function isPaginated(markdown: string, documentTitle = '') {
   return Math.floor(total / chapters.length) >= PUBLICATION_POLICY.minMeanChapterWords;
 }
 
+/**
+ * In-page table of contents entries: every heading the renderer emits.
+ *
+ * The range is `#{1,6}` and not `#{1,3}` because `headingTag()` renders ANY
+ * heading — `####` included — and `heading_open` stamps it with a `slug()` id.
+ * A narrower range here produces a heading that is on the page, carries a
+ * working anchor, and is missing from the navigation beside it (#75). Matching
+ * what the renderer emits is the only range that cannot drift out of agreement
+ * with it.
+ *
+ * `demoteHeadings()` is what makes that concrete rather than academic: demoting
+ * a `#`-topped source file shifts by two levels, so its `###` sub-headings land
+ * at `#####`. At `#{1,4}` those would render and never appear in a chapter's
+ * table of contents — the same bug one level down.
+ *
+ * The list is deliberately flat. `headingTag()` collapses everything below `##`
+ * to `h3`, so below chapter level there is no rendered depth for a TOC to
+ * mirror; a level on each entry would describe a hierarchy the page does not
+ * have.
+ */
 export function markdownHeadings(markdown: string) {
   return markdown
     .split(/\r?\n/)
-    .map((line) => line.trim().match(/^#{1,3}\s+(.+)$/)?.[1])
+    .map((line) => line.trim().match(/^#{1,6}\s+(.+)$/)?.[1])
     .filter((title): title is string => Boolean(title))
     .map((title) => ({ title, id: slug(title) || 'section' }));
+}
+
+/** The shallowest level at which a heading is NOT a chapter — see `sectionRanges()`. */
+const SUBHEADING_LEVEL = 3;
+
+/** `#######` is not a heading in CommonMark, so this is where demotion stops. */
+const MAX_HEADING_LEVEL = 6;
+
+/**
+ * The same lines `sectionRanges()` treats as headings, with their indentation,
+ * hashes, gap and title kept apart so a level can be rewritten in place.
+ *
+ * It deliberately mirrors `sectionRanges()`' `line.trim().match(/^(#{1,3})\s+(.+)$/)`
+ * rather than markdown-it's notion of a heading: a demotion exists to stop the
+ * CHAPTER PARSER splitting, so it has to move exactly the lines that parser
+ * would split on. That includes an indented `  ## Heading`, and it includes a
+ * `## Heading` line inside a fenced code block — which splits a chapter today,
+ * fence or no fence, because `sectionRanges()` scans lines and knows nothing
+ * about fences.
+ */
+const HEADING_LINE = /^(\s*)(#{1,6})(\s+)(\S.*)$/;
+
+/**
+ * Shifts every heading in a block of content deep enough that none of it can
+ * become a chapter — so a whole source file lands as ONE chapter.
+ *
+ * This is the missing half of the contract stated on `sectionRanges()`. Because
+ * BOTH `#` and `##` create sibling chapters, a caller writing a research file
+ * into a section had no way to say "this is one chapter": a migration that
+ * intended 15 chapters produced 74 (#48), and the demote-the-`##`s workaround
+ * four separate agents converged on was wrong by half — it left every `#`
+ * splitting the chapter anyway.
+ *
+ * The shift is uniform and derived from the SHALLOWEST heading present, so the
+ * source document's own hierarchy survives intact:
+ *
+ * - a `#`-topped file shifts by two — `#`→`###`, `##`→`####`, `###`→`#####`
+ * - a `##`-topped file shifts by one — `##`→`###`, `###`→`####`
+ * - a file already topped at `###` or deeper is returned untouched, so the flag
+ *   is a no-op on content that was already safe
+ *
+ * A fixed one-level shift would be the same half-right answer as the workaround:
+ * it would leave a `#` at `##`, still a chapter.
+ *
+ * Nothing is pushed past `######`, which is the deepest heading CommonMark has.
+ * `markdownHeadings()` spans the whole range for this reason — every level a
+ * demotion can produce still reaches the chapter's in-page table of contents.
+ */
+export function demoteHeadings(content: string) {
+  const lines = content.split(/\r?\n/);
+  const headings = lines.map((line) => line.match(HEADING_LINE));
+  const levels = headings
+    .filter((match): match is RegExpMatchArray => Boolean(match))
+    .map((match) => (match[2] || '').length);
+
+  // `Math.min()` over no headings is `Infinity`, so content with nothing to
+  // move leaves by the same door as content that is already deep enough.
+  // Returning `content` itself rather than a re-joined copy is what keeps a
+  // CRLF document byte-identical when the demotion is a no-op.
+  const shift = SUBHEADING_LEVEL - Math.min(...levels);
+  if (shift <= 0) return content;
+
+  return lines
+    .map((line, index) => {
+      const match = headings[index];
+      if (!match) return line;
+      const level = Math.min(MAX_HEADING_LEVEL, (match[2] || '').length + shift);
+      return `${match[1]}${'#'.repeat(level)}${match[3]}${match[4]}`;
+    })
+    .join('\n');
 }
 
 export function chapterId(title: string) {
@@ -302,13 +392,43 @@ type SectionRange = {
 };
 
 /**
- * Line boundaries of every section, by the same rules chapter splitting uses:
- * `###` and deeper belong to the section above, a leading `#` repeating the
- * document title is not a section, and content before the first heading is a
- * lead-in.
+ * Line boundaries of every section. This function is the single place the
+ * chapter rule lives; chapter listing, section editing and the idea page's
+ * lead-in all build on it, so the three cannot disagree about where a section
+ * begins and ends.
  *
- * Chapter listing and section editing both build on this, so the two cannot
- * disagree about where a section begins and ends.
+ * THE CONTRACT — `#` AND `##` BOTH CREATE SIBLING CHAPTERS. `###` DOES NOT.
+ *
+ * The level is read and then thrown away: `headingTag()` renders `#` and `##`
+ * identically as `<h2>`, and `ideaChapters()` re-emits every chapter as
+ * `` `## ${title}` `` whatever level it was written at. So the two are not
+ * distinguishable in the output either, which is why `read_idea_section` on a
+ * `#`-headed chapter hands back a `##` heading.
+ *
+ * There is exactly ONE case in which a `#` is not a chapter: it is the very
+ * first thing in the document — before any other heading and before any
+ * non-blank content — and its slug equals the slug of the idea's own title.
+ * That one is the document title, already rendered as the page's `<h1>`. Every
+ * other `#` becomes a chapter, a peer of every `##`, including:
+ *
+ * - a leading `#` whose text differs from the idea's title. Two published
+ *   documents have exactly this and their first chapter IS that `#`, so any
+ *   change here is a URL-breaking migration for them, not a no-op (#48).
+ * - a `#` that repeats the title but appears later in the document.
+ * - a leading `#` in a document parsed with no `documentTitle`.
+ *
+ * The line is `.trim()`ed before matching, so leading whitespace does not
+ * protect a heading: `  ## Heading` and a tab-indented `\t## Heading` are both
+ * chapters. Nothing here is fence-aware either — a `## Heading` line inside a
+ * fenced code block splits the chapter.
+ *
+ * Depth below chapter level belongs in `###`, which renders as an in-page
+ * anchor rather than a URL. `demoteHeadings()` is how a caller pushes a whole
+ * source file below the chapter line so it lands as one chapter instead of
+ * shattering into siblings.
+ *
+ * Content before the first chapter heading is a lead-in, not a section — see
+ * `ideaPreamble()`.
  */
 function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
   const lines = markdown.split(/\r?\n/);
@@ -324,7 +444,10 @@ function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
     }
     const level = (heading[1] || '').length;
     const title = (heading[2] || '').trim();
+    // Only `###` and deeper are absorbed into the section above. `#` falls
+    // through to the title check below and is otherwise a chapter like `##`.
     if (level > 2) return;
+    // The one non-chapter `#`: the document's own title, at the very top.
     if (
       level === 1 &&
       documentTitle &&

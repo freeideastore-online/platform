@@ -5,6 +5,7 @@ import {
   addIdeaSection,
   appendToIdeaSection,
   CHAPTER_SIZE,
+  demoteHeadings,
   documentMetrics,
   mergeIdeaSections,
   moveIdeaSection,
@@ -27,6 +28,19 @@ import type { Env, IdeaRow } from './types';
 
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
+
+/**
+ * Opt-in: push the supplied content below chapter level so the whole block
+ * lands as ONE chapter.
+ *
+ * Off by default, because turning it on for everyone would re-level content
+ * already written against the contract and move published chapter URLs. It has
+ * to be asked for, which is the point — the caller who is writing a whole source
+ * file into a section is the one who knows it is one chapter.
+ */
+function demoteRequested(input: Record<string, unknown>) {
+  return input.demote_headings === true || input.demoteHeadings === true;
+}
 
 /**
  * How much of THIS write's content the budget can actually take.
@@ -354,6 +368,57 @@ async function ownedIdea(request: Request, env: Env, rawIdeaId: string): Promise
 }
 
 /**
+ * Rebuilds the derived indexes for a document whose body has already committed.
+ *
+ * Everything here is derived: search rows and the source registry are functions
+ * of the document, and the document is durable by the time this runs. So a
+ * failure here must not fail the request. It used to: the two calls were awaited
+ * bare on the far side of the `UPDATE`, and between them they issued one
+ * subrequest per statement — 447 of them on the live `cellar-door-cycling`
+ * document — so a D1 error or a subrequest ceiling turned a write that had
+ * landed into a generic 500 (#71, and the leading explanation for #51).
+ *
+ * That is the expensive kind of failure: the obvious response to a 500 is to
+ * retry, and retrying a merge that already applied is not safe. A stale index is
+ * cheap by comparison — the next write to the document rebuilds it.
+ *
+ * It stays awaited rather than deferred to `ctx.waitUntil`. Callers read their
+ * own writes: `list_idea_sources`, `/api/search` and the sources page are all
+ * routinely hit immediately after an edit, and deferring the index would make
+ * those reads race. Batching is what removes the cost; the guard is what removes
+ * the failure mode.
+ */
+async function reindexAfterWrite(env: Env, idea: IdeaRow, body: string): Promise<boolean> {
+  try {
+    await syncDocumentSources(env, idea, body);
+    await indexDocument(env, idea, body);
+    return true;
+  } catch (error) {
+    // Logged, not swallowed: the index silently drifting is its own bug.
+    console.error('post-commit reindex failed', idea.id, String(error));
+    return false;
+  }
+}
+
+/**
+ * What a write says about an index it could not rebuild.
+ *
+ * Absent on the happy path, so a healthy response keeps its shape. When it is
+ * present the caller can tell "the write did not happen" from "the write
+ * happened and the index did not" — the exact ambiguity #51 is about — without
+ * having to read a 500 and guess.
+ */
+function indexWarning(reindexed: boolean) {
+  return reindexed
+    ? {}
+    : {
+        reindexed: false,
+        warning:
+          'the document was saved; search and the source registry could not be updated and will catch up on the next write',
+      };
+}
+
+/**
  * Persists a canonical body: R2 when bound, inline otherwise, and refreshes the
  * stored metrics the catalog reads.
  */
@@ -405,12 +470,12 @@ async function writeCanonicalBody(
       idea.id,
     )
     .run();
-  // Re-index after the write so the registry and search reflect what is published.
-  await syncDocumentSources(env, idea, body);
-  await indexDocument(env, idea, body);
+  // Re-index after the write so the registry and search reflect what is
+  // published — but never at the cost of the write itself. See reindexAfterWrite.
+  const reindexed = await reindexAfterWrite(env, idea, body);
   // Every canonical write reports the budget from the metrics it already
   // computed, so no two write paths can disagree about what is left.
-  return { ...metrics, usage: documentUsage(body, metrics), revisionId };
+  return { ...metrics, usage: documentUsage(body, metrics), revisionId, reindexed };
 }
 
 /**
@@ -437,8 +502,11 @@ export async function updateIdeaSection(
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
   const input = parsedBody.data;
-  const content = String(input.content ?? input.markdown ?? input.body ?? '');
-  if (!content.trim()) return bad('section content is required');
+  const supplied = String(input.content ?? input.markdown ?? input.body ?? '');
+  if (!supplied.trim()) return bad('section content is required');
+  // Demote before anything measures the content: the budget accounting below
+  // has to weigh what is actually written, and the demotion adds characters.
+  const content = demoteRequested(input) ? demoteHeadings(supplied) : supplied;
 
   const current = await ideaBody(env, idea);
   const next =
@@ -473,6 +541,7 @@ export async function updateIdeaSection(
     chapters: result.chapters,
     usage: result.usage,
     url: `/ideas/${idea.id}/`,
+    ...indexWarning(result.reindexed),
   });
 }
 
@@ -624,13 +693,13 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     )
     .run();
 
-  await syncDocumentSources(env, idea, body);
-  await indexDocument(env, idea, body);
+  const reindexed = await reindexAfterWrite(env, idea, body);
   return json({
     ok: true,
     idea: idea.id,
     usage: documentUsage(body, metrics),
     url: `/ideas/${idea.id}/`,
+    ...indexWarning(reindexed),
   });
 }
 
@@ -705,6 +774,7 @@ export async function revertIdeaToRevision(
     words: metrics.words,
     chapters: metrics.chapters,
     url: `/ideas/${idea.id}/`,
+    ...indexWarning(metrics.reindexed),
   });
 }
 
@@ -784,6 +854,7 @@ export async function applyRefinement(
     words: result.words,
     usage: result.usage,
     url: `/ideas/${idea.id}/`,
+    ...indexWarning(result.reindexed),
   });
 }
 
@@ -886,6 +957,7 @@ async function writeStructuralEdit(
     sections: ideaSectionList(next, idea.title),
     usage: result.usage,
     url: `/ideas/${idea.id}/`,
+    ...indexWarning(result.reindexed),
   });
 }
 
@@ -893,7 +965,8 @@ export function createIdeaSection(request: Request, env: Env, rawIdeaId: string)
   return writeStructuralEdit(request, env, rawIdeaId, 'add section', (body, idea, input) => {
     const title = String(input.title || '').trim();
     if (!title) return null;
-    return addIdeaSection(body, title, String(input.content || ''), {
+    const supplied = String(input.content || '');
+    return addIdeaSection(body, title, demoteRequested(input) ? demoteHeadings(supplied) : supplied, {
       after: String(input.after || '') || undefined,
       before: String(input.before || '') || undefined,
       documentTitle: idea.title,

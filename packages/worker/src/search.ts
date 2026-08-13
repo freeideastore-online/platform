@@ -1,3 +1,4 @@
+import { runInBatches, type SizedStatement } from './d1';
 import { ideaChapters } from './markdown';
 import type { Env, IdeaRow } from './types';
 
@@ -33,18 +34,31 @@ export function toMatchQuery(raw: string): string | null {
     .join(' ');
 }
 
-/** Replaces a document's section rows. Called after every canonical write. */
+/**
+ * Replaces a document's section rows. Called after every canonical write.
+ *
+ * The clear and the rows that replace it go out batched: one statement per
+ * chapter awaited on its own was one subrequest per chapter, which a 100-chapter
+ * document turns into 101 sequential round trips on the far side of a commit
+ * that has already happened.
+ */
 export async function indexDocument(env: Env, idea: IdeaRow, body: string) {
-  await env.DB.prepare("DELETE FROM search_index WHERE idea_id = ? AND kind = 'section'")
-    .bind(idea.id)
-    .run();
+  const statements: SizedStatement[] = [
+    {
+      statement: env.DB.prepare("DELETE FROM search_index WHERE idea_id = ? AND kind = 'section'").bind(idea.id),
+    },
+  ];
   for (const chapter of ideaChapters(body, idea.title)) {
-    await env.DB.prepare(
-      `INSERT INTO search_index (title, text, idea_id, kind, ref) VALUES (?, ?, ?, 'section', ?)`,
-    )
-      .bind(`${idea.title} — ${chapter.title}`, chapter.markdown, idea.id, chapter.id)
-      .run();
+    statements.push({
+      statement: env.DB.prepare(
+        `INSERT INTO search_index (title, text, idea_id, kind, ref) VALUES (?, ?, ?, 'section', ?)`,
+      ).bind(`${idea.title} — ${chapter.title}`, chapter.markdown, idea.id, chapter.id),
+      // Each row carries the chapter's full markdown, so the batch is cut on
+      // payload as well as on statement count.
+      chars: chapter.markdown.length,
+    });
   }
+  return runInBatches(env.DB, statements);
 }
 
 /** Indexes one research entry. Claim and prose are both searchable. */
