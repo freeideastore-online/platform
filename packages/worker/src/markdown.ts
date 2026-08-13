@@ -137,9 +137,9 @@ export type IdeaChapter = {
  * Splitting used to happen on heading count alone, so every `##` became a page
  * regardless of size. Measured across all 11 published ideas, mean words per
  * chapter ran 38-185 — no chapter filled a laptop viewport, and the idea home
- * page (which renders the whole body inline) already showed 103% of the
- * combined chapter content. Pagination was navigation over content the reader
- * could already scroll.
+ * page (which then inlined the whole body, and now inlines only the lead-in)
+ * already showed 103% of the combined chapter content. Pagination was
+ * navigation over content the reader could already scroll.
  *
  * A chapter has to carry enough to stand alone, and there have to be enough of
  * them to be worth paging through. Below either bar the idea is one page with an
@@ -203,27 +203,50 @@ export type ChapterVerdict = 'merge' | 'thin' | 'ok' | 'split';
  */
 export function chapterHealth(markdown: string, documentTitle = '') {
   return ideaChapters(markdown, documentTitle).map((chapter) => {
-    // `chapter.markdown` carries its own `## Title` line. Counting that would
-    // credit every chapter with its heading, which flatters the shortest ones
-    // most — exactly the chapters this is meant to catch.
-    const words = wordCount(chapter.markdown.replace(/^##[^\n]*\n?/, ''));
-    let verdict: ChapterVerdict = 'ok';
-    if (words < CHAPTER_SIZE.floorWords) verdict = 'merge';
-    else if (words < CHAPTER_SIZE.targetMinWords) verdict = 'thin';
-    else if (words > CHAPTER_SIZE.ceilingWords) verdict = 'split';
-    return { id: chapter.id, title: chapter.title, words, verdict };
+    const words = chapterBodyWords(chapter.markdown);
+    return { id: chapter.id, title: chapter.title, words, verdict: chapterVerdict(words) };
   });
+}
+
+/**
+ * `chapter.markdown` carries its own `## Title` line. Counting that would
+ * credit every chapter with its heading, which flatters the shortest ones most
+ * — exactly the chapters this is meant to catch.
+ */
+function chapterBodyWords(chapterMarkdown: string) {
+  return wordCount(chapterMarkdown.replace(/^##[^\n]*\n?/, ''));
+}
+
+/**
+ * The single place a word count becomes a verdict, so every surface that shows
+ * one — chapterHealth(), ideaSectionList(), the usage block on writes — agrees
+ * about the same chapter.
+ */
+function chapterVerdict(words: number): ChapterVerdict {
+  if (words < CHAPTER_SIZE.floorWords) return 'merge';
+  if (words < CHAPTER_SIZE.targetMinWords) return 'thin';
+  if (words > CHAPTER_SIZE.ceilingWords) return 'split';
+  return 'ok';
 }
 
 /**
  * Metrics stored on the idea row so the catalog can evaluate
  * PUBLICATION_POLICY exactly. Bodies live in R2, so SQL cannot measure the
  * document itself — it reads these columns instead of guessing from text.
+ *
+ * `belowFloor`/`aboveCeiling` are the chapterHealth() distribution reduced to
+ * two numbers, so a write response can carry the diagnosis without carrying a
+ * row per chapter. They are counts of verdicts, not a second opinion: `merge`
+ * is a chapter that cannot stand alone, `split` one that has become two topics.
+ * `words` and `chapters` are unchanged — the catalog columns read them.
  */
 export function documentMetrics(markdown: string, documentTitle = '') {
+  const health = chapterHealth(markdown, documentTitle);
   return {
     words: wordCount(markdown),
-    chapters: ideaChapters(markdown, documentTitle).length,
+    chapters: health.length,
+    belowFloor: health.filter((chapter) => chapter.verdict === 'merge').length,
+    aboveCeiling: health.filter((chapter) => chapter.verdict === 'split').length,
   };
 }
 
@@ -320,6 +343,39 @@ function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
   return ranges;
 }
 
+/**
+ * The lead-in: everything before the first chapter heading. This is a
+ * document's framing, and on a paginated idea page it is the only body prose
+ * the index renders — the chapters themselves live on their own URLs.
+ *
+ * It is derived from `sectionRanges()` for the reason stated above that
+ * function: a second heading parser is a second opinion, and the two disagreeing
+ * is a bug, not a difference in taste. A `body.split(/^## /m)` would treat
+ * `# Chapter` before the first `##`, or an indented `  ## Chapter`, as lead-in
+ * while `sectionRanges()` treats both as chapters — so such a chapter would be
+ * inlined here AND served as its own page, which is exactly the duplication
+ * chapter pagination exists to remove.
+ */
+export function ideaPreamble(markdown: string, documentTitle = '') {
+  const lines = markdown.split(/\r?\n/);
+  const ranges = sectionRanges(markdown, documentTitle);
+  const first = ranges[0];
+  const preamble = lines.slice(0, first ? first.headingLine : lines.length);
+
+  // `sectionRanges()` skips a leading `# Document Title` — it is the page's own
+  // <h1>, not a chapter. It must not come back as lead-in prose either.
+  const firstContent = preamble.findIndex((line) => line.trim());
+  const repeatedTitle =
+    documentTitle && firstContent >= 0
+      ? (preamble[firstContent] || '').trim().match(/^#\s+(.+)$/)
+      : null;
+  if (repeatedTitle && slug((repeatedTitle[1] || '').trim()) === slug(documentTitle)) {
+    preamble.splice(firstContent, 1);
+  }
+
+  return preamble.join('\n').trim();
+}
+
 export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
   const lines = markdown.split(/\r?\n/);
   const ranges = sectionRanges(markdown, documentTitle);
@@ -392,12 +448,23 @@ function findSection(markdown: string, sectionId: string, documentTitle: string)
   return range && chapter ? { range, chapter } : null;
 }
 
-/** Section titles and ids, for callers deciding what to read or write. */
+/**
+ * Section titles, ids and sizing, for callers deciding what to read or write.
+ *
+ * `verdict` is the whole point of listing words at all: `words: 52` only means
+ * something next to the floor it misses. Without it an author sees a list of
+ * numbers and no diagnosis, which is how a 74-chapter document shipped with
+ * most of its chapters below the floor.
+ */
 export function ideaSectionList(markdown: string, documentTitle = '') {
   return ideaChapters(markdown, documentTitle).map((chapter) => ({
     id: chapter.id,
     title: chapter.title,
+    // Unchanged: this counts the heading, and callers depend on the number.
     words: wordCount(chapter.markdown),
+    // The verdict uses the heading-stripped count chapterHealth() uses, so a
+    // row here can never disagree with the health of the same chapter.
+    verdict: chapterVerdict(chapterBodyWords(chapter.markdown)),
   }));
 }
 

@@ -3,8 +3,10 @@ import {
   appendToIdeaSection,
   chapterHealth,
   CHAPTER_SIZE,
+  defaultIdeaBody,
   ideaChapterById,
   ideaChapters,
+  ideaPreamble,
   ideaSectionList,
   markdownHeadings,
   markdownToHtml,
@@ -324,6 +326,91 @@ describe('ideaChapters', () => {
     expect(chapters[0]?.excerpt).toContain('StudentRide');
     expect(chapters[0]?.excerpt).not.toContain('**');
     expect(chapters[0]?.excerpt).not.toContain('](https://');
+  });
+});
+
+/**
+ * The lead-in is the ONLY body prose a paginated idea page renders, so what
+ * counts as lead-in and what counts as a chapter has to be one decision. These
+ * assert that `ideaPreamble()` and `ideaChapters()` partition the document:
+ * every line is in exactly one of them, never both.
+ */
+describe('ideaPreamble', () => {
+  it('returns the text before the first chapter', () => {
+    const markdown = [
+      '> **Status: scan complete.** A lead-in, not a chapter.',
+      '',
+      '## Snapshot',
+      'The short version.',
+    ].join('\n');
+
+    expect(ideaPreamble(markdown)).toBe('> **Status: scan complete.** A lead-in, not a chapter.');
+  });
+
+  it('is empty for a template-built document, which opens on its first chapter', () => {
+    // defaultIdeaBody() and the canonical spine both start with `## Snapshot`,
+    // so this is the COMMON case, not an edge case — the idea page has to have
+    // something else to show.
+    const body = defaultIdeaBody({
+      summary: 'A summary.',
+      signal: 'A signal.',
+      preview: '',
+      next_step: 'A next step.',
+      risk: 'A risk.',
+    } as unknown as Parameters<typeof defaultIdeaBody>[0]);
+
+    expect(ideaPreamble(body, 'Some Idea')).toBe('');
+    expect(ideaChapters(body, 'Some Idea').length).toBeGreaterThan(1);
+  });
+
+  it('does not claim a `#`-headed chapter that ideaChapters() also claims', () => {
+    // The bug this catches: a preamble derived from `body.split(/^## /m)` keeps
+    // everything up to the first `##`, so a `#` chapter before it was rendered
+    // inline on the idea page AND served as its own chapter page.
+    const markdown = [
+      '# Opening Chapter',
+      'Single-hash chapters are chapters to sectionRanges().',
+      '',
+      '## Second Chapter',
+      'And this one is obvious.',
+    ].join('\n');
+
+    expect(ideaChapters(markdown, 'Unrelated Title').map((chapter) => chapter.title)).toEqual([
+      'Opening Chapter',
+      'Second Chapter',
+    ]);
+    expect(ideaPreamble(markdown, 'Unrelated Title')).toBe('');
+  });
+
+  it('does not claim an indented chapter heading either', () => {
+    const markdown = [
+      '  ## Indented Chapter',
+      'sectionRanges() trims the line before matching, so this is a chapter.',
+      '',
+      '## Plain Chapter',
+      'Body.',
+    ].join('\n');
+
+    expect(ideaChapters(markdown).map((chapter) => chapter.title)).toEqual([
+      'Indented Chapter',
+      'Plain Chapter',
+    ]);
+    expect(ideaPreamble(markdown)).toBe('');
+  });
+
+  it('drops a leading `# Document Title`, which is the page heading and not prose', () => {
+    const markdown = ['# Deep Idea', '', 'Real lead-in prose.', '', '## Snapshot', 'Body.'].join('\n');
+
+    // ideaChapters() already ignores this heading; rendering it as lead-in
+    // would put the title on the page twice.
+    expect(ideaChapters(markdown, 'Deep Idea').map((chapter) => chapter.title)).toEqual(['Snapshot']);
+    expect(ideaPreamble(markdown, 'Deep Idea')).toBe('Real lead-in prose.');
+  });
+
+  it('is the whole document when there are no chapter headings at all', () => {
+    expect(ideaPreamble('Just a paragraph, no headings anywhere.')).toBe(
+      'Just a paragraph, no headings anywhere.',
+    );
   });
 });
 

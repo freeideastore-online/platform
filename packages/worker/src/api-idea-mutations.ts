@@ -4,6 +4,7 @@ import { bad, enumValue, FIELD_LIMITS, json, pathId, readJsonBody, slug, tooLong
 import {
   addIdeaSection,
   appendToIdeaSection,
+  CHAPTER_SIZE,
   documentMetrics,
   mergeIdeaSections,
   moveIdeaSection,
@@ -27,6 +28,115 @@ import type { Env, IdeaRow } from './types';
 const IDEA_STAGES = new Set(['raw', 'shaping', 'researching', 'validating', 'prototyping', 'launched', 'pivot', 'parked']);
 const IDEA_VISIBILITY = new Set(['public', 'unlisted']);
 
+/**
+ * How much of THIS write's content the budget can actually take.
+ *
+ * The naive answer — `FIELD_LIMITS.body - current.length` — is right only for
+ * an append, because only an append leaves every character of the current
+ * document in place. A `patch_idea_section` replace and a section merge also
+ * FREE the outgoing section, so the allowance is measured against what the
+ * write keeps, not against what the document held before it. Telling a replace
+ * it "may add at most N more" when it is dropping a 40,000-character section
+ * asks the author to trim content they never had to trim.
+ *
+ * `resulting` already reflects everything the write frees, so the outgoing
+ * length never has to be threaded through the call sites:
+ *
+ *   allowance = incoming.length - (resulting.length - LIMIT)
+ *
+ * For an append that reduces to `LIMIT - current.length` (less the blank line
+ * the join inserts). For a replace it reduces to `LIMIT - (current.length -
+ * outgoing.length)`, which is the number the author needs. For a merge, where
+ * nothing is contributed and content only moves, the write cannot grow the
+ * document at all — so it can only overflow a document that was already over,
+ * and `incoming` is absent and the message says so.
+ */
+function overflowAdvice(
+  resulting: string,
+  options: { current?: string; incoming?: string },
+): string {
+  const excess = resulting.length - FIELD_LIMITS.body;
+  if (options.incoming !== undefined) {
+    const allowance = Math.max(0, options.incoming.length - excess);
+    return (
+      `this write may contribute at most ${allowance} of its ${options.incoming.length} characters` +
+      ` — ${excess} too many once what the document keeps is counted`
+    );
+  }
+  if (options.current !== undefined && resulting.length <= options.current.length) {
+    // A merge, move or removal: it did not grow the document, so the document
+    // was already over budget before this edit and trimming this edit is not
+    // the fix.
+    return (
+      `this edit does not grow the document — it is already ${options.current.length} characters` +
+      ` and must lose at least ${options.current.length - FIELD_LIMITS.body}`
+    );
+  }
+  return `trim at least ${excess} characters`;
+}
+
+/**
+ * The free-tier document budget, checked in one place.
+ *
+ * Both ceilings are enforced here so a document cannot pass one write path and
+ * fail another: creating, deriving, publishing, writing a section and applying
+ * a refinement all end up with the same document, so they all owe the same
+ * answer. Rejects, never truncates — see the note above FIELD_LIMITS; a silent
+ * `.slice()` once destroyed the tail of four contributions.
+ *
+ * `current` is the document as it stands and `incoming` is the content this
+ * write is contributing; only incremental writes pass them. A whole-document
+ * publish replaces everything, so the actionable number there is simply how
+ * much to trim. Reporting the wrong one is the failure in #46 — three agents
+ * each had to overflow once and subtract from the error string to discover
+ * ~41,800 characters of headroom.
+ */
+export function documentOverflow(
+  body: string,
+  title = '',
+  options: { current?: string; incoming?: string } = {},
+): string | null {
+  if (body.length > FIELD_LIMITS.body) {
+    return (
+      `body is ${body.length} characters; the free limit is ${FIELD_LIMITS.body}` +
+      ` (${overflowAdvice(body, options)})` +
+      ' — move the overflow into a derived annex document, or take the document to Pro'
+    );
+  }
+  const { chapters } = documentMetrics(body, title);
+  if (chapters > FIELD_LIMITS.chapters) {
+    return (
+      `document would have ${chapters} chapters; the free limit is ${FIELD_LIMITS.chapters}` +
+      ` — merge chapters under the ${CHAPTER_SIZE.floorWords}-word floor, or move a run of them` +
+      ' into a derived annex document'
+    );
+  }
+  return null;
+}
+
+/**
+ * What the author could not see until a write failed: both budgets, what is
+ * spent, what is left, and how many chapters are the wrong size. Returned by
+ * every write that changes the document, so headroom is knowable before the
+ * write that would overflow it rather than only after (#46), and a document
+ * drifting into paragraph-per-page announces itself (#45).
+ */
+export type DocumentUsage = ReturnType<typeof documentUsage>;
+
+function documentUsage(
+  body: string,
+  metrics: { chapters: number; belowFloor: number; aboveCeiling: number },
+) {
+  return {
+    chars: body.length,
+    chars_remaining: Math.max(0, FIELD_LIMITS.body - body.length),
+    chapters: metrics.chapters,
+    chapters_remaining: Math.max(0, FIELD_LIMITS.chapters - metrics.chapters),
+    below_floor: metrics.belowFloor,
+    above_ceiling: metrics.aboveCeiling,
+  };
+}
+
 export async function createIdea(request: Request, env: Env) {
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
@@ -47,13 +157,14 @@ export async function createIdea(request: Request, env: Env) {
     ['summary', summary, FIELD_LIMITS.summary],
     ['preview', preview, FIELD_LIMITS.preview],
     ['signal', signal, FIELD_LIMITS.signal],
-    ['body', body, FIELD_LIMITS.body],
     ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
     ['category', category, FIELD_LIMITS.category],
     ['next step', nextStep, FIELD_LIMITS.nextStep],
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  const budget = documentOverflow(body, title);
+  if (budget) return bad(budget);
 
   const metrics = documentMetrics(body, title);
   const ideaId = await uniqueIdeaId(env, title);
@@ -133,13 +244,16 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
     ['summary', summary, FIELD_LIMITS.summary],
     ['preview', preview, FIELD_LIMITS.preview],
     ['signal', signal, FIELD_LIMITS.signal],
-    ['body', seedBody, FIELD_LIMITS.body],
     ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
     ['category', category, FIELD_LIMITS.category],
     ['next step', nextStep, FIELD_LIMITS.nextStep],
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  // A fork inherits the parent document, so an over-budget parent is caught
+  // here rather than at the fork's first section write.
+  const budget = documentOverflow(seedBody, title);
+  if (budget) return bad(budget);
   const metrics = documentMetrics(seedBody, title);
   const bodyKey = `ideas/${ideaId}/body.md`;
   const renderKey = `ideas/${ideaId}/rendered.html`;
@@ -294,7 +408,9 @@ async function writeCanonicalBody(
   // Re-index after the write so the registry and search reflect what is published.
   await syncDocumentSources(env, idea, body);
   await indexDocument(env, idea, body);
-  return { ...metrics, revisionId };
+  // Every canonical write reports the budget from the metrics it already
+  // computed, so no two write paths can disagree about what is left.
+  return { ...metrics, usage: documentUsage(body, metrics), revisionId };
 }
 
 /**
@@ -336,10 +452,12 @@ export async function updateIdeaSection(
     );
   }
 
-  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
-  if (overflow) return bad(overflow);
+  // `content` is what this write contributes; a replace also frees the section
+  // it overwrites, and passing both is what lets the error account for it.
+  const budget = documentOverflow(next, idea.title, { current, incoming: content });
+  if (budget) return bad(budget);
 
-  const metrics = await writeCanonicalBody(env, idea, next, idea.title, {
+  const result = await writeCanonicalBody(env, idea, next, idea.title, {
     previousBody: current,
     authorProfileId: idea.created_by,
     source: mode === 'append' ? 'section-append' : 'section-replace',
@@ -351,8 +469,9 @@ export async function updateIdeaSection(
     idea: idea.id,
     section: sectionId,
     mode,
-    words: metrics.words,
-    chapters: metrics.chapters,
+    words: result.words,
+    chapters: result.chapters,
+    usage: result.usage,
     url: `/ideas/${idea.id}/`,
   });
 }
@@ -395,16 +514,30 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     ['summary', summary, FIELD_LIMITS.summary],
     ['preview', preview, FIELD_LIMITS.preview],
     ['signal', signal, FIELD_LIMITS.signal],
-    // A body nobody is rewriting is not being checked against the cap. Measuring
-    // the stored document on a metadata-only edit would make an over-cap
-    // document permanently unmaintainable — the exact failure #33 reports.
-    ...(bodyProvided ? [['body', body, FIELD_LIMITS.body] as [string, string, number]] : []),
+    // The body is deliberately absent from this list. `documentOverflow` below
+    // supersedes it: it checks the character cap AND the chapter cap, and its
+    // message carries the remaining headroom and the overflow path. Both guards
+    // are gated on `bodyProvided` for the same reason — measuring a document
+    // nobody is rewriting would make an over-cap document permanently
+    // unmaintainable, which is #33.
     ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
     ['category', category, FIELD_LIMITS.category],
     ['next step', nextStep, FIELD_LIMITS.nextStep],
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  // Only check the document budget when the document is actually being
+  // written. When `body` is omitted this call is a metadata-only update and
+  // `body` is just the stored document read back — measuring THAT against the
+  // cap would make a document which is already at or over the limit
+  // permanently undescribable, which is the whole complaint in #33.
+  //
+  // A publish replaces the whole document, so no `current` — the actionable
+  // number is what to trim, not what may still be added.
+  if (bodyProvided) {
+    const budget = documentOverflow(body, title);
+    if (budget) return bad(budget);
+  }
   const metrics = documentMetrics(body, title);
   // publish_idea_update replaces the whole document; keep what it replaced.
   if (bodyProvided && body !== previousBody) {
@@ -493,7 +626,12 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
 
   await syncDocumentSources(env, idea, body);
   await indexDocument(env, idea, body);
-  return json({ ok: true, idea: idea.id, url: `/ideas/${idea.id}/` });
+  return json({
+    ok: true,
+    idea: idea.id,
+    usage: documentUsage(body, metrics),
+    url: `/ideas/${idea.id}/`,
+  });
 }
 
 export async function promoteIdea(request: Request, env: Env, rawIdeaId: string) {
@@ -618,8 +756,8 @@ export async function applyRefinement(
     );
   }
 
-  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
-  if (overflow) return bad(overflow);
+  const budget = documentOverflow(next, idea.title, { current, incoming: content });
+  if (budget) return bad(budget);
 
   const result = await writeCanonicalBody(env, idea, next, idea.title, {
     previousBody: current,
@@ -644,6 +782,7 @@ export async function applyRefinement(
     mode,
     revision: result.revisionId,
     words: result.words,
+    usage: result.usage,
     url: `/ideas/${idea.id}/`,
   });
 }
@@ -724,8 +863,12 @@ async function writeStructuralEdit(
       404,
     );
   }
-  const overflow = tooLong([['body', next, FIELD_LIMITS.body]]);
-  if (overflow) return bad(overflow);
+  // Only `add section` contributes author text; a merge, move, rename or
+  // removal reshapes what is already there, and passing an empty `incoming` for
+  // those would advertise an allowance of zero on a write that adds nothing.
+  const incoming = typeof input.content === 'string' && input.content ? input.content : undefined;
+  const budget = documentOverflow(next, idea.title, { current, incoming });
+  if (budget) return bad(budget);
   if (next === current) {
     return json({ ok: true, idea: idea.id, note: 'no change' });
   }
@@ -741,6 +884,7 @@ async function writeStructuralEdit(
     idea: idea.id,
     revision: result.revisionId,
     sections: ideaSectionList(next, idea.title),
+    usage: result.usage,
     url: `/ideas/${idea.id}/`,
   });
 }
