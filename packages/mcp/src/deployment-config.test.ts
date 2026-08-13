@@ -44,6 +44,11 @@ describe("MCP deployment config", () => {
     expect(ideaSkillCatalog).toContain('"prototype-planner"');
     expect(publishingTools).toContain('"publish_idea_update"');
     expect(publishingTools).toContain('"delete_idea"');
+    // #33: the only tool that writes summary/title/stage must not demand the
+    // whole body with them, or a document too large to resend has its metadata
+    // frozen — wrong or not — for the rest of its life.
+    expect(publishingTools).toMatch(/body: z\.string\(\)[^\n]*\.optional\(\)/);
+    expect(publishingTools).toMatch(/title: z\.string\(\)[^\n]*\.optional\(\)/);
     expect(index).toContain("publish_idea_update, delete_idea, react_to_idea");
     expect(collaborationTools).toContain('"react_to_idea"');
     expect(skillTools).toContain('"dynamic_idea_book_template"');

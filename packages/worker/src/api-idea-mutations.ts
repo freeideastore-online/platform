@@ -372,8 +372,14 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   if (!parsedBody.ok) return parsedBody.response;
   const input = parsedBody.data;
   const bodyInput = input.body ?? input.body_md;
+  // Omitting `body` is a metadata-only update: every field the caller did send
+  // is written and the canonical document is left exactly as it was. Without
+  // this a document that had grown too large to resend could never have its own
+  // summary corrected again (#33), which is the same trap section writes were
+  // added to escape — the body scaled and the fields describing it did not.
+  const bodyProvided = typeof bodyInput === 'string';
   const previousBody = await ideaBody(env, idea);
-  const body = typeof bodyInput === 'string' ? bodyInput.trim() : previousBody;
+  const body = bodyProvided ? bodyInput.trim() : previousBody;
   const title = String(input.title || idea.title).trim();
   const summary = String(input.summary || idea.summary).trim();
   const preview = String(input.preview ?? idea.preview ?? '');
@@ -389,7 +395,10 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     ['summary', summary, FIELD_LIMITS.summary],
     ['preview', preview, FIELD_LIMITS.preview],
     ['signal', signal, FIELD_LIMITS.signal],
-    ['body', body, FIELD_LIMITS.body],
+    // A body nobody is rewriting is not being checked against the cap. Measuring
+    // the stored document on a metadata-only edit would make an over-cap
+    // document permanently unmaintainable — the exact failure #33 reports.
+    ...(bodyProvided ? [['body', body, FIELD_LIMITS.body] as [string, string, number]] : []),
     ['source URL', sourceUrl, FIELD_LIMITS.sourceUrl],
     ['category', category, FIELD_LIMITS.category],
     ['next step', nextStep, FIELD_LIMITS.nextStep],
@@ -398,7 +407,7 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   if (overflow) return bad(overflow);
   const metrics = documentMetrics(body, title);
   // publish_idea_update replaces the whole document; keep what it replaced.
-  if (body !== previousBody) {
+  if (bodyProvided && body !== previousBody) {
     await recordRevision(env, idea, previousBody, {
       authorProfileId: profile.id,
       source: 'update',
@@ -408,7 +417,12 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
   const renderKey = idea.render_key || `ideas/${idea.id}/rendered.html`;
   let storedInR2 = false;
-  if (env.IDEA_BUCKET) {
+  // A metadata-only update does not touch object storage at all. Rewriting the
+  // document with a copy of itself would be a no-op at best, and at worst — when
+  // the R2 object is missing and `ideaBody` has fallen back to a placeholder —
+  // would overwrite a document with that placeholder for the sake of editing a
+  // one-line summary.
+  if (bodyProvided && env.IDEA_BUCKET) {
     try {
       await env.IDEA_BUCKET.put(bodyKey, body, {
         httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
@@ -419,6 +433,23 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
       // Fall back to storing body inline in D1 if R2 write fails.
     }
   }
+  // Where the body lives, and how big it is, are the document's business. On a
+  // metadata-only update they carry over untouched rather than being recomputed.
+  const bodyColumns = bodyProvided
+    ? {
+        bodyMd: storedInR2 ? '' : body,
+        bodyKey: storedInR2 ? bodyKey : '',
+        renderKey: storedInR2 ? renderKey : '',
+        words: metrics.words,
+        chapters: metrics.chapters,
+      }
+    : {
+        bodyMd: idea.body_md ?? '',
+        bodyKey: idea.body_key ?? '',
+        renderKey: idea.render_key ?? '',
+        words: idea.body_words ?? metrics.words,
+        chapters: idea.chapter_count ?? metrics.chapters,
+      };
 
   await env.DB.prepare(
     `UPDATE ideas
@@ -445,17 +476,17 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
       summary,
       preview,
       signal,
-      storedInR2 ? '' : body,
-      storedInR2 ? bodyKey : '',
-      storedInR2 ? renderKey : '',
+      bodyColumns.bodyMd,
+      bodyColumns.bodyKey,
+      bodyColumns.renderKey,
       sourceUrl,
       enumValue(input.visibility ?? idea.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage ?? idea.stage, IDEA_STAGES, idea.stage || 'raw'),
       category,
       nextStep,
       risk,
-      metrics.words,
-      metrics.chapters,
+      bodyColumns.words,
+      bodyColumns.chapters,
       idea.id,
     )
     .run();
