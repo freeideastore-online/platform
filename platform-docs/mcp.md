@@ -48,6 +48,8 @@ For anything short of a full rewrite, work a section at a time:
 2. `read_idea_section` — pull only the section being revised.
 3. `patch_idea_section` to replace it, or `append_to_idea_section` to extend it. Everything outside the section stays byte-identical.
 
+The same applies to the fields that describe the document. `publish_idea_update` takes `body` as optional: omit it and only the metadata you send — `summary`, `title`, `stage`, `category`, `preview`, `signal`, `next_step`, `risk`, `source_url` — is written, and the canonical document is left byte-identical. Correcting a summary on a 116k-character document does not mean resending 116k characters, and a document past the body cap is still describable.
+
 Measured on a 9-section idea, reading one section returned 714 characters against roughly 4,700 for the whole document.
 
 Structure is editable at the same granularity. `patch_idea_section` and `append_to_idea_section` only touch sections that already exist, so growing or reshaping a document used to mean resending the whole body — the expensive path these tools exist to remove:

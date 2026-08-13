@@ -1153,6 +1153,156 @@ describe('FreeIdeaStore worker', () => {
     expect(data.ideas.find((idea) => idea.id === 'deep-idea')?.has_publication).toBe(1);
   });
 
+  /**
+   * #33: a document could outgrow its own metadata. `publish_idea_update` was
+   * the only writer of summary, stage, category and the rest, and it demanded
+   * the whole body with them — so once a document was too large to resend, the
+   * sentence describing it on the catalog card was frozen, wrong or not.
+   */
+  describe('metadata-only updates', () => {
+    const DOCUMENT = ['## Snapshot', filler(60), '', '## Risk', filler(60)].join('\n');
+    const headers = { Authorization: 'Bearer fis-session-token', 'content-type': 'application/json' };
+
+    async function seeded() {
+      mockSignedInSerge();
+      const bucket = new FakeR2();
+      const testEnv = env(new FakeD1(), undefined, bucket);
+      await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            body: DOCUMENT,
+            summary: 'Full measurements now live in four linked research annexes.',
+          }),
+        }),
+        testEnv,
+      );
+      return { bucket, testEnv };
+    }
+
+    async function readIdea(testEnv: ReturnType<typeof env>) {
+      const response = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+      return (await response.json()) as {
+        idea: Record<string, unknown>;
+        body: string;
+      };
+    }
+
+    it('leaves the document byte-identical when body is omitted', async () => {
+      const { bucket, testEnv } = await seeded();
+      const revisionsBefore = testEnv.DB.revisions.length;
+      const bucketDeletesBefore = bucket.deleted.length;
+
+      const response = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            summary: 'The annexes were folded back into this document.',
+            stage: 'validating',
+            category: 'research',
+          }),
+        }),
+        testEnv,
+      );
+      const after = await readIdea(testEnv);
+
+      expect(response.status).toBe(200);
+      // The whole point: the sentence on the catalog card is correctable.
+      expect(after.idea.summary).toBe('The annexes were folded back into this document.');
+      expect(after.idea.stage).toBe('validating');
+      expect(after.idea.category).toBe('research');
+      // And the document is untouched — not re-uploaded, not re-derived, not
+      // re-measured, and not worth a revision of its own.
+      expect(after.body).toBe(DOCUMENT);
+      expect(bucket.objects.get('ideas/serge-idea-lab/body.md')).toBe(DOCUMENT);
+      expect(after.idea.body_key).toBe('ideas/serge-idea-lab/body.md');
+      expect(testEnv.DB.revisions).toHaveLength(revisionsBefore);
+      // Object storage is not touched at all — the body is not re-uploaded and
+      // the rendered cache behind it is not invalidated for a metadata edit.
+      expect(bucket.deleted).toHaveLength(bucketDeletesBefore);
+    });
+
+    it('still replaces the document when body is sent alongside metadata', async () => {
+      const { bucket, testEnv } = await seeded();
+      const revisionsBefore = testEnv.DB.revisions.length;
+      const rewritten = ['## Snapshot', filler(70), '', '## Risk', filler(70)].join('\n');
+
+      const response = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ body: rewritten, summary: 'Rewritten in one call.' }),
+        }),
+        testEnv,
+      );
+      const after = await readIdea(testEnv);
+
+      expect(response.status).toBe(200);
+      expect(after.body).toBe(rewritten);
+      expect(bucket.objects.get('ideas/serge-idea-lab/body.md')).toBe(rewritten);
+      expect(after.idea.summary).toBe('Rewritten in one call.');
+      // The replaced document is still recoverable.
+      expect(testEnv.DB.revisions.length).toBe(revisionsBefore + 1);
+    });
+
+    it('does not overwrite a document with a placeholder when its object is missing', async () => {
+      // `ideaBody` falls back to a generated stub when the R2 object cannot be
+      // read. Writing that stub back because somebody edited a summary would
+      // turn a retrievable outage into a destroyed document.
+      const { bucket, testEnv } = await seeded();
+      bucket.objects.clear();
+
+      const response = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ summary: 'Editable even while the bucket is unhappy.' }),
+        }),
+        testEnv,
+      );
+      const after = await readIdea(testEnv);
+
+      expect(response.status).toBe(200);
+      expect(after.idea.summary).toBe('Editable even while the bucket is unhappy.');
+      expect(bucket.objects.size).toBe(0);
+      // The pointer to the real document survives, so restoring the object
+      // restores the idea.
+      expect(after.idea.body_key).toBe('ideas/serge-idea-lab/body.md');
+      expect(after.idea.body_md).toBe('');
+    });
+
+    it('does not measure an untouched body against the body cap', async () => {
+      // A document already past the cap must still be describable. Otherwise the
+      // cap, whose job is to stop oversized writes, silently doubles as a
+      // permanent ban on correcting the sentence that describes the document.
+      const { bucket, testEnv } = await seeded();
+      // Derived from the cap, never a literal. Pinned to 200_000 this fixture
+      // stops being oversized the moment FIELD_LIMITS.body is raised — the
+      // tiered-limits branch takes it to 1,000,000 — and the test would then
+      // pass for the wrong reason while the guard it exists to prove was gone.
+      const chunk = 'over the cap ';
+      const oversized = `${DOCUMENT}\n\n${chunk.repeat(Math.ceil(FIELD_LIMITS.body / chunk.length) + 1)}`;
+      expect(oversized.length).toBeGreaterThan(FIELD_LIMITS.body);
+      bucket.objects.set('ideas/serge-idea-lab/body.md', oversized);
+
+      const response = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ summary: 'Short field, enormous document.' }),
+        }),
+        testEnv,
+      );
+      const after = await readIdea(testEnv);
+
+      expect(response.status).toBe(200);
+      expect(after.idea.summary).toBe('Short field, enormous document.');
+      expect(after.body).toBe(oversized);
+    });
+  });
+
   it('lists and reads sections without returning the whole document', async () => {
     const testEnv = env();
     const list = await worker.fetch(new Request('https://fis.test/api/ideas/asx-filings-analyst/sections'), testEnv);
@@ -2530,14 +2680,27 @@ describe('FreeIdeaStore worker', () => {
     // over-length body would be a megabyte. On the unguarded code this request
     // returns 400 "document would have 101 chapters".
     mockSignedInSerge();
-    const testEnv = env();
+    const bucket = new FakeR2();
+    const testEnv = env(new FakeD1(), undefined, bucket);
+    // Seed a normal document first so `body_key` points into object storage,
+    // then put the over-cap document behind that pointer. Writing it through
+    // the API would be rejected by the very guard under test.
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer fas-session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body: '## Snapshot\nSmall for now.' }),
+      }),
+      testEnv,
+    );
     const overCap = Array.from(
       { length: FIELD_LIMITS.chapters + 1 },
       (_, i) => `## Chapter ${i}\nSome prose.`,
     ).join('\n\n');
-    const seeded = testEnv.DB.ideas.get('serge-idea-lab');
-    seeded.body_md = overCap;
-    seeded.body_key = '';
+    bucket.objects.set('ideas/serge-idea-lab/body.md', overCap);
 
     const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {

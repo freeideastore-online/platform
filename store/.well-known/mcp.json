@@ -57,7 +57,7 @@
         },
         {
           "name": "publish_idea_update",
-          "description": "Replace the authenticated owner's canonical public idea document after refinement."
+          "description": "Replace the authenticated owner's canonical public idea document after refinement, or update only its metadata when body is omitted."
         },
         {
           "name": "delete_idea",

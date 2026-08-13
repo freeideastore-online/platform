@@ -6,10 +6,15 @@ import { STAGES, text, type Env, type McpProps } from "./mcp-types.js";
 export function registerPublishingTools(server: McpServer, env: Env, getProps: () => McpProps) {
   server.tool(
     "publish_idea_update",
-    "Replace the authenticated owner's canonical public idea document after refinement. Use get_idea first, preserve useful existing content, then publish the improved markdown.",
+    "Update the authenticated owner's canonical public idea document and the fields describing it. Pass body to replace the whole document — use get_idea first and preserve useful existing content. Omit body to correct metadata only (summary, title, stage, category, next_step, risk and the rest), leaving the document byte-identical; that is the right call on a document too large to resend.",
     {
       idea_id: z.string().min(2),
-      body: z.string().min(20).max(200000).describe("Complete markdown document to publish on the public idea page. Bodies are stored in R2, so depth is not limited by the database."),
+      // Optional since #33. Metadata used to be reachable only by resending the
+      // entire document, so a document that had outgrown one tool call had its
+      // summary, stage and category frozen for good — a catalog card describing
+      // four annexes that no longer existed, with no way to correct the sentence.
+      body: z.string().min(20).max(200000).optional().describe("Complete markdown document to publish on the public idea page. Bodies are stored in R2, so depth is not limited by the database. Omit to leave the existing document untouched and update only the metadata fields supplied."),
+      title: z.string().min(3).max(80).optional().describe("Document title. Keep it short — put detail in summary."),
       summary: z.string().min(10).max(1000).optional(),
       stage: z.enum(STAGES).optional(),
       category: z.string().max(60).optional(),
@@ -27,6 +32,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       const publicBase = env.PUBLIC_BASE || "https://freeideastore.online";
       const payload: Record<string, unknown> = {
         body: input.body,
+        title: input.title,
         summary: input.summary,
         stage: input.stage,
         category: input.category,
@@ -38,6 +44,13 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       };
       for (const [key, value] of Object.entries(payload)) {
         if (value === undefined) delete payload[key];
+      }
+      // Everything is optional now, so "update nothing" became expressible. Say
+      // so rather than reporting a successful publish that changed nothing.
+      if (Object.keys(payload).length === 0) {
+        return text(
+          "Error publishing idea update: nothing to update. Supply body to replace the document, or at least one metadata field (summary, title, stage, category, preview, signal, next_step, risk, source_url) to change it.",
+        );
       }
       const res = await fisApi<{ ok: boolean; idea: string; url: string }>(
         env,
@@ -55,7 +68,9 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         ok: true,
         idea: res.data.idea,
         url: `${publicBase}${res.data.url}`,
-        note: "Canonical public document updated. Use add_idea_contribution for evidence/comments that should stay in history instead of replacing the document.",
+        note: input.body
+          ? "Canonical public document updated. Use add_idea_contribution for evidence/comments that should stay in history instead of replacing the document."
+          : "Metadata updated. The canonical document was not touched.",
       }, null, 2));
     },
   );

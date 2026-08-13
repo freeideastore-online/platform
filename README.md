@@ -90,7 +90,7 @@ MCP provisioning follows the same cheap path through `packages/mcp`:
 - `derive_idea` forks a new idea from an existing one, seeded with the parent body and linked back to the source (open to anyone; you own the fork).
 - `add_idea_contribution` records evidence, risk, pivot, prototype, refinement, or kill-signal notes.
 - `propose_idea_refinement` records a structured section-level refinement proposal without overwriting the canonical body.
-- `publish_idea_update` replaces the authenticated owner's canonical public idea document after refinement.
+- `publish_idea_update` replaces the authenticated owner's canonical public idea document after refinement, or — with `body` omitted — corrects only the metadata describing it, leaving the document untouched.
 - `react_to_idea` adds a support, trash, or pivot signal.
 - `promote_to_pro_candidate` marks an authenticated owner's idea for ProIdeaStore review and returns a dossier draft.
 - `dynamic_idea_book_template` returns the canonical Markdown heading spine used by dynamic idea publications.
