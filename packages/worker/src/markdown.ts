@@ -578,17 +578,23 @@ function findSection(markdown: string, sectionId: string, documentTitle: string)
  * something next to the floor it misses. Without it an author sees a list of
  * numbers and no diagnosis, which is how a 74-chapter document shipped with
  * most of its chapters below the floor.
+ *
+ * `words` is the heading-stripped body count — the same number the verdict is
+ * computed from, via the same chapterBodyWords(). It used to be
+ * `wordCount(chapter.markdown)`, which counted the `## Title` line, so one row
+ * reported a chapter's size and its health using two different measures: on the
+ * 64-chapter cellar-door document that inflated the corpus by 584 words, and
+ * told authors "505 words" beside "verdict: merge" with no way to reconcile the
+ * two (#74). The floor is the authority, and the floor does not count headings.
+ * The only caller was the `list_idea_sections` serialiser, which passes the
+ * field straight through.
+ *
+ * It is chapterHealth() rather than a second walk over the same chapters
+ * because two copies of "count a chapter" are what let the number and the
+ * verdict drift apart in the first place.
  */
 export function ideaSectionList(markdown: string, documentTitle = '') {
-  return ideaChapters(markdown, documentTitle).map((chapter) => ({
-    id: chapter.id,
-    title: chapter.title,
-    // Unchanged: this counts the heading, and callers depend on the number.
-    words: wordCount(chapter.markdown),
-    // The verdict uses the heading-stripped count chapterHealth() uses, so a
-    // row here can never disagree with the health of the same chapter.
-    verdict: chapterVerdict(chapterBodyWords(chapter.markdown)),
-  }));
+  return chapterHealth(markdown, documentTitle);
 }
 
 /** One section's markdown, heading included. Null when the section is unknown. */
