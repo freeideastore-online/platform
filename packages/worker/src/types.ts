@@ -2,6 +2,11 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   IDEA_BUCKET?: R2Bucket;
+  /**
+   * FIS's own HMAC key for signing sessions (see session.ts). Optional while the
+   * FreeAppStore path is still the live one; #38 makes it required.
+   */
+  SESSION_SIGNING_KEY?: string;
 }
 
 export type IdeaRow = {
@@ -40,6 +45,18 @@ export type AuthUser = {
   displayName: string;
   provider: string;
   avatarUrl: string | null;
+};
+
+/** A FIS-owned identity; see migration 0016. Joins to profiles by handle. */
+export type IdentityRow = {
+  id: string;
+  provider: string;
+  provider_user_id: string;
+  handle: string;
+  display_name: string;
+  avatar_url?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ContributorRow = {
