@@ -8,6 +8,7 @@ import {
   mergeIdeaSection,
   deleteIdea,
   deriveIdea,
+  documentUsage,
   handleListRefinements,
   promoteIdea,
   resolveRefinement,
@@ -17,7 +18,7 @@ import {
 } from './api-idea-mutations';
 import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
-import { ideaSectionList, readIdeaSection } from './markdown';
+import { documentMetrics, ideaPreamble, ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
 import { REFINEMENT_KIND } from './refinements';
 import { indexContribution, search } from './search';
@@ -65,12 +66,64 @@ async function handleListIdeas(env: Env, url: URL) {
   });
 }
 
-async function handleGetIdea(env: Env, ideaParam: string) {
+/**
+ * The budget block the write paths return, computed for a read.
+ *
+ * Reads got none of it until #46, so an author's FIRST call of a session — a
+ * read, always — could not tell them how much of the document budget was left.
+ * The only way to learn the headroom was to overflow it and subtract from the
+ * error string. This is deliberately `documentUsage()` and not a local
+ * recomputation: a second opinion on the budget is a bug waiting to be found by
+ * a caller who trusts the read and is rejected by the write.
+ */
+function readUsage(body: string, title: string) {
+  return documentUsage(body, documentMetrics(body, title));
+}
+
+/**
+ * How much of the document `GET /api/ideas/:id` sends back.
+ *
+ * `full` is the historical behaviour and stays the HTTP default, so the idea
+ * page's own JSON link and the browser fetch on the idea page are unchanged.
+ * The MCP `get_idea` tool defaults to `none` instead (#66) and asks for what it
+ * wants explicitly — the point of doing the filtering HERE rather than in the
+ * tool is that at `none` and `preamble` the rest of the document never crosses
+ * the wire at all.
+ */
+const BODY_VIEWS = ['none', 'preamble', 'full'] as const;
+type BodyView = (typeof BODY_VIEWS)[number];
+
+function bodyView(body: string, view: BodyView, title: string): string | null {
+  if (view === 'none') return null;
+  if (view === 'preamble') return ideaPreamble(body, title);
+  return body;
+}
+
+async function handleGetIdea(env: Env, ideaParam: string, url: URL) {
   const ideaId = pathId(ideaParam);
   if (!ideaId) return bad('invalid idea id', 400);
+  const requested = (url.searchParams.get('body') || 'full').trim().toLowerCase();
+  // Reject an unknown view rather than falling back to `full`: a typo that
+  // silently returns a megabyte is the failure this parameter exists to stop.
+  if (!(BODY_VIEWS as readonly string[]).includes(requested)) {
+    return bad(`body must be one of ${BODY_VIEWS.join(', ')}`);
+  }
   const idea = await ideaById(env, ideaId);
   if (!idea) return bad('idea not found', 404);
-  return json({ idea, body: await ideaBody(env, idea), url: `/ideas/${idea.id}/` });
+  const body = await ideaBody(env, idea);
+  return json({
+    idea,
+    // Always present, `null` rather than absent when the caller asked for no
+    // body, so code that indexes into it fails loudly instead of reading an
+    // omitted field as an empty document.
+    body: bodyView(body, requested as BodyView, idea.title),
+    body_view: requested,
+    // The chapter list is what makes `body: none` a usable answer rather than a
+    // truncated one: it tells the caller what to read next, and at what cost.
+    sections: ideaSectionList(body, idea.title),
+    usage: readUsage(body, idea.title),
+    url: `/ideas/${idea.id}/`,
+  });
 }
 
 async function handleGetContributions(env: Env, ideaParam: string, url: URL) {
@@ -98,7 +151,7 @@ async function handleGetSections(env: Env, ideaParam: string) {
   const idea = await ideaById(env, ideaId);
   if (!idea) return bad('idea not found', 404);
   const body = await ideaBody(env, idea);
-  return json({ idea: idea.id, sections: ideaSectionList(body, idea.title) });
+  return json({ idea: idea.id, sections: ideaSectionList(body, idea.title), usage: readUsage(body, idea.title) });
 }
 
 async function handleGetSection(env: Env, ideaParam: string, sectionParam: string) {
@@ -349,7 +402,7 @@ const routes: Route[] = [
   {
     pattern: /^\/api\/ideas\/([^/]+)$/,
     methods: {
-      GET: (_, env, __, match) => handleGetIdea(env, match![1] || ''),
+      GET: (_, env, url, match) => handleGetIdea(env, match![1] || '', url),
       DELETE: (request, env, __, match) => deleteIdea(request, env, match![1] || ''),
       PATCH: (request, env, __, match) => updateIdea(request, env, match![1] || ''),
       PUT: (request, env, __, match) => updateIdea(request, env, match![1] || ''),

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { fisApi } from "./fis-api.js";
+import { DOCUMENT_CHARS, DOCUMENT_LIMIT_NOTE, SECTION_CHARS, SECTION_LIMIT_NOTE } from "./limits.js";
 import { STAGES, text, type Env, type McpProps } from "./mcp-types.js";
 
 /**
@@ -18,14 +19,14 @@ const DEMOTE_HEADINGS =
 export function registerPublishingTools(server: McpServer, env: Env, getProps: () => McpProps) {
   server.tool(
     "publish_idea_update",
-    "Update the authenticated owner's canonical public idea document and the fields describing it. Pass body to replace the whole document — use get_idea first and preserve useful existing content. Omit body to correct metadata only (summary, title, stage, category, next_step, risk and the rest), leaving the document byte-identical; that is the right call on a document too large to resend.",
+    "Update the authenticated owner's canonical public idea document and the fields describing it. Pass body to replace the whole document — call get_idea with body: 'full' first and preserve useful existing content. Omit body to correct metadata only (summary, title, stage, category, next_step, risk and the rest), leaving the document byte-identical; that is the right call on a document too large to resend.",
     {
       idea_id: z.string().min(2),
       // Optional since #33. Metadata used to be reachable only by resending the
       // entire document, so a document that had outgrown one tool call had its
       // summary, stage and category frozen for good — a catalog card describing
       // four annexes that no longer existed, with no way to correct the sentence.
-      body: z.string().min(20).max(200000).optional().describe("Complete markdown document to publish on the public idea page. Bodies are stored in R2, so depth is not limited by the database. Omit to leave the existing document untouched and update only the metadata fields supplied."),
+      body: z.string().min(20).max(DOCUMENT_CHARS).optional().describe(`Complete markdown document to publish on the public idea page. Bodies are stored in R2, so depth is not limited by the database. ${DOCUMENT_LIMIT_NOTE} Omit to leave the existing document untouched and update only the metadata fields supplied.`),
       title: z.string().min(3).max(80).optional().describe("Document title. Keep it short — put detail in summary."),
       summary: z.string().min(10).max(1000).optional(),
       stage: z.enum(STAGES).optional(),
@@ -144,12 +145,16 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
 
   server.tool(
     "list_idea_sections",
-    "List the sections of an idea document with their ids and word counts. Start here before reading or writing a section — the ids are the same handles the public chapter URLs use.",
+    "List the sections of an idea document with their ids, word counts and size verdicts, plus `usage`: the document's character and chapter budget and what is left of it. Start here before reading or writing a section — the ids are the same handles the public chapter URLs use, and the headroom is knowable without attempting a write.",
     {
       idea_id: z.string().min(2),
     },
     async (input) => {
-      const res = await fisApi<{ idea: string; sections: Array<{ id: string; title: string; words: number }> }>(
+      const res = await fisApi<{
+      idea: string;
+      sections: Array<{ id: string; title: string; words: number }>;
+      usage: Record<string, number | undefined>;
+    }>(
         env,
         `/api/ideas/${encodeURIComponent(input.idea_id)}/sections`,
         { token: getProps().token },
@@ -187,7 +192,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     {
       idea_id: z.string().min(2),
       section: z.string().min(1).describe("Section id from list_idea_sections."),
-      content: z.string().min(1).max(200000).describe(`Replacement markdown for the section body. ${HEADING_CONTRACT}`),
+      content: z.string().min(1).max(SECTION_CHARS).describe(`Replacement markdown for the section body. ${HEADING_CONTRACT} ${SECTION_LIMIT_NOTE}`),
       demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
     },
     async (input) => {
@@ -217,7 +222,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     {
       idea_id: z.string().min(2),
       section: z.string().min(1).describe("Section id from list_idea_sections."),
-      content: z.string().min(1).max(200000).describe(`Markdown to append to the section body. ${HEADING_CONTRACT}`),
+      content: z.string().min(1).max(SECTION_CHARS).describe(`Markdown to append to the section body. ${HEADING_CONTRACT} ${SECTION_LIMIT_NOTE}`),
       demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
     },
     async (input) => {
@@ -355,7 +360,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       refinement_id: z.string().min(2),
       section: z.string().optional().describe("Target section id. Defaults to the section the proposal names."),
       mode: z.enum(["append", "replace"]).optional().describe("Defaults to append."),
-      content: z.string().max(200000).optional().describe("Merged markdown to write. Defaults to the proposal text."),
+      content: z.string().max(SECTION_CHARS).optional().describe(`Merged markdown to write. Defaults to the proposal text. ${SECTION_LIMIT_NOTE}`),
       note: z.string().max(1000).optional(),
     },
     async (input) => {
@@ -420,7 +425,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     {
       idea_id: z.string().min(2),
       title: z.string().min(1).max(120),
-      content: z.string().max(200000).optional().describe(`Markdown for the new section's body. ${HEADING_CONTRACT}`),
+      content: z.string().max(SECTION_CHARS).optional().describe(`Markdown for the new section's body. ${HEADING_CONTRACT} ${SECTION_LIMIT_NOTE}`),
       after: z.string().optional().describe("Section id to insert after. Defaults to the end of the document."),
       before: z.string().optional().describe("Section id to insert before."),
       demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),

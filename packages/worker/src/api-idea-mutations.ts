@@ -133,11 +133,13 @@ export function documentOverflow(
  * spent, what is left, and how many chapters are the wrong size. Returned by
  * every write that changes the document, so headroom is knowable before the
  * write that would overflow it rather than only after (#46), and a document
- * drifting into paragraph-per-page announces itself (#45).
+ * drifting into paragraph-per-page announces itself (#45). Exported because the
+ * READ paths return it too — an author's first call of a session is a read, and
+ * a second implementation of this block for them would be a second opinion.
  */
 export type DocumentUsage = ReturnType<typeof documentUsage>;
 
-function documentUsage(
+export function documentUsage(
   body: string,
   metrics: { chapters: number; belowFloor: number; aboveCeiling: number },
 ) {
