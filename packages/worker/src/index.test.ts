@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
 import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection } from './idea-research';
+import { FIELD_LIMITS } from './http';
 
 /**
  * Filler prose for fixtures that need to clear PUBLICATION_POLICY. Chapter
@@ -1214,8 +1215,13 @@ describe('FreeIdeaStore worker', () => {
       // cap, whose job is to stop oversized writes, silently doubles as a
       // permanent ban on correcting the sentence that describes the document.
       const { bucket, testEnv } = await seeded();
-      const oversized = `${DOCUMENT}\n\n${'over the cap '.repeat(20_000)}`;
-      expect(oversized.length).toBeGreaterThan(200_000);
+      // Derived from the cap, never a literal. Pinned to 200_000 this fixture
+      // stops being oversized the moment FIELD_LIMITS.body is raised — the
+      // tiered-limits branch takes it to 1,000,000 — and the test would then
+      // pass for the wrong reason while the guard it exists to prove was gone.
+      const chunk = 'over the cap ';
+      const oversized = `${DOCUMENT}\n\n${chunk.repeat(Math.ceil(FIELD_LIMITS.body / chunk.length) + 1)}`;
+      expect(oversized.length).toBeGreaterThan(FIELD_LIMITS.body);
       bucket.objects.set('ideas/serge-idea-lab/body.md', oversized);
 
       const response = await worker.fetch(
