@@ -5,10 +5,12 @@ import {
   CHAPTER_SIZE,
   defaultIdeaBody,
   demoteHeadings,
+  documentMetrics,
   ideaChapterById,
   ideaChapters,
   ideaPreamble,
   ideaSectionList,
+  isPaginated,
   markdownHeadings,
   markdownToHtml,
   readIdeaSection,
@@ -863,5 +865,91 @@ describe('chapterHealth', () => {
     // chapters are paragraphs — which is the shape the corpus is actually in.
     const health = chapterHealth(doc(['Fat', 3000], ['Para', 100], ['Para2', 100]));
     expect(health.map((c) => c.verdict)).toEqual(['ok', 'merge', 'merge']);
+  });
+});
+
+describe('ideaSectionList sizing', () => {
+  const body = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
+  const chapter = (title: string, n: number) => `## ${title}\n\n${body(n)}`;
+
+  it('counts the body only, so a long heading cannot inflate the row', () => {
+    // Ten title words plus the `##` marker: the eleven words this used to add.
+    const title = 'Region New World NZ California Oregon South Africa Argentina Chile';
+    const headingWords = `## ${title}`.trim().split(/\s+/).length;
+    const [section] = ideaSectionList(chapter(title, 43), 'Idea');
+
+    expect(headingWords).toBe(11);
+    expect(section?.words).toBe(43);
+    expect(section?.words).not.toBe(43 + headingWords);
+  });
+
+  it('reports the number the verdict was computed from, chapter for chapter', () => {
+    const doc = [
+      chapter('Prototype Or Pilot', 48),
+      chapter('A Considerably Longer Chapter Heading Than Most', 900),
+      chapter('Mid', 520),
+    ].join('\n\n');
+
+    expect(ideaSectionList(doc, 'Idea').map((s) => ({ title: s.title, words: s.words, verdict: s.verdict }))).toEqual([
+      { title: 'Prototype Or Pilot', words: 48, verdict: 'merge' },
+      { title: 'A Considerably Longer Chapter Heading Than Most', words: 900, verdict: 'ok' },
+      { title: 'Mid', words: 520, verdict: 'thin' },
+    ]);
+    // Same numbers chapterHealth() reports for the same document, not merely
+    // the same verdicts — the two measures used to differ by the heading (#74).
+    // Trivially true while this delegates; it fails the moment anyone gives
+    // ideaSectionList() its own copy of the count again, which is the bug.
+    expect(ideaSectionList(doc, 'Idea').map((s) => [s.words, s.verdict])).toEqual(
+      chapterHealth(doc, 'Idea').map((c) => [c.words, c.verdict]),
+    );
+  });
+
+  it('does not let a heading carry a chapter across the floor', () => {
+    const title = 'Aggregators And Shared Cost Support Models';
+    const justUnder = ideaSectionList(chapter(title, CHAPTER_SIZE.floorWords - 1), 'Idea')[0];
+    const atFloor = ideaSectionList(chapter(title, CHAPTER_SIZE.floorWords), 'Idea')[0];
+
+    // The heading is 7 words, so the old count put both rows above the floor
+    // while the verdict beside them was computed from the body.
+    expect(justUnder?.words).toBe(CHAPTER_SIZE.floorWords - 1);
+    expect(justUnder?.verdict).toBe('merge');
+    expect(atFloor?.words).toBe(CHAPTER_SIZE.floorWords);
+    expect(atFloor?.verdict).toBe('thin');
+  });
+
+  it('never prints a number on the wrong side of the floor from its own verdict', () => {
+    const title = 'A Heading Long Enough To Move A Chapter Over The Floor';
+    for (let n = CHAPTER_SIZE.floorWords - 12; n <= CHAPTER_SIZE.floorWords + 2; n += 1) {
+      const [section] = ideaSectionList(chapter(title, n), 'Idea');
+      expect(section?.words).toBe(n);
+      expect(section?.verdict === 'merge').toBe(n < CHAPTER_SIZE.floorWords);
+    }
+  });
+
+  it('still counts the whole document for the synthetic single-section fallback', () => {
+    // No `##` heading anywhere, so ideaChapters() returns the `snapshot` stand-in
+    // whose markdown IS the document. There is no chapter heading to strip.
+    const [section] = ideaSectionList(`# Idea\n\n${body(12)}`, 'Idea');
+
+    expect(section?.id).toBe('snapshot');
+    expect(section?.words).toBe(14);
+  });
+
+  it('leaves the document-wide mean that decides pagination alone', () => {
+    // PUBLICATION_POLICY is evaluated from documentMetrics().words / chapters,
+    // which is a whole-document count including headings and lead-in. Three
+    // chapters of 295 body words each clear the 300-word mean only because of
+    // their headings. Narrowing the per-chapter count must not re-decide that
+    // for documents nobody is editing (#73) — has_publication reads columns
+    // written by documentMetrics(), not by ideaSectionList().
+    const doc = [
+      chapter('Support Models In The New World Regions', 295),
+      chapter('Support Models In The Old World Regions', 295),
+      chapter('Support Models Everywhere Else In The World', 295),
+    ].join('\n\n');
+
+    expect(documentMetrics(doc, 'Idea').words).toBe(3 * (295 + 8));
+    expect(isPaginated(doc, 'Idea')).toBe(true);
+    expect(ideaSectionList(doc, 'Idea').map((s) => s.words)).toEqual([295, 295, 295]);
   });
 });
