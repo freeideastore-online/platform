@@ -12,7 +12,12 @@ The public MCP discovery manifest is available at `/.well-known/mcp.json`. It li
 
 ## Important Tools
 
-All 35 tools the server registers, grouped by what they are for.
+All 37 tools the server registers, grouped by what they are for.
+
+**Authorization** — see [Authorization And Expiry](#authorization-and-expiry)
+
+- `authenticate`
+- `complete_authentication`
 
 **Skills and templates**
 
@@ -72,6 +77,18 @@ All 35 tools the server registers, grouped by what they are for.
 - `search_ideas`
 - `list_idea_sources`
 - `get_source`
+
+## Authorization And Expiry
+
+An MCP access token lives 24 hours, and the FreeIdeaStore session behind it expires with it. A long authoring run can therefore outlive its own credential, and the way that used to surface was a write failing part-way through a migration with no route back inside the session — once leaving fifteen chapters reading `(chapter loading)` on a live public page.
+
+Three things now stand between an agent and that outcome.
+
+**Check the time you have before you spend it.** `authenticate` with no arguments reports the current session: `user_id`, `expires_at`, `expires_in_seconds`, and `renew_recommended` when under thirty minutes remain. Call it before anything that writes more than once. If the credential is short, call `authenticate` with `force: true` and renew before starting rather than during.
+
+**Recover in-band.** `authenticate` returns an `authorization_url` and a `pairing_code`. Give the URL to the user; they sign in with GitHub or Google. Then call `complete_authentication` — no arguments, the session remembers its own code — and the recovered identity is bound to the session, durably, so it also survives Durable Object hibernation. Check the `user_id` it returns owns the documents being written: GitHub and Google accounts with near-identical handles have produced silent wrong-account writes here before.
+
+**Recover out-of-band when the tools are gone.** If the token expires outright, MCP clients withdraw the server's tools and no tool call is possible. The 401 body carries `reauthorize_url` for that case — `https://mcp.freeideastore.online/reauthorize` works with no prior tool call, and shows a pairing code after sign-in that can be read back to the agent as `complete_authentication`'s `pairing_code`. Pairing codes are single-use and expire in fifteen minutes.
 
 ## Prefer Section Writes Over Whole-Document Rewrites
 

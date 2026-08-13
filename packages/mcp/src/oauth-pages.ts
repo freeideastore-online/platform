@@ -73,7 +73,8 @@ const PAGE_STYLES = `
     p{line-height:1.5;margin:0 0 22px;color:#374151}
     .actions{display:flex;gap:10px;flex-wrap:wrap}
     a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:8px;background:#111827;color:white;text-decoration:none;font-weight:700}
-    a.secondary{background:white;color:#374151;border:1px solid #d1d5db}`;
+    a.secondary{background:white;color:#374151;border:1px solid #d1d5db}
+    .code{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;letter-spacing:1px;text-align:center;padding:14px;margin:0 0 22px;border:1px dashed #0f766e;border-radius:8px;background:#f0fdfa;color:#0f766e;user-select:all}`;
 
 function page(title: string, body: string): string {
   return `<!doctype html>
@@ -94,7 +95,21 @@ ${body}
 </html>`;
 }
 
-export function authConfirmPage(config: OAuthPageConfig, nonce: string, clientName: string | null): Response {
+/**
+ * `connect` is a client completing OAuth for the first time; `reauthorize` is a
+ * live agent session that has lost its credential and needs one back (#26). The
+ * mechanics are identical — same nonce, same cookie, same providers — but the
+ * wording is not, because the second reader is mid-task and already believes
+ * they are signed in.
+ */
+export type ConfirmVariant = "connect" | "reauthorize";
+
+export function authConfirmPage(
+  config: OAuthPageConfig,
+  nonce: string,
+  clientName: string | null,
+  variant: ConfirmVariant = "connect",
+): Response {
   const continueUrl = (provider: AuthProvider) => {
     const url = new URL("/authorize/continue", config.issuer);
     url.searchParams.set("nonce", nonce);
@@ -102,11 +117,16 @@ export function authConfirmPage(config: OAuthPageConfig, nonce: string, clientNa
     return url.toString();
   };
   const name = clientName ? escapeHtml(clientName) : "your MCP client";
+  const title = variant === "reauthorize" ? "Sign back in to FreeIdeaStore MCP" : "Connect FreeIdeaStore MCP";
+  const lead =
+    variant === "reauthorize"
+      ? "Your agent's FreeIdeaStore authorization has run out, so it cannot write. Sign in again to give it back — use the same account that owns the documents it is working on."
+      : `${name} wants to use FreeIdeaStore MCP tools as your account. Choose how to sign in.`;
   return new Response(
     page(
-      "Connect FreeIdeaStore MCP",
-      `    <h1>Connect FreeIdeaStore MCP</h1>
-    <p>${name} wants to use FreeIdeaStore MCP tools as your account. Choose how to sign in.</p>
+      title,
+      `    <h1>${escapeHtml(title)}</h1>
+    <p>${variant === "reauthorize" ? escapeHtml(lead) : lead}</p>
     <div class="actions">
       <a href="${escapeHtml(continueUrl("github"))}" autofocus>Continue with GitHub</a>
       <a class="secondary" href="${escapeHtml(continueUrl("google"))}">Continue with Google</a>
@@ -117,6 +137,34 @@ export function authConfirmPage(config: OAuthPageConfig, nonce: string, clientNa
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Set-Cookie": authInFlightCookie(nonce),
+      },
+    },
+  );
+}
+
+/**
+ * The end of a re-authorization: signed in, with a pairing code to hand back.
+ *
+ * The code is on screen even when the agent already holds it, because the two
+ * ways of reaching this page are indistinguishable from here — and the case
+ * that matters most is the one where the agent holds nothing, because its MCP
+ * client withdrew the server's tools when the token expired. Then this code,
+ * read out to the agent, is the only route back into the session.
+ */
+export function authPairedPage(pairingCode: string): Response {
+  return new Response(
+    page(
+      "FreeIdeaStore MCP re-authorized",
+      `    <h1>You are signed back in</h1>
+    <p>Give this pairing code to your agent and ask it to call <code>complete_authentication</code>. It expires in 15 minutes and works once.</p>
+    <span class="code">${escapeHtml(pairingCode)}</span>
+    <p>If the agent started this sign-in itself, it already has the code — just tell it you are done. You can close this tab either way.</p>`,
+    ),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Set-Cookie": `${AUTH_IN_FLIGHT_COOKIE}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`,
       },
     },
   );

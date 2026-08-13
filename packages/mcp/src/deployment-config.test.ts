@@ -26,6 +26,8 @@ const NON_TOOL_IDENTIFIERS = new Set([
   "idea_id",
   "section_id",
   "revision_id",
+  "expires_at",
+  "pairing_code",
 ]);
 
 /** Every snake_case identifier a document names, minus the known non-tools. */

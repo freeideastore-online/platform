@@ -44,6 +44,16 @@ import type { McpProps } from "./mcp-types.js";
 /** Where this session's resolved auth lives in Durable Object storage. */
 export const AUTH_PROPS_KEY = "fis:auth-props";
 
+/**
+ * Where the pairing code this session is waiting on lives.
+ *
+ * It goes to storage for the same reason the identity does: the human is off in
+ * a browser signing in, which is exactly the idle gap that gets the Durable
+ * Object evicted. A pairing remembered only in memory would be forgotten during
+ * the one operation it exists to survive.
+ */
+export const PAIRING_CODE_KEY = "fis:auth-pairing";
+
 /** The slice of `DurableObjectStorage` this module needs, so tests can fake it. */
 export interface AuthStorage {
   get<T>(key: string): Promise<T | undefined>;
@@ -114,5 +124,47 @@ export class SessionAuth {
   /** What tool handlers see. Empty means unauthenticated, never undefined. */
   current(): McpProps {
     return this.props ?? {};
+  }
+
+  /**
+   * Remember that this session started a re-authorization, so that only this
+   * session can redeem it (#26).
+   *
+   * The pairing code travels through a transcript and often a chat window on
+   * its way back, and the session behind it is a live write credential. Binding
+   * it to the MCP session that asked for it means a code seen by someone else
+   * is not a code they can spend.
+   */
+  async beginPairing(code: string): Promise<void> {
+    await this.writePairing(code);
+  }
+
+  /** The code this session is waiting on, if any. */
+  async pendingPairing(): Promise<string | undefined> {
+    try {
+      const stored = await this.storage.get<string>(PAIRING_CODE_KEY);
+      return typeof stored === "string" && stored ? stored : undefined;
+    } catch (error) {
+      console.error(`mcp auth: could not read the pending pairing code (${reason(error)})`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Forget the pairing, once it has been spent or abandoned.
+   *
+   * Written as an empty string rather than deleted, so that `AuthStorage` stays
+   * the two-method slice of `DurableObjectStorage` this module needs.
+   */
+  async clearPairing(): Promise<void> {
+    await this.writePairing("");
+  }
+
+  private async writePairing(code: string): Promise<void> {
+    try {
+      await this.storage.put(PAIRING_CODE_KEY, code);
+    } catch (error) {
+      console.error(`mcp auth: could not persist the pending pairing code (${reason(error)})`);
+    }
   }
 }

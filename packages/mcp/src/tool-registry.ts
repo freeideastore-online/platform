@@ -1,12 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Env, McpProps } from "./mcp-types.js";
 import { registerAccountTools } from "./register-account-tools.js";
+import { registerAuthTools, type AuthControls } from "./register-auth-tools.js";
 import { registerCollaborationTools } from "./register-collaboration-tools.js";
 import { registerDiscoveryTools } from "./register-discovery-tools.js";
 import { registerPublishingTools } from "./register-publishing-tools.js";
 import { registerSkillTools } from "./register-skill-tools.js";
 
-type Registrar = (server: McpServer, env: Env, getProps: () => McpProps) => void;
+/**
+ * `controls` is optional and only the auth registrar reads it: those two tools
+ * *write* identity, where every other tool only reads it. Optional because
+ * `collectToolNames` below registers with nothing behind it.
+ */
+type Registrar = (
+  server: McpServer,
+  env: Env,
+  getProps: () => McpProps,
+  controls?: AuthControls,
+) => void;
 
 /**
  * The one list of registration modules.
@@ -23,6 +34,7 @@ type Registrar = (server: McpServer, env: Env, getProps: () => McpProps) => void
  * construction, a tool that is advertised — there is no second list to forget.
  */
 const REGISTRARS: readonly Registrar[] = [
+  registerAuthTools,
   registerSkillTools,
   registerAccountTools,
   registerCollaborationTools,
@@ -30,8 +42,13 @@ const REGISTRARS: readonly Registrar[] = [
   registerDiscoveryTools,
 ];
 
-export function registerAllTools(server: McpServer, env: Env, getProps: () => McpProps): void {
-  for (const register of REGISTRARS) register(server, env, getProps);
+export function registerAllTools(
+  server: McpServer,
+  env: Env,
+  getProps: () => McpProps,
+  controls?: AuthControls,
+): void {
+  for (const register of REGISTRARS) register(server, env, getProps, controls);
 }
 
 /**

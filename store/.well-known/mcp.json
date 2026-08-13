@@ -12,6 +12,14 @@
       },
       "tools": [
         {
+          "name": "authenticate",
+          "description": "Check or renew this session's authorization. Reports expires_at, so a long multi-write task can be started with time to finish it, and returns a sign-in URL when one is needed."
+        },
+        {
+          "name": "complete_authentication",
+          "description": "Finish a sign-in started by authenticate and bind the recovered identity to this MCP session."
+        },
+        {
           "name": "free_idea_template",
           "description": "Return the cheap FreeIdeaStore one-page idea template."
         },
