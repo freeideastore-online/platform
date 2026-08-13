@@ -11,7 +11,8 @@ export const IDEA_SKILL_IDS = [
   "prototype-planner",
   "pro-candidate-assessor",
 ] as const;
-export const TOOL_COUNT = 17;
+// TOOL_COUNT used to live here as a literal and sat at 17 while 32 tools were
+// registered (#72). It is now derived — see `toolCount()` in tool-registry.ts.
 
 import { IDEA_SKILLS as CATALOG_IDEA_SKILLS, type IdeaSkill as CatalogIdeaSkill } from "./idea-skill-catalog.js";
 
