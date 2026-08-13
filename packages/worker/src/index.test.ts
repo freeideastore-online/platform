@@ -129,7 +129,6 @@ class FakeD1 {
         filler(55),
       ].join('\n'),
       body_key: '',
-      render_key: '',
       source_url: '',
       visibility: 'public',
       stage: 'researching',
@@ -154,7 +153,6 @@ class FakeD1 {
       signal: 'Signed-in profile should see this idea.',
       body_md: '## Snapshot\nOwned by the signed-in account.',
       body_key: '',
-      render_key: '',
       source_url: '',
       visibility: 'public',
       stage: 'prototyping',
@@ -205,11 +203,23 @@ class FakeD1 {
     if (sql.includes('SELECT id FROM ideas WHERE id = ?')) {
       return new FakeStatement({ first: ([id]) => (this.ideas.has(String(id)) ? { id } : null) });
     }
-    if (sql.includes('SELECT id, title FROM ideas WHERE parent_id = ?')) {
+    // derivedIdeas(): the capped, oldest-first page of children, and the total
+    // it is a page of. Map insertion order stands in for `created_at ASC`.
+    if (sql.includes('SELECT COUNT(*) AS n FROM ideas') && sql.includes('parent_id = ?')) {
       return new FakeStatement({
-        all: ([parentId]) => ({
+        first: ([parentId]) => ({
+          n: Array.from(this.ideas.values()).filter(
+            (idea) => idea.parent_id === parentId && idea.status !== 'removed',
+          ).length,
+        }),
+      });
+    }
+    if (sql.includes('SELECT id, title FROM ideas') && sql.includes('parent_id = ?')) {
+      return new FakeStatement({
+        all: ([parentId, limit]) => ({
           results: Array.from(this.ideas.values())
             .filter((idea) => idea.parent_id === parentId && idea.status !== 'removed')
+            .slice(0, Number(limit))
             .map((idea) => ({ id: idea.id, title: idea.title })),
         }),
       });
@@ -230,7 +240,7 @@ class FakeD1 {
           return {
             results: Array.from(this.ideas.values())
               .filter((idea) => idea.status !== 'removed')
-              .map(({ body_md, body_key, render_key, ...idea }) => ({
+              .map(({ body_md, body_key, ...idea }) => ({
                 ...idea,
                 // Mirrors the has_publication SQL in data.ts: PUBLICATION_POLICY
                 // evaluated from the stored metrics. Seeded rows have no stored
@@ -552,13 +562,12 @@ class FakeD1 {
     // Section writes update only the body columns (writeCanonicalBody).
     if (sql.includes('UPDATE ideas') && sql.includes('SET body_md = ?')) {
       return new FakeStatement({
-        run: ([body_md, body_key, render_key, body_words, chapter_count, id]) => {
+        run: ([body_md, body_key, body_words, chapter_count, id]) => {
           const idea = this.ideas.get(String(id));
           if (!idea) return;
           Object.assign(idea, {
             body_md,
             body_key,
-            render_key,
             body_words,
             chapter_count,
             updated_at: '2026-06-11 02:00:00',
@@ -576,7 +585,6 @@ class FakeD1 {
             signal,
             body_md,
             body_key,
-            render_key,
             source_url,
             visibility,
             stage,
@@ -596,7 +604,6 @@ class FakeD1 {
             signal,
             body_md,
             body_key,
-            render_key,
             source_url,
             visibility,
             stage,
@@ -850,7 +857,6 @@ describe('FreeIdeaStore worker', () => {
     expect(data.ideas[0]).toMatchObject({ has_publication: 1 });
     expect(data.ideas[0]).not.toHaveProperty('body_md');
     expect(data.ideas[0]).not.toHaveProperty('body_key');
-    expect(data.ideas[0]).not.toHaveProperty('render_key');
   });
 
   it('renders dynamic idea pages from DB-backed markdown', async () => {
@@ -2774,7 +2780,7 @@ describe('FreeIdeaStore worker', () => {
     expect(session.status).toBe(200);
     await expect(session.json()).resolves.toMatchObject({ user: { handle: 'serge-the-dev' } });
     expect(create.status).toBe(201);
-    expect(testEnv.DB.inserts.at(-1)?.[14]).toBe('profile-serge-the-dev');
+    expect(testEnv.DB.inserts.at(-1)?.[13]).toBe('profile-serge-the-dev');
   });
 
   it('blocks cross-site browser mutations while allowing bearer agent mutations', async () => {
