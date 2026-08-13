@@ -228,12 +228,39 @@ export function isApiMutation(request: Request) {
   return ['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method);
 }
 
+/**
+ * A handle an identity row already holds is a registered person's, and an
+ * unauthenticated caller may not write as them.
+ *
+ * This is the `x-idea-handle` half of #42. `availableHandle` stops a stranger
+ * being *issued* someone's handle at sign-in; nothing stopped a stranger simply
+ * asserting one in a header on an anonymous idea or contribution, which files
+ * the row under `profile-<them>` and puts it on their contributor page. It is
+ * not the full takeover — `ownedIdea` requires a session and compares against
+ * the caller's own verified handle, so no existing idea changes hands — but it
+ * is the same mistake, a profile selected by a name anyone can type.
+ */
+async function handleIsRegistered(env: Env, handle: string) {
+  return Boolean(
+    await env.DB.prepare('SELECT 1 FROM identities WHERE handle = ?').bind(handle).first(),
+  );
+}
+
 export async function profileFor(request: Request, env: Env) {
   const authUser = await authUserFor(request, env);
   // Only trust x-idea-handle when unauthenticated (anonymous idea creation).
   // When authenticated, always use the verified handle to prevent attribution spoofing.
-  const raw = authUser?.handle || request.headers.get('x-idea-handle') || 'guest';
-  const handle = slug(raw) || 'guest';
+  let handle: string;
+  if (authUser) {
+    handle = slug(authUser.handle) || 'guest';
+  } else {
+    const requested = slug(request.headers.get('x-idea-handle') || '');
+    // Anonymous callers keep their own attribution handle, but fall back to
+    // `guest` rather than borrowing a registered contributor's. Falling back
+    // instead of erroring keeps the anonymous write path working — the MCP
+    // client sends this header on every call, signed in or not.
+    handle = requested && !(await handleIsRegistered(env, requested)) ? requested : 'guest';
+  }
   const profileId = `profile-${handle}`;
   await env.DB.prepare(
     `INSERT OR IGNORE INTO profiles (id, handle, display_name, reputation, badges_json)

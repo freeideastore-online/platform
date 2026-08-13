@@ -6,9 +6,11 @@ import type { Env, IdentityRow } from './types';
 // Minimal D1 stand-in: enough to exercise the identity queries without a real
 // database. Matching on the SQL text is crude, but it keeps the fake honest —
 // change a query and the test fails rather than silently passing.
+type FakeProfile = { id: string; handle: string; claim_email: string | null; created_at: string };
+
 function fakeEnv() {
   const identities: IdentityRow[] = [];
-  const profiles: { id: string; handle: string }[] = [];
+  const profiles: FakeProfile[] = [];
 
   const run = (sql: string, args: unknown[]) => {
     const q = sql.replace(/\s+/g, ' ').trim();
@@ -18,8 +20,33 @@ function fakeEnv() {
     if (q.startsWith('SELECT * FROM identities WHERE provider =')) {
       return identities.find((r) => r.provider === args[0] && r.provider_user_id === args[1]) ?? null;
     }
-    if (q.startsWith('SELECT 1 FROM identities WHERE handle =')) {
-      return identities.some((r) => r.handle === args[0]) ? { 1: 1 } : null;
+    // The availability probe (#42). This answers from exactly the tables the
+    // query names, and is deliberately looser than the rest of the fake.
+    //
+    // Being strict here would make the takeover test un-discriminating in the
+    // worst way: revert `availableHandle` to its old identities-only probe and
+    // a strict matcher throws `unexpected SQL`, so the test goes red without
+    // ever exercising the behaviour it claims to prove — it would be red for a
+    // one-table query and red for a takeover alike, and could not tell them
+    // apart. Answering truthfully from whichever tables are named means the
+    // reverted query runs, reports the legacy handle free, and the assertion
+    // fails on the stranger walking onto `simon`, which is the actual claim.
+    if (/^SELECT 1 FROM (identities|profiles) WHERE handle =/.test(q)) {
+      const held =
+        (q.includes('FROM identities') && identities.some((r) => r.handle === args[0])) ||
+        (q.includes('FROM profiles') && profiles.some((p) => p.handle === args[args.length - 1]));
+      return held ? { 1: 1 } : null;
+    }
+    if (q.startsWith('SELECT p.handle FROM profiles p WHERE p.claim_email =')) {
+      // NOT EXISTS against identities is part of the query, not an afterthought:
+      // the fake has to enforce it or the test proving a claim is single-use
+      // would pass against a lookup that had quietly dropped the condition.
+      const match = profiles
+        .filter(
+          (p) => p.claim_email === args[0] && !identities.some((i) => i.handle === p.handle),
+        )
+        .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0];
+      return match ? { handle: match.handle } : null;
     }
     if (q.startsWith('SELECT handle FROM identities WHERE email =')) {
       // email_verified = 1 is part of the query, not an afterthought: the fake
@@ -59,7 +86,12 @@ function fakeEnv() {
     }
     if (q.startsWith('INSERT OR IGNORE INTO profiles')) {
       if (!profiles.some((p) => p.handle === args[1])) {
-        profiles.push({ id: args[0] as string, handle: args[1] as string });
+        profiles.push({
+          id: args[0] as string,
+          handle: args[1] as string,
+          claim_email: null,
+          created_at: String(profiles.length).padStart(4, '0'),
+        });
       }
       return null;
     }
@@ -81,7 +113,22 @@ function fakeEnv() {
     },
   } as unknown as Env;
 
-  return { env, identities, profiles };
+  /**
+   * A pre-cutover contributor: a `profiles` row with work under it and no
+   * identity behind it, exactly what the FreeAppStore era left in the database.
+   * `claimEmail` is the address an operator has recorded as the owner's, and is
+   * null for the profiles nobody has established an owner for.
+   */
+  const seedLegacyProfile = (handle: string, claimEmail: string | null = null) => {
+    profiles.push({
+      id: `profile-${handle}`,
+      handle,
+      claim_email: claimEmail,
+      created_at: String(profiles.length).padStart(4, '0'),
+    });
+  };
+
+  return { env, identities, profiles, seedLegacyProfile };
 }
 
 const github = (id: string, handle: string): ProviderProfile => ({
@@ -116,7 +163,7 @@ describe('identity upsert', () => {
     const row = await upsertIdentity(env, github('1', 'alice'));
     expect(row.handle).toBe('alice');
     expect(row.provider).toBe('github');
-    expect(profiles).toEqual([{ id: 'profile-alice', handle: 'alice' }]);
+    expect(profiles.map((p) => p.id)).toEqual(['profile-alice']);
   });
 
   it('returns the same identity on repeat sign-in', async () => {
@@ -195,7 +242,7 @@ describe('account linking on a verified email', () => {
     expect(identities).toHaveLength(2);
     // One profile, so contributions from either sign-in attribute to the same
     // contributor page. A second row here is exactly the data loss in #40.
-    expect(profiles).toEqual([{ id: 'profile-serge-ivo', handle: 'serge-ivo' }]);
+    expect(profiles.map((p) => p.id)).toEqual(['profile-serge-ivo']);
   });
 
   it('does NOT link an unverified email', async () => {
@@ -267,6 +314,129 @@ describe('account linking on a verified email', () => {
     expect(back.email_verified).toBe(1);
     const goog = await upsertIdentity(env, verified(google('sub-1', 'bob'), 'alice@example.com'));
     expect(goog.handle).toBe('alice');
+  });
+});
+
+describe('an unclaimed legacy profile is not up for grabs (#42)', () => {
+  it('does NOT hand a stranger a legacy handle that matches their login', async () => {
+    // The defect. `simon` has a profiles row from before the cutover and no
+    // identity row, so the old availability probe — which read `identities`
+    // only — reported the handle free. The stranger was issued it, and the
+    // INSERT OR IGNORE then adopted profile-simon rather than creating one, so
+    // ownedIdea (created_by vs contributorByHandle) handed over Simon's ideas.
+    const { env, seedLegacyProfile, profiles } = fakeEnv();
+    seedLegacyProfile('simon');
+
+    const stranger = await upsertIdentity(env, github('999', 'simon'));
+
+    expect(stranger.handle).not.toBe('simon');
+    expect(stranger.handle).toBe('simon-github');
+    // And the legacy row is untouched: still exactly one profile called `simon`,
+    // and the stranger got a new one of their own. If this array ever contains
+    // one entry, the identity is sharing Simon's profile and the bug is back.
+    expect(profiles.map((p) => p.handle)).toEqual(['simon', 'simon-github']);
+  });
+
+  it('does NOT hand it over on the counting fallback either', async () => {
+    // The provider-qualified handle is the second guess, not a safe one: if a
+    // legacy `simon-github` profile also exists, the loop must keep going
+    // rather than settle on it.
+    const { env, seedLegacyProfile } = fakeEnv();
+    seedLegacyProfile('simon');
+    seedLegacyProfile('simon-github');
+    seedLegacyProfile('simon-2');
+
+    const stranger = await upsertIdentity(env, github('999', 'simon'));
+
+    expect(stranger.handle).toBe('simon-3');
+  });
+
+  it('does NOT let a verified email alone claim a profile with no recorded claim', async () => {
+    // Reserving the handle is not conditional on the attacker being anonymous.
+    // A perfectly verified Google address is still no evidence of a connection
+    // to a profile that has no claim_email recorded against it.
+    const { env, seedLegacyProfile } = fakeEnv();
+    seedLegacyProfile('fis-mcp');
+
+    const stranger = await upsertIdentity(
+      env,
+      verified(google('sub-999', 'fis-mcp'), 'mallory@example.com'),
+    );
+
+    expect(stranger.handle).toBe('fis-mcp-google');
+  });
+
+  it('does NOT match a claim_email the provider has not verified', async () => {
+    // The same boundary linkedHandle draws. An unverified address is a string
+    // the account holder typed, so it proves nothing and must not open the door.
+    const { env, seedLegacyProfile } = fakeEnv();
+    seedLegacyProfile('simon', 'simon@example.com');
+
+    const impostor = await upsertIdentity(env, {
+      ...google('sub-666', 'simon'),
+      email: 'simon@example.com',
+      emailVerified: false,
+    });
+
+    expect(impostor.handle).toBe('simon-google');
+  });
+
+  it('lets the real owner bind to their own profile on their first sign-in', async () => {
+    // The door in the wall. An operator recorded Simon's verified address
+    // against the legacy profile; his first sign-in under the new flow adopts
+    // it, so profile-simon — and the ideas filed under it — stay his.
+    const { env, seedLegacyProfile, profiles } = fakeEnv();
+    seedLegacyProfile('simon', 'simon@example.com');
+
+    const simon = await upsertIdentity(
+      env,
+      verified(github('7', 'simon-renamed-on-github'), 'simon@example.com'),
+    );
+
+    expect(simon.handle).toBe('simon');
+    // No second profile: he rejoined the existing row rather than being handed
+    // an empty one, which is the whole point of the migration path.
+    expect(profiles.map((p) => p.handle)).toEqual(['simon']);
+  });
+
+  it('spends the claim once — a second account on the same address does not follow him in', async () => {
+    // Once an identity holds the handle the profile has an owner who signs in,
+    // so the NOT EXISTS closes the door behind him. A second provider account
+    // on the same *verified* address is Simon's own and is caught earlier, by
+    // linkedHandle; this asserts the claim path itself does not fire twice.
+    const { env, seedLegacyProfile } = fakeEnv();
+    seedLegacyProfile('simon', 'simon@example.com');
+    await upsertIdentity(env, verified(github('7', 'simon'), 'simon@example.com'));
+
+    // A different address that an operator has NOT recorded — so no linkedHandle
+    // match either, and nothing left to adopt.
+    const other = await upsertIdentity(env, verified(google('sub-8', 'simon'), 'nope@example.com'));
+
+    expect(other.handle).toBe('simon-google');
+  });
+
+  it('leaves an ordinary new signup completely unaffected', async () => {
+    // The common case must not pay for any of this: a fresh login that collides
+    // with nothing still gets the plain handle and a profile of its own.
+    const { env, seedLegacyProfile, profiles } = fakeEnv();
+    seedLegacyProfile('simon');
+    seedLegacyProfile('fis-mcp');
+
+    const newcomer = await upsertIdentity(env, verified(github('3', 'dana'), 'dana@example.com'));
+
+    expect(newcomer.handle).toBe('dana');
+    expect(profiles.map((p) => p.handle)).toContain('dana');
+  });
+
+  it('still reserves a handle held only by an identity', async () => {
+    // The original guard has to survive the change: a live contributor with no
+    // profile row yet (identities are written first) is still protected.
+    const { env } = fakeEnv();
+    const alice = await upsertIdentity(env, github('1', 'alice'));
+    const second = await upsertIdentity(env, github('2', 'alice'));
+
+    expect(second.handle).toBe('alice-github');
+    expect(second.id).not.toBe(alice.id);
   });
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { handleAuth } from './auth';
+import { handleAuth, profileFor } from './auth';
 import { verifySession } from './session';
 import type { Env, IdentityRow } from './types';
 
@@ -208,5 +208,68 @@ describe('ordinary sign-in', () => {
 
     expect(done?.headers.get('location')).toBe('https://freeideastore.online/console/');
     expect(cookies.some((c) => c.startsWith('__Host-fis_session='))).toBe(true);
+  });
+});
+
+/**
+ * `x-idea-handle` is the anonymous attribution header, and the second half of
+ * #42. Sign-in is not the only place a profile gets selected by name: an
+ * unauthenticated write picks its profile straight out of this header.
+ */
+describe('anonymous attribution cannot borrow a registered handle', () => {
+  function profileEnv(registered: string[]) {
+    const inserts: string[] = [];
+    const run = (sql: string, args: unknown[]) => {
+      const q = sql.replace(/\s+/g, ' ').trim();
+      if (q.startsWith('SELECT 1 FROM identities WHERE handle =')) {
+        return registered.includes(String(args[0])) ? { 1: 1 } : null;
+      }
+      if (q.startsWith('INSERT OR IGNORE INTO profiles')) {
+        inserts.push(String(args[1]));
+        return null;
+      }
+      throw new Error(`unexpected SQL: ${q}`);
+    };
+    const env = {
+      DB: {
+        prepare: (sql: string) => ({
+          bind: (...args: unknown[]) => ({
+            first: async () => run(sql, args),
+            run: async () => run(sql, args),
+          }),
+        }),
+      },
+    } as unknown as Env;
+    return { env, inserts };
+  }
+
+  const anonymous = (handle: string) =>
+    new Request('https://freeideastore.online/api/ideas', {
+      method: 'POST',
+      headers: { 'x-idea-handle': handle },
+    });
+
+  it('falls back to guest when the requested handle belongs to an identity', async () => {
+    const { env, inserts } = profileEnv(['serge-ivo']);
+
+    await expect(profileFor(anonymous('serge-ivo'), env)).resolves.toBe('profile-guest');
+    // And it must not have created or touched a row under the borrowed name.
+    expect(inserts).toEqual(['guest']);
+  });
+
+  it('still lets an anonymous caller use an unregistered handle', async () => {
+    // The MCP client sends this header on every call, signed in or not, and
+    // defaults it to `fis-mcp`. Erroring here would break that write path, so
+    // the guard is narrowed to handles a registered person actually holds.
+    const { env, inserts } = profileEnv(['serge-ivo']);
+
+    await expect(profileFor(anonymous('fis-mcp'), env)).resolves.toBe('profile-fis-mcp');
+    expect(inserts).toEqual(['fis-mcp']);
+  });
+
+  it('slugs the requested handle before deciding, so casing cannot dodge the check', async () => {
+    const { env } = profileEnv(['serge-ivo']);
+
+    await expect(profileFor(anonymous('Serge-Ivo'), env)).resolves.toBe('profile-guest');
   });
 });

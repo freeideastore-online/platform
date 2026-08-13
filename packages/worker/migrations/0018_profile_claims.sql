@@ -1,0 +1,61 @@
+-- Reserve unclaimed legacy profiles, and give their real owners a way back in.
+--
+-- THE HOLE THIS CLOSES (#42). Before this migration, `availableHandle` asked
+-- only whether an *identity* held a handle. A pre-cutover contributor has a
+-- `profiles` row and no `identities` row until they sign in again, so their
+-- handle read as free. The first GitHub or Google account whose login slugged
+-- to it passed that check, was issued the handle, and the follow-up
+-- `INSERT OR IGNORE INTO profiles` then adopted the existing profile row
+-- instead of creating one. Authorization follows the handle — `ownedIdea`
+-- compares `ideas.created_by` against `contributorByHandle(user.handle)` — so
+-- the stranger inherited that contributor's ideas, contributions and edit
+-- rights. Nothing anywhere distinguished the rightful owner from a squatter who
+-- picked a matching username.
+--
+-- The fix has two halves and this file is the second one. `availableHandle` now
+-- treats a handle held by EITHER table as taken, which reserves every legacy
+-- profile outright. That alone would be a wall with no door: a genuine
+-- pre-cutover contributor signing in for the first time would be pushed onto
+-- `alice-github` and silently detached from their own history, which is the
+-- data loss the whole handle-stability design exists to prevent.
+--
+-- `claim_email` is the door. It is the verified address that has been
+-- established, out of band, as belonging to the person whose work sits under
+-- this profile. When a new identity arrives carrying that same address, and the
+-- *provider* asserts the address is verified, the identity adopts the profile.
+-- That is the same rule `linkedHandle` already applies between two identities
+-- (#40), extended to a profile that has no identity behind it yet.
+--
+-- WHY IT IS NULL FOR EVERY EXISTING ROW, AND MUST BE. Nothing recorded an email
+-- against a profile before now and we must not invent one. Guessing — from the
+-- handle, from a GitHub login that looks like it, from an address on a
+-- contribution — would rebuild the exact defect being fixed, with a database
+-- column lending it an air of authority. A NULL `claim_email` means "this
+-- profile is reserved and no one can claim it by signing in", which is the safe
+-- default. `system`, `guest` and `fis-mcp` are not people and should keep it
+-- forever.
+--
+-- HOW A REAL LEGACY OWNER GETS THEIR PROFILE BACK. An operator establishes who
+-- they are, then sets the column to their verified address, lower-cased:
+--
+--   UPDATE profiles SET claim_email = 'simon@example.com' WHERE handle = 'simon';
+--
+-- Their next sign-in with a provider that verifies that address binds the new
+-- identity to the existing profile, and their ideas and contributions are
+-- theirs again. The matching side of that is `claimableProfileHandle` in
+-- identities.ts, which additionally requires that the profile still has no
+-- identity — a profile claimed once is not claimable twice.
+--
+-- Lower-cased because `oauth-providers.ts` lower-cases the address it stores
+-- and the comparison is a plain `=`. A mixed-case value here simply never
+-- matches, which fails closed but looks like the feature is broken.
+ALTER TABLE profiles ADD COLUMN claim_email TEXT;
+
+-- Read on every first sign-in that carries a verified address, next to the
+-- existing `identities_email` lookup.
+CREATE INDEX IF NOT EXISTS profiles_claim_email ON profiles (claim_email);
+
+-- Read by `availableHandle` on every first sign-in, up to 51 times when a
+-- handle is contested. `profiles.handle` is already UNIQUE (0001), which
+-- implies an index, so nothing further is needed here — noted so a future
+-- reader does not add a redundant one.
