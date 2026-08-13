@@ -12,7 +12,7 @@ The public MCP discovery manifest is available at `/.well-known/mcp.json`. It li
 
 ## Important Tools
 
-All 32 tools the server registers, grouped by what they are for.
+All 35 tools the server registers, grouped by what they are for.
 
 **Skills and templates**
 
@@ -67,6 +67,12 @@ All 32 tools the server registers, grouped by what they are for.
 - `apply_refinement`
 - `resolve_refinement`
 
+**Search and sources** — the indexes every canonical write rebuilds, made readable
+
+- `search_ideas`
+- `list_idea_sources`
+- `get_source`
+
 ## Prefer Section Writes Over Whole-Document Rewrites
 
 `publish_idea_update` replaces the entire canonical document, so revising one part costs the whole document in tokens both ways, and the whole document has to fit in one call. That pressure is why research accumulated as ten separate numbered contributions on one idea instead of landing in the document.
@@ -89,6 +95,8 @@ Structure is editable at the same granularity. `patch_idea_section` and `append_
 - `delete_idea_section` — remove a section. Recoverable through revisions.
 
 Structural edits are ordinary canonical writes, so each one is snapshotted as a revision and re-indexes sources and search automatically.
+
+**Write responses do not carry the document tree.** A structural write used to answer with every chapter of the document, so a ten-call consolidation pass re-read the whole structure ten times — the O(document) cost section writes exist to remove, moved from the request to the response. On a 74-chapter document that was 11,209 characters per call; it is now 419. What comes back is the outcome plus `usage` — `chars`, `chars_remaining`, `chapters`, `chapters_remaining`, `below_floor`, `above_ceiling` — so budget and chapter health stay visible without a second call, and `add_idea_section` and a rename still name the section id they produced in `section`. Pass `verbose: true` for the tree, or call `list_idea_sections`, which is the deliberate way to fetch it.
 
 Section ids stay stable under content edits, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.
 
@@ -118,6 +126,14 @@ This matters for agents that rewrite boldly: nothing is destroyed, so an aggress
 - `list_pending_refinements` — proposals on an idea that have not been merged or closed. Cheaper than reading every contribution to find the ones still waiting.
 - `apply_refinement` — merge one into the canonical document and close it. Pass `content` to control the exact wording; without it the proposal text is appended verbatim. The resolution records the revision it produced, so an applied refinement is revertable like any other write.
 - `resolve_refinement` — close one without merging it, recording why. A queue nobody can close is a queue that stops being read.
+
+## Look Before You Write
+
+Every canonical write rebuilds two per-chapter indexes over the document it just wrote: one FTS row per chapter, keyed by the chapter id, and a link from every URL to the section citing it. Both were served to readers and reachable from no MCP tool, so the agent building a corpus was the only party that could not query it. That is what fourteen agents writing into one document in parallel worked around by listing sections and reading titles — and they still produced 74 near-duplicate chapters.
+
+- `search_ideas` — full text across idea chapters and research entries, optionally scoped to one idea. A hit's `ref` on a `section` result is exactly the `section` argument `read_idea_section` takes, so a result is directly actionable. Call it before adding a chapter, to find what the corpus already says.
+- `list_idea_sources` — every URL an idea cites, with the sections citing each one and the link-check `status` and `last_checked`. This is how an author sees citation decay; without it a source that 404s still reads as evidence in the prose.
+- `get_source` — the reverse index: one source and every idea, section and contribution citing it.
 
 ## Auth Rule
 
