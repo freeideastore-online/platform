@@ -86,6 +86,44 @@ This gate exists because splitting on `##` alone produced chapters that were not
 
 An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.
 
+## The Chapter Heading Contract
+
+**`#` and `##` both create sibling chapters. `###` does not.**
+
+`sectionRanges()` in `packages/worker/src/markdown.ts` is the single place this rule lives. Chapter listing, section editing and the idea page's lead-in all build on it, so nothing may re-derive "where a chapter starts" with a regex of its own.
+
+The single exception is a `#` that is the very first thing in the document — before any other heading and before any non-blank content — whose slug equals the slug of the idea's own title. That one is the document title, already rendered as the page's `<h1>`, and it is skipped. **Every other `#` becomes a chapter, a peer of every `##`**, including:
+
+- a leading `#` whose text differs from the idea's title,
+- a `#` that repeats the title but appears later in the document,
+- a leading `#` in a document with no title to compare against.
+
+Two published documents have exactly the first case, and their first chapter *is* that `#`. Any change that stops a non-title `#` being a chapter is a URL-breaking migration for them, not a no-op.
+
+The heading level is read and then discarded: `headingTag()` renders `#` and `##` identically as `<h2>`, and `ideaChapters()` re-emits every chapter as `## Title` whatever level it was written at. That is why `read_idea_section` on a `#`-headed chapter hands back a `##` heading.
+
+The line is trimmed before matching, so **leading whitespace does not protect a heading**: `  ## Heading` and a tab-indented heading are both chapters. Nothing here is fence-aware either — a `## Heading` line inside a fenced code block splits the chapter.
+
+Depth below chapter level belongs in `###` and deeper, which render as in-page anchors rather than URLs. All of this is pinned by tests in `packages/worker/src/markdown.test.ts` under `the chapter heading contract`.
+
+### Writing A Whole File As One Chapter
+
+Because both `#` and `##` split, feeding a research file straight into `patch_idea_section` shatters it: a migration that intended 15 chapters produced 74, and one 1,351-word file became nine chapters. Demoting only the `##` headings — the workaround four separate agents converged on — is wrong by half, since every `#` still splits.
+
+The section-write tools (`add_idea_section`, `patch_idea_section`, `append_to_idea_section`) take `demote_headings: true` for this. It shifts every heading in `content` uniformly, by whatever the **shallowest** heading present requires:
+
+| Shallowest heading in `content` | Shift | Result |
+| --- | --- | --- |
+| `#` | two levels | `#`→`###`, `##`→`####`, `###`→`#####` |
+| `##` | one level | `##`→`###`, `###`→`####` |
+| `###` or deeper | none | returned untouched |
+
+The uniform shift keeps the source document's own hierarchy intact. Nothing is pushed past `######`, the deepest heading CommonMark has. The flag is a no-op on content that was already safe, so a bulk migration can set it unconditionally.
+
+Demotion moves exactly the lines `sectionRanges()` would split on — indented headings and headings inside fenced code blocks included. Leaving those behind would leave the chapter split, so the "one chapter" guarantee would not be one.
+
+`markdownHeadings()`, which builds a chapter's in-page table of contents, matches `#{1,6}` for this reason: it has to span every level a demotion can produce, or a demoted file renders correctly and silently loses its navigation. Matching what the renderer emits is also the only range that cannot drift out of agreement with it — `headingTag()` renders and anchors every heading level.
+
 ## What The Idea Page Itself Renders
 
 A **single-page** idea renders its whole body inline, with an in-page table of contents.
@@ -108,7 +146,7 @@ Search links straight to `#contribution-<id>`, which may be on a later page. Whe
 
 ## Publishing Model
 
-The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits `##` headings into chapter URLs, and keeps `###` headings as sub-sections inside the chapter.
+The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits `#` and `##` headings into chapter URLs (see The Chapter Heading Contract above), and keeps `###` and deeper as sub-sections inside the chapter.
 
 FreeIdeaStore does not create per-idea GitHub docs, Zensical projects, generated static publication assets, or fallback static pages for free ideas.
 

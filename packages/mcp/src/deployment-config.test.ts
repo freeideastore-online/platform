@@ -56,4 +56,28 @@ describe("MCP deployment config", () => {
     expect(`${skillTools}${publishingTools}${collaborationTools}`).not.toContain(["dry_run", "proidea_book_export"].join("_"));
     expect(`${skillTools}${publishingTools}${collaborationTools}`).not.toContain("idea-books/${slug}");
   });
+
+  /**
+   * #48. The three tools that write markdown into a section used to say only
+   * "Do not repeat the section heading", which warns about ONE heading and is
+   * silent about every other. Four agents independently concluded the store
+   * splits on `##` — wrong by half, because a non-title `#` splits too — and a
+   * migration that intended 15 chapters produced 74.
+   */
+  it("states the chapter heading contract on every section-write tool", () => {
+    // The contract itself, and the escape hatch, stated once and shared.
+    expect(publishingTools).toContain("`#` AND `##` both create sibling chapters");
+    expect(publishingTools).toContain("`###` and deeper stay inside the chapter");
+    expect(publishingTools).toContain("set demote_headings: true");
+
+    // Each of the three `content` fields carries it, and each tool declares the
+    // flag and forwards it to the API — a flag the schema advertises and the
+    // request body drops is worse than no flag.
+    const contentFields = publishingTools.match(/content: z\.string\(\)[^\n]*HEADING_CONTRACT/g) || [];
+    expect(contentFields).toHaveLength(3);
+    const declared = publishingTools.match(/demote_headings: z\.boolean\(\)\.optional\(\)/g) || [];
+    expect(declared).toHaveLength(3);
+    const forwarded = publishingTools.match(/demote_headings: input\.demote_headings/g) || [];
+    expect(forwarded).toHaveLength(3);
+  });
 });

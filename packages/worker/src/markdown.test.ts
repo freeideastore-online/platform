@@ -4,6 +4,7 @@ import {
   chapterHealth,
   CHAPTER_SIZE,
   defaultIdeaBody,
+  demoteHeadings,
   ideaChapterById,
   ideaChapters,
   ideaPreamble,
@@ -326,6 +327,300 @@ describe('ideaChapters', () => {
     expect(chapters[0]?.excerpt).toContain('StudentRide');
     expect(chapters[0]?.excerpt).not.toContain('**');
     expect(chapters[0]?.excerpt).not.toContain('](https://');
+  });
+});
+
+/**
+ * THE CHAPTER HEADING CONTRACT, pinned.
+ *
+ * `sectionRanges()` is the single place the rule lives, and until #48 the rule
+ * was undocumented and untested: no test asserted what a NON-title `#` does,
+ * even though two published documents have one as their first chapter. Four
+ * separate agents inferred "the store splits on `##`", which is wrong by half,
+ * and a migration that intended 15 chapters produced 74.
+ *
+ * These are behaviour assertions, not aspirations. Nothing here may be
+ * "corrected" without accepting that it moves live chapter URLs.
+ */
+describe('the chapter heading contract', () => {
+  const titles = (markdown: string, documentTitle = '') =>
+    ideaChapters(markdown, documentTitle).map((chapter) => chapter.title);
+
+  it('makes a chapter of a non-title `#`, as a peer of every `##`', () => {
+    const markdown = [
+      '# A Source File Title',
+      'Its opening paragraph.',
+      '',
+      '## Bottom line',
+      'The finding.',
+    ].join('\n');
+
+    expect(titles(markdown, 'Something Else Entirely')).toEqual([
+      'A Source File Title',
+      'Bottom line',
+    ]);
+  });
+
+  it('makes a chapter of a `#` that repeats the title but is not first', () => {
+    const markdown = [
+      '## Snapshot',
+      'The short version.',
+      '',
+      '# Deep Idea',
+      'A second pass over the same ground.',
+    ].join('\n');
+
+    // The skip is positional as well as textual: only the FIRST heading can be
+    // the document title.
+    expect(titles(markdown, 'Deep Idea')).toEqual(['Snapshot', 'Deep Idea']);
+  });
+
+  it('makes a chapter of a leading `#` when non-blank content precedes it', () => {
+    const markdown = ['> Status: scan complete.', '', '# Deep Idea', 'Body.'].join('\n');
+
+    expect(titles(markdown, 'Deep Idea')).toEqual(['Deep Idea']);
+    // ...and the lead-in above it stays lead-in, so nothing is published twice.
+    expect(ideaPreamble(markdown, 'Deep Idea')).toBe('> Status: scan complete.');
+  });
+
+  it('skips a leading `#` only when its slug is the document title', () => {
+    const markdown = ['# Deep Idea', '', '## Snapshot', 'Body.'].join('\n');
+
+    expect(titles(markdown, 'Deep Idea')).toEqual(['Snapshot']);
+    // Slug equality, not string equality — punctuation and case do not matter.
+    expect(titles(markdown, 'Deep  IDEA!')).toEqual(['Snapshot']);
+    // Any other title, or no title at all, and the same line is a chapter.
+    expect(titles(markdown, 'Another Idea')).toEqual(['Deep Idea', 'Snapshot']);
+    expect(titles(markdown)).toEqual(['Deep Idea', 'Snapshot']);
+  });
+
+  it('keeps `###` and deeper inside the chapter above', () => {
+    const markdown = [
+      '## Research',
+      'First finding.',
+      '',
+      '### Sources',
+      'Where it came from.',
+      '',
+      '#### Method',
+      'How it was gathered.',
+    ].join('\n');
+
+    expect(titles(markdown)).toEqual(['Research']);
+    expect(ideaChapters(markdown)[0]?.markdown).toContain('### Sources');
+    expect(ideaChapters(markdown)[0]?.markdown).toContain('#### Method');
+  });
+
+  it('does not let indentation protect a heading from becoming a chapter', () => {
+    const markdown = [
+      '## Plain',
+      'Body.',
+      '',
+      '  ## Two spaces',
+      'Body.',
+      '',
+      '\t## One tab',
+      'Body.',
+      '',
+      '   # One hash, indented',
+      'Body.',
+    ].join('\n');
+
+    // The line is `.trim()`ed before matching, so all four are chapters.
+    expect(titles(markdown, 'Plain')).toEqual([
+      'Plain',
+      'Two spaces',
+      'One tab',
+      'One hash, indented',
+    ]);
+  });
+
+  it('splits on a heading inside a fenced code block, because it scans lines', () => {
+    const markdown = ['## Snapshot', 'Body.', '', '```', '## Not really a heading', '```'].join('\n');
+
+    // Deliberate: `sectionRanges()` knows nothing about fences. This is why
+    // `demoteHeadings()` moves fenced heading lines too — leaving them behind
+    // would leave the chapter split.
+    expect(titles(markdown)).toEqual(['Snapshot', 'Not really a heading']);
+  });
+
+  /**
+   * The two published documents whose FIRST CHAPTER is a non-title `#`, read
+   * off `GET /api/ideas/<id>/sections` on 2026-08-14. #48's acceptance
+   * criterion is that their chapter set does not change, so the exact heading
+   * and title pairs are pinned here rather than described in prose.
+   */
+  it('keeps the first chapter of the two live `#`-headed documents', () => {
+    const requirementsBase = ideaChapters(
+      [
+        '# RequirementsBase — Competitive Market Research (GRC / compliance-automation / control-mapping)',
+        'Body.',
+        '',
+        '## The core finding',
+        'Body.',
+      ].join('\n'),
+      'RequirementsBase — MCP-native regulatory gap-analysis agent',
+    );
+
+    expect(requirementsBase.map((chapter) => chapter.id)).toEqual([
+      'requirementsbase-competitive-market-research-grc-compliance-auto',
+      'the-core-finding',
+    ]);
+
+    const tekToEsg = ideaChapters(
+      ['# TEK-to-ESG Translator', 'Body.', '', '## The problem', 'Body.'].join('\n'),
+      'TEK-to-ESG Translator — Indigenous-Governed Platform for Turning Traditional Knowledge into Corporate Disclosure',
+    );
+
+    expect(tekToEsg.map((chapter) => chapter.id)).toEqual(['tek-to-esg-translator', 'the-problem']);
+  });
+});
+
+describe('markdownHeadings', () => {
+  it('lists every heading the renderer emits, `####` and deeper included', () => {
+    const source = [
+      '# One',
+      '',
+      '## Two',
+      '',
+      '### Three',
+      '',
+      '#### Four',
+      '',
+      '##### Five',
+      '',
+      '###### Six',
+    ].join('\n');
+    const html = markdownToHtml(source);
+
+    expect(markdownHeadings(source).map((heading) => heading.title)).toEqual([
+      'One',
+      'Two',
+      'Three',
+      'Four',
+      'Five',
+      'Six',
+    ]);
+    // Anything on the page carrying an anchor has to be reachable from the
+    // table of contents beside it. A heading that renders but never navigates
+    // is the bug in #75, and demotion is what makes it common.
+    for (const heading of markdownHeadings(source)) {
+      expect(html).toContain(`id="${heading.id}"`);
+    }
+  });
+
+  it('does not invent a heading out of seven hashes', () => {
+    // CommonMark stops at h6, so the table of contents has to as well.
+    expect(markdownHeadings('####### Not a heading')).toEqual([]);
+    expect(markdownToHtml('####### Not a heading')).not.toContain('<h');
+  });
+});
+
+describe('demoteHeadings', () => {
+  const sourceFile = [
+    '# Precedent hunt: shared support vans',
+    'Opening paragraph.',
+    '',
+    '## Bottom line',
+    'The finding.',
+    '',
+    '### Closest things on earth',
+    'Two of them.',
+  ].join('\n');
+
+  it('shifts a `#`-topped file by two levels, because one is not enough', () => {
+    // A one-level shift is the workaround four agents converged on in #48. It
+    // leaves the `#` at `##` — still a chapter — so it fixes nothing.
+    expect(demoteHeadings(sourceFile).split('\n')).toEqual([
+      '### Precedent hunt: shared support vans',
+      'Opening paragraph.',
+      '',
+      '#### Bottom line',
+      'The finding.',
+      '',
+      '##### Closest things on earth',
+      'Two of them.',
+    ]);
+  });
+
+  it('shifts a `##`-topped file by one, taking the shift from the shallowest', () => {
+    const demoted = demoteHeadings(['## Bottom line', 'x', '', '### Detail', 'y'].join('\n'));
+
+    // Whole lines, not `toContain`: `'#### Bottom line'` CONTAINS
+    // `'### Bottom line'`, so a substring assertion here would pass under an
+    // over-shift and prove nothing.
+    expect(demoted.split('\n')).toEqual(['### Bottom line', 'x', '', '#### Detail', 'y']);
+  });
+
+  it('turns a file that would shatter into siblings into one chapter', () => {
+    const doc = ['## Precedent hunt', 'Placeholder.', '', '## Next section', 'Body.'].join('\n');
+
+    const shattered = replaceIdeaSection(doc, 'precedent-hunt', sourceFile);
+    expect(ideaSectionList(String(shattered)).map((section) => section.id)).toEqual([
+      'precedent-hunt',
+      'precedent-hunt-shared-support-vans',
+      'bottom-line',
+      'next-section',
+    ]);
+
+    const single = replaceIdeaSection(doc, 'precedent-hunt', demoteHeadings(sourceFile));
+    expect(ideaSectionList(String(single)).map((section) => section.id)).toEqual([
+      'precedent-hunt',
+      'next-section',
+    ]);
+    // Nothing was dropped — it all moved below the chapter line. Whole lines,
+    // since `'#### X'` contains `'### X'`.
+    const lines = String(single).split('\n');
+    expect(lines).toContain('### Precedent hunt: shared support vans');
+    expect(lines).toContain('#### Bottom line');
+    expect(lines).toContain('##### Closest things on earth');
+  });
+
+  it('keeps every level a demotion produces in the in-page table of contents', () => {
+    // This is the whole reason `markdownHeadings()` spans `#{1,6}`. At `#{1,3}`
+    // only the first of these survives; at `#{1,4}` only the first two.
+    expect(markdownHeadings(demoteHeadings(sourceFile)).map((heading) => heading.title)).toEqual([
+      'Precedent hunt: shared support vans',
+      'Bottom line',
+      'Closest things on earth',
+    ]);
+  });
+
+  it('leaves content that is already below chapter level untouched', () => {
+    const safe = ['### Method', 'How.', '', '#### Detail', 'More.'].join('\n');
+
+    // The flag is a no-op on content that could not have split anything, so a
+    // caller can set it unconditionally on a bulk migration.
+    expect(demoteHeadings(safe)).toBe(safe);
+  });
+
+  it('leaves content with no headings untouched, byte for byte', () => {
+    // Byte for byte, CRLF included: the early return is what stops a rewrite
+    // that has nothing to rewrite from silently re-joining the document on LF.
+    const plain = 'Just a paragraph.\r\n\r\nAnd another.';
+
+    expect(demoteHeadings(plain)).toBe(plain);
+  });
+
+  it('stops at `######`, which is the deepest heading there is', () => {
+    const demoted = demoteHeadings(['# Top', '', '##### Deep', '', '###### Deeper'].join('\n'));
+
+    expect(demoted).toContain('### Top');
+    // 5 + 2 and 6 + 2 both clamp: `#######` renders as a paragraph, so pushing
+    // past six would delete a heading rather than demote it.
+    expect(demoted.split('\n')[2]).toBe('###### Deep');
+    expect(demoted.split('\n')[4]).toBe('###### Deeper');
+    expect(demoted).not.toMatch(/^#{7}/m);
+  });
+
+  it('moves the same lines the chapter parser splits on, indentation and fences included', () => {
+    const demoted = demoteHeadings(
+      ['  ## Indented', '', '```', '## Inside a fence', '```'].join('\n'),
+    );
+
+    // Both are chapters to `sectionRanges()`, so both have to move or the "one
+    // chapter" guarantee is not a guarantee. Indentation is preserved.
+    expect(demoted).toBe(['  ### Indented', '', '```', '### Inside a fence', '```'].join('\n'));
   });
 });
 

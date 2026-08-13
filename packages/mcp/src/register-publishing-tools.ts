@@ -3,6 +3,18 @@ import { z } from "zod";
 import { fisApi } from "./fis-api.js";
 import { STAGES, text, type Env, type McpProps } from "./mcp-types.js";
 
+/**
+ * The chapter contract, stated on every tool that writes markdown into a
+ * section. Callers previously read only "do not repeat the section heading",
+ * which warns about ONE heading and says nothing about the rest — a migration
+ * that intended 15 chapters produced 74 (#48).
+ */
+const HEADING_CONTRACT =
+  "Headings: `#` AND `##` both create sibling chapters, so every one of them splits this content into a separate chapter with its own URL. `###` and deeper stay inside the chapter as in-page anchors. Do not repeat the section heading. To write a whole source file as ONE chapter, set demote_headings: true rather than re-levelling by hand.";
+
+const DEMOTE_HEADINGS =
+  "Shift every heading in `content` below chapter level so the whole block lands as ONE chapter instead of splitting into siblings. The shift is uniform and taken from the shallowest heading present: a `#`-topped file moves two levels (`#`→`###`, `##`→`####`, `###`→`#####`), a `##`-topped file one (`##`→`###`). Content already topped at `###` is untouched. Nothing is pushed past `######`. Off by default.";
+
 export function registerPublishingTools(server: McpServer, env: Env, getProps: () => McpProps) {
   server.tool(
     "publish_idea_update",
@@ -175,7 +187,8 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     {
       idea_id: z.string().min(2),
       section: z.string().min(1).describe("Section id from list_idea_sections."),
-      content: z.string().min(1).max(200000).describe("Replacement markdown for the section body. Do not repeat the section heading."),
+      content: z.string().min(1).max(200000).describe(`Replacement markdown for the section body. ${HEADING_CONTRACT}`),
+      demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
     },
     async (input) => {
       const props = getProps();
@@ -185,7 +198,11 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       const res = await fisApi<Record<string, unknown>>(
         env,
         `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
-        { method: "PUT", body: JSON.stringify({ content: input.content }), token: props.token },
+        {
+          method: "PUT",
+          body: JSON.stringify({ content: input.content, demote_headings: input.demote_headings }),
+          token: props.token,
+        },
       );
       if (!res.ok || "error" in res.data) {
         return text(`Error patching section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -200,7 +217,8 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     {
       idea_id: z.string().min(2),
       section: z.string().min(1).describe("Section id from list_idea_sections."),
-      content: z.string().min(1).max(200000).describe("Markdown to append to the section body."),
+      content: z.string().min(1).max(200000).describe(`Markdown to append to the section body. ${HEADING_CONTRACT}`),
+      demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
     },
     async (input) => {
       const props = getProps();
@@ -210,7 +228,11 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       const res = await fisApi<Record<string, unknown>>(
         env,
         `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
-        { method: "POST", body: JSON.stringify({ content: input.content }), token: props.token },
+        {
+          method: "POST",
+          body: JSON.stringify({ content: input.content, demote_headings: input.demote_headings }),
+          token: props.token,
+        },
       );
       if (!res.ok || "error" in res.data) {
         return text(`Error appending to section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
@@ -398,9 +420,10 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     {
       idea_id: z.string().min(2),
       title: z.string().min(1).max(120),
-      content: z.string().max(200000).optional(),
+      content: z.string().max(200000).optional().describe(`Markdown for the new section's body. ${HEADING_CONTRACT}`),
       after: z.string().optional().describe("Section id to insert after. Defaults to the end of the document."),
       before: z.string().optional().describe("Section id to insert before."),
+      demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
     },
     async (input) => {
       const props = getProps();
@@ -410,7 +433,13 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         `/api/ideas/${encodeURIComponent(input.idea_id)}/sections`,
         {
           method: "POST",
-          body: JSON.stringify({ title: input.title, content: input.content, after: input.after, before: input.before }),
+          body: JSON.stringify({
+            title: input.title,
+            content: input.content,
+            after: input.after,
+            before: input.before,
+            demote_headings: input.demote_headings,
+          }),
           token: props.token,
         },
       );
