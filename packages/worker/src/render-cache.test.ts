@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createIdea, deleteIdea, deriveIdea, updateIdea, updateIdeaSection } from './api-idea-mutations';
+import { mintSession } from './session';
 import type { Env } from './types';
+
+const SIGNING_KEY = 'test-signing-key';
 
 /**
  * `render_key` is gone — these tests are the reason it stays gone.
@@ -86,6 +89,22 @@ const IDEA = {
 const PROFILE = { id: 'profile-serge-the-dev', handle: 'serge-the-dev', display_name: 'Serge The Dev' };
 
 /**
+ * The row a session resolves to. Since #38 this is the only thing that can make
+ * a request authenticated: there is no longer a path where a handle arrives
+ * from outside FIS with no identity row behind it.
+ */
+const IDENTITY = {
+  id: 'identity-serge',
+  provider: 'github',
+  provider_user_id: '42',
+  handle: 'serge-the-dev',
+  display_name: 'Serge The Dev',
+  avatar_url: null,
+  created_at: '2026-06-10 00:00:00',
+  updated_at: '2026-06-10 00:00:00',
+};
+
+/**
  * Records every statement the write path prepares and answers only the reads a
  * mutation needs. Everything else returns empty, which is enough: the
  * post-commit reindex is guarded and a stale index is not what is under test.
@@ -99,6 +118,8 @@ class RecordingD1 {
       handler.first = () => ({ ...IDEA });
     } else if (sql.includes('FROM profiles p') && sql.includes('WHERE p.handle = ?')) {
       handler.first = () => ({ ...PROFILE });
+    } else if (sql.includes('SELECT * FROM identities WHERE id = ?')) {
+      handler.first = () => ({ ...IDENTITY });
     }
     return new Statement(this, sql, handler);
   }
@@ -146,7 +167,7 @@ class RecordingR2 {
 function fakeEnv() {
   const DB = new RecordingD1();
   const IDEA_BUCKET = new RecordingR2();
-  return { DB, IDEA_BUCKET, env: { DB, IDEA_BUCKET } as unknown as Env };
+  return { DB, IDEA_BUCKET, env: { DB, IDEA_BUCKET, SESSION_SIGNING_KEY: SIGNING_KEY } as unknown as Env };
 }
 
 function post(url: string, body: unknown, headers: Record<string, string> = {}) {
@@ -157,19 +178,8 @@ function post(url: string, body: unknown, headers: Record<string, string> = {}) 
   });
 }
 
-function signedIn() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          user: { handle: 'serge-the-dev', displayName: 'Serge The Dev', provider: 'github', avatarUrl: null },
-        }),
-        { headers: { 'content-type': 'application/json' } },
-      ),
-    ),
-  );
-  return { Authorization: 'Bearer test-session-token' };
+async function signedIn() {
+  return { Authorization: `Bearer ${await mintSession('identity-serge', SIGNING_KEY)}` };
 }
 
 afterEach(() => {
@@ -221,7 +231,7 @@ describe('render_key is gone from the write paths (#70)', () => {
 
   it('a section write invalidates nothing — there is no cache to invalidate', async () => {
     const { DB, IDEA_BUCKET, env } = fakeEnv();
-    const headers = signedIn();
+    const headers = await signedIn();
     const response = await updateIdeaSection(
       post('https://fis.test/api/ideas/asx-filings-analyst/sections/risk', { content: 'Licensing exposure.' }, headers),
       env,
@@ -241,7 +251,7 @@ describe('render_key is gone from the write paths (#70)', () => {
 
   it('publishing a whole document invalidates nothing', async () => {
     const { DB, IDEA_BUCKET, env } = fakeEnv();
-    const headers = signedIn();
+    const headers = await signedIn();
     const response = await updateIdea(
       post('https://fis.test/api/ideas/asx-filings-analyst', { body: '## Snapshot\nRewritten in full.\n' }, headers),
       env,
@@ -257,7 +267,7 @@ describe('render_key is gone from the write paths (#70)', () => {
 
   it('deleting an idea removes the body object and nothing else', async () => {
     const { IDEA_BUCKET, env } = fakeEnv();
-    const headers = signedIn();
+    const headers = await signedIn();
     const response = await deleteIdea(
       post('https://fis.test/api/ideas/asx-filings-analyst/delete', { confirmTitle: IDEA.title }, headers),
       env,
@@ -270,7 +280,7 @@ describe('render_key is gone from the write paths (#70)', () => {
 
   it('no statement or object any write path touches names a render key', async () => {
     const { DB, IDEA_BUCKET, env } = fakeEnv();
-    const headers = signedIn();
+    const headers = await signedIn();
     await createIdea(
       post('https://fis.test/api/ideas', {
         title: 'Trace Sweep',

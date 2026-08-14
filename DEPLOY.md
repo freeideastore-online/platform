@@ -86,6 +86,8 @@ Those two are the deploy credentials. Sign-in needs a separate set, held as **Cl
 
 The matching client ids are **not** secrets — they travel in every authorize redirect — so they live in version control as `[vars]` in `packages/worker/wrangler.toml`, where a reader can see what the deployed Worker is actually using.
 
+All three are **required**, not optional. Until [#38](https://github.com/freeideastore-online/platform/issues/38) a Worker missing any of them still signed people in, by redirecting to FreeAppStore; that fallback is deleted, so a deploy without them answers 503 `sign-in is not configured` at `/.fis/auth/start` and identifies nobody. `SESSION_SIGNING_KEY` is correspondingly a required field of `Env`. Deploy them before the Worker, in the same way CI applies D1 migrations before deploying.
+
 All three are managed from `~/dev/ops` and recorded under the `fis:` section of `inventory.yaml`:
 
 ```bash

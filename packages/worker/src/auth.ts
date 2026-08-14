@@ -1,5 +1,5 @@
 import { json, slug, SECURITY_HEADERS } from './http';
-import type { AuthUser, Env } from './types';
+import type { Env } from './types';
 import { mintSession, SESSION_TTL_SECONDS, verifySession } from './session';
 import { authUserFromIdentity, identityById, upsertIdentity } from './identities';
 import {
@@ -13,11 +13,6 @@ import {
 export const AUTH_PREFIX = '/.fis/auth';
 const SESSION_COOKIE_NAME = '__Host-fis_session';
 const NONCE_COOKIE_NAME = '__Host-fis_auth_nonce';
-// FreeAppStore fallback. FIS used to have no identity of its own and borrowed
-// this one wholesale; it stays only so sessions issued before the cutover keep
-// working, and #38 deletes it. Nothing new should route through here.
-const AUTH_API_BASE = 'https://api.freeappstore.online';
-const AUTH_APP_ID = 'freeideastore';
 const NONCE_TTL_SECONDS = 10 * 60;
 const AUTH_PROVIDERS = new Set(['github', 'google']);
 
@@ -28,8 +23,8 @@ const AUTH_PROVIDERS = new Set(['github', 'google']);
 // the site, so the `__Host-` cookie this file sets can never reach it — and a
 // cookie is the only channel a browser offers apart from the URL itself. That
 // leaves the redirect URL as the sole way to hand the MCP OAuth flow the session
-// it just earned. FreeAppStore used to perform exactly this handoff for us
-// (`response_mode=query` + `fas_session`); it now stays inside FIS (#37).
+// it just earned. The external auth service FIS used before #39 performed this
+// handoff on its behalf; it now stays inside FIS (#37).
 //
 // A token in a URL is normally a mistake — URLs reach browser history, Referer
 // headers and access logs. It is an acceptable tradeoff only because all three
@@ -50,12 +45,17 @@ function credentialsFor(env: Env, provider: ProviderId): ProviderCredentials | n
 }
 
 /**
- * FIS can only run its own flow once it has both halves of a provider client and
- * a key to sign sessions with. Where it cannot, sign-in falls back to the
- * FreeAppStore path rather than failing — which is what keeps a half-configured
- * deploy from locking everyone out.
+ * FIS can only sign anyone in once it has both halves of a provider client and a
+ * key to sign sessions with. There is no longer a second path: until #38 a
+ * half-configured deploy silently fell back to the external auth service FIS was
+ * built on, and that fallback is what this returning null now refuses to do.
+ *
+ * `SESSION_SIGNING_KEY` is typed as required, so the check reads as redundant.
+ * It is not — a Worker secret that was never placed arrives as `undefined` at
+ * runtime whatever the type says, and minting a session with an empty key would
+ * make every signature forgeable by anyone who guessed the key was empty.
  */
-function nativeCredentials(env: Env, provider: ProviderId): ProviderCredentials | null {
+function signInCredentials(env: Env, provider: ProviderId): ProviderCredentials | null {
   return env.SESSION_SIGNING_KEY ? credentialsFor(env, provider) : null;
 }
 
@@ -163,61 +163,40 @@ export function isSameOriginMutation(request: Request) {
   return true;
 }
 
-function normalizeAuthUser(payload: unknown): AuthUser | null {
-  const data = (payload || {}) as Record<string, unknown>;
-  const user = ((data.user || data.profile || data.account || data) || {}) as Record<string, unknown>;
-  const email = String(user.email || '');
-  const rawHandle = String(user.handle || user.login || user.username || email.split('@')[0] || user.name || '');
-  const handle = slug(rawHandle);
-  if (!handle) return null;
-  return {
-    handle,
-    displayName: String(user.displayName || user.display_name || user.name || rawHandle).trim() || handle,
-    provider: String(user.provider || data.provider || 'auth'),
-    avatarUrl: String(user.avatarUrl || user.avatar_url || user.picture || '').trim() || null,
-  };
-}
-
-async function fetchAuthPayload(token: string) {
-  const response = await fetch(`${AUTH_API_BASE}/v1/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const text = await response.text();
-  let body: unknown = text;
-  try {
-    body = text ? JSON.parse(text) : {};
-  } catch {
-    body = { error: text };
-  }
-  return { response, body };
-}
-
 function authTokenFor(request: Request) {
   const authorization = request.headers.get('Authorization') || '';
   if (authorization.toLowerCase().startsWith('bearer ')) return authorization.slice(7).trim();
   return readCookie(request.headers.get('Cookie'), SESSION_COOKIE_NAME);
 }
 
+/**
+ * Who is making this request, from FIS's own records and nothing else.
+ *
+ * A session is FIS-signed or it is nobody. Until #38 this function fell through
+ * to another store's `/v1/auth/me` for any token that failed the local check,
+ * and built a handle by slugging whatever login came back — with no `identities`
+ * row anywhere in it. That is the second half of the #42 takeover: the
+ * reservation rule in `availableHandle`, the `claim_email` binding and the
+ * two-table probe all sit on the identity path, and none of them were consulted
+ * on the fallback, so a foreign account whose login slugged to `simon` resolved
+ * to `profile-simon` and passed `ownedIdea` on that contributor's ideas.
+ *
+ * Everything that authorizes now hangs off a row this store wrote:
+ * signature -> `identities.id` -> `identities.handle`. There is no longer any
+ * way for a handle to enter the system except through `upsertIdentity`, which is
+ * where all the guards live.
+ *
+ * Verification is local, so this makes no network call — see the test that
+ * asserts exactly that. It is also the latency win #38 promised: an outbound
+ * HTTPS round trip on every signed-in page render is gone.
+ */
 export async function authUserFor(request: Request, env?: Env) {
   const token = authTokenFor(request);
-  if (!token) return null;
-  // FIS-issued sessions verify locally — no network call, and no dependency on
-  // another store being reachable. Tokens minted before the cutover fail this
-  // check harmlessly and fall through to the FreeAppStore path below.
-  if (env?.SESSION_SIGNING_KEY) {
-    const payload = await verifySession(token, env.SESSION_SIGNING_KEY);
-    if (payload) {
-      const identity = await identityById(env, payload.uid);
-      return identity ? authUserFromIdentity(identity) : null;
-    }
-  }
-  try {
-    const { response, body } = await fetchAuthPayload(token);
-    if (!response.ok) return null;
-    return normalizeAuthUser(body);
-  } catch {
-    return null;
-  }
+  if (!token || !env?.SESSION_SIGNING_KEY) return null;
+  const payload = await verifySession(token, env.SESSION_SIGNING_KEY);
+  if (!payload) return null;
+  const identity = await identityById(env, payload.uid);
+  return identity ? authUserFromIdentity(identity) : null;
 }
 
 export function hasBearerAuth(request: Request) {
@@ -299,31 +278,22 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     const returnTarget = handoff ? handoff.toString() : sameOriginPath(url, requestedReturn || '/console/');
     const nonce = crypto.randomUUID();
 
-    const credentials = env && isProviderId(provider) ? nativeCredentials(env, provider) : null;
-    if (credentials && isProviderId(provider)) {
-      // The return target rides in the cookie, not the redirect URI, which has
-      // to match the provider's registration exactly.
-      return redirect(
-        authorizeUrl(provider, credentials, callbackUri(url, provider), nonce),
-        302,
-        [cookie(NONCE_COOKIE_NAME, `${nonce}|${returnTarget}`, NONCE_TTL_SECONDS)],
-      );
+    const credentials = env && isProviderId(provider) ? signInCredentials(env, provider) : null;
+    // A deploy missing either half of a provider client, or the signing key,
+    // cannot sign anyone in. It used to hand the flow to another store instead;
+    // that redirect is what #38 deletes, so the only remaining answer is to
+    // refuse. Failing loudly beats re-creating the cross-store coupling that
+    // broke MCP sign-in in #34.
+    if (!credentials || !isProviderId(provider)) {
+      return new Response('sign-in is not configured', { status: 503, headers: SECURITY_HEADERS });
     }
-
-    // Only the FIS-owned flow can honour a handoff. The FreeAppStore fallback
-    // hands back a FreeAppStore-signed token, and passing one of those to
-    // another FIS worker to verify is the exact cross-store key coupling that
-    // broke MCP sign-in in #34. Failing loudly beats re-creating that bug.
-    if (handoff) return new Response('sign-in is not configured', { status: 503, headers: SECURITY_HEADERS });
-
-    const callback = new URL(`${AUTH_PREFIX}/callback`, url.origin);
-    callback.searchParams.set('return_to', returnTarget);
-    callback.searchParams.set('nonce', nonce);
-    const start = new URL(`/v1/auth/${provider}/start`, AUTH_API_BASE);
-    start.searchParams.set('app_id', AUTH_APP_ID);
-    start.searchParams.set('return_to', callback.toString());
-    start.searchParams.set('response_mode', 'query');
-    return redirect(start.toString(), 302, [cookie(NONCE_COOKIE_NAME, nonce, NONCE_TTL_SECONDS)]);
+    // The return target rides in the cookie, not the redirect URI, which has to
+    // match the provider's registration exactly.
+    return redirect(
+      authorizeUrl(provider, credentials, callbackUri(url, provider), nonce),
+      302,
+      [cookie(NONCE_COOKIE_NAME, `${nonce}|${returnTarget}`, NONCE_TTL_SECONDS)],
+    );
   }
 
   const nativeCallback = url.pathname.startsWith(`${AUTH_PREFIX}/callback/`)
@@ -332,7 +302,7 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
   if (nativeCallback !== null) {
     if (request.method !== 'GET') return methodNotAllowed('GET');
     if (!isProviderId(nativeCallback)) return new Response('unknown provider', { status: 404, headers: SECURITY_HEADERS });
-    const credentials = env ? nativeCredentials(env, nativeCallback) : null;
+    const credentials = env ? signInCredentials(env, nativeCallback) : null;
     if (!credentials || !env?.SESSION_SIGNING_KEY) {
       return new Response('sign-in is not configured', { status: 503, headers: SECURITY_HEADERS });
     }
@@ -375,21 +345,12 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     return redirect(`${url.origin}${returnPath}`, 303, cookies);
   }
 
-  if (url.pathname === `${AUTH_PREFIX}/callback`) {
-    if (request.method !== 'GET') return methodNotAllowed('GET');
-    const returnPath = sameOriginPath(url, url.searchParams.get('return_to') || '/console/');
-    const nonce = url.searchParams.get('nonce');
-    const storedNonce = readCookie(request.headers.get('Cookie'), NONCE_COOKIE_NAME);
-    if (!nonce || nonce !== storedNonce) return redirect(`${url.origin}${returnPath}#auth_error=invalid_state`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
-    const session = url.searchParams.get('session') || url.searchParams.get('fas_session');
-    if (!session) return redirect(`${url.origin}${returnPath}#auth_error=missing_session`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
-    const { response } = await fetchAuthPayload(session);
-    if (!response.ok) return redirect(`${url.origin}${returnPath}#auth_error=invalid_session`, 303, [clearCookie(NONCE_COOKIE_NAME)]);
-    return redirect(`${url.origin}${returnPath}`, 303, [
-      cookie(SESSION_COOKIE_NAME, session, SESSION_TTL_SECONDS),
-      clearCookie(NONCE_COOKIE_NAME),
-    ]);
-  }
+  // `${AUTH_PREFIX}/callback` with no provider segment was the return leg of the
+  // external flow: it took a foreign token off the query string and wrote it
+  // into the session cookie verbatim, unverified by FIS. It is deleted rather
+  // than left to 503, so the path 404s and no request can put a token this store
+  // did not sign into `__Host-fis_session` again. The provider-qualified
+  // `/callback/{github,google}` above is the only callback there is.
 
   if (url.pathname === `${AUTH_PREFIX}/me`) {
     if (request.method !== 'GET') return methodNotAllowed('GET');
@@ -397,8 +358,9 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     if (!token) return json({ error: 'not signed in' }, { status: 401 });
     const authUser = await authUserFor(request, env);
     if (authUser) return json({ user: authUser });
-    // Clear the cookie so a token that no longer resolves — expired, or issued
-    // by the old FreeAppStore path after cutover — does not keep being retried.
+    // Clear the cookie so a token that no longer resolves — expired, or one of
+    // the pre-cutover foreign tokens #38 stopped honouring — is not retried on
+    // every page load for the next 30 days.
     return json({ error: 'not signed in' }, { status: 401, headers: { 'Set-Cookie': clearCookie(SESSION_COOKIE_NAME) } });
   }
 
