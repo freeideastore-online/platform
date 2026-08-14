@@ -3,10 +3,13 @@ export interface Env {
   ASSETS: Fetcher;
   IDEA_BUCKET?: R2Bucket;
   /**
-   * FIS's own HMAC key for signing sessions (see session.ts). Optional while the
-   * FreeAppStore path is still the live one; #38 makes it required.
+   * FIS's own HMAC key for signing sessions (see session.ts). Required since
+   * #38: it is the only thing that can establish who a caller is, so a deploy
+   * without it cannot sign anyone in at all rather than degrading to another
+   * store's answer. Code still guards against it being absent, because a Worker
+   * secret that was never placed is `undefined` whatever the type says.
    */
-  SESSION_SIGNING_KEY?: string;
+  SESSION_SIGNING_KEY: string;
   /** Public client ids — wrangler.toml vars, not secrets. */
   GH_OAUTH_CLIENT_ID?: string;
   GOOGLE_CLIENT_ID?: string;

@@ -184,8 +184,11 @@ describe('cross-origin session handoff', () => {
   });
 
   it('refuses a handoff it cannot mint for itself', async () => {
-    // Without FIS credentials the fallback would hand back a FreeAppStore-signed
-    // token, which is the cross-store coupling that broke MCP sign-in (#34).
+    // A handoff hands another Worker a token to verify, so it may only ever be
+    // a token this store signed. Before #38 a Worker without a signing key
+    // delegated the whole flow to FreeAppStore and got back a FreeAppStore-signed
+    // token — the cross-store key coupling that broke MCP sign-in (#34). Now
+    // there is nothing to delegate to and the only answer is to refuse.
     const env = { ...fakeEnv(), SESSION_SIGNING_KEY: undefined } as unknown as Env;
     const started = await start(
       `provider=github&response_mode=query&return_to=${encodeURIComponent(MCP_CALLBACK)}`,

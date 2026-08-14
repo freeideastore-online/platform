@@ -295,11 +295,13 @@ const SESSION_FAILURE_ADVICE: Record<SessionFailure, string> = {
 async function oauthCallback(request: Request, config: OAuthConfig): Promise<Response> {
   const url = new URL(request.url);
   const nonce = url.searchParams.get("nonce");
-  // `fis_session` is what the site sends. `fas_session` and `session` are the
-  // FreeAppStore-era names, kept so a sign-in already in flight across the
-  // cutover completes instead of dead-ending (#37).
-  const session =
-    url.searchParams.get("fis_session") || url.searchParams.get("fas_session") || url.searchParams.get("session");
+  // `fis_session` is the only name the site sends, and since #38 the only one
+  // accepted. The pre-cutover aliases `fas_session` and `session` existed so a
+  // sign-in already in flight on 2026-08-13 completed instead of dead-ending;
+  // the site stopped emitting them the moment the external path was deleted, and
+  // a parameter no legitimate caller can produce is only a second name for the
+  // same door.
+  const session = url.searchParams.get("fis_session");
   // The site reports its own failures here, since a cross-origin redirect cannot
   // carry a fragment back to a server.
   const siteError = url.searchParams.get("auth_error");

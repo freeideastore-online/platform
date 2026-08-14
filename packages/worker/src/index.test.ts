@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
 import { FIELD_LIMITS, MAX_REQUEST_CHARS } from './http';
 import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection } from './idea-research';
+import { mintSession } from './session';
+
+/** The key `env()` signs and verifies sessions with; nothing real uses it. */
+const TEST_SIGNING_KEY = 'test-signing-key';
 
 /**
  * Filler prose for fixtures that need to clear PUBLICATION_POLICY. Chapter
@@ -60,6 +64,23 @@ class FakeD1 {
   batches = 0;
   private readonly ideas = new Map<string, Record<string, unknown>>();
   private readonly profiles = new Map<string, Record<string, unknown>>();
+  readonly identities = new Map<string, Record<string, unknown>>([
+    [
+      'identity-serge',
+      {
+        id: 'identity-serge',
+        provider: 'github',
+        provider_user_id: '42',
+        handle: 'serge-the-dev',
+        display_name: 'Serge The Dev',
+        avatar_url: 'https://example.com/avatar.png',
+        email: 'serge@example.com',
+        email_verified: 1,
+        created_at: '2026-06-11 03:00:00',
+        updated_at: '2026-06-11 03:00:00',
+      },
+    ],
+  ]);
   private readonly contributions: Array<Record<string, unknown>> = [];
   readonly revisions: Array<Record<string, unknown>> = [];
   readonly sources: Array<Record<string, unknown>> = [];
@@ -195,6 +216,19 @@ class FakeD1 {
         run: () => {
           throw new Error(`D1 unavailable for: ${sql}`);
         },
+      });
+    }
+    // Identity rows are what authorization hangs off since #38: a session
+    // carries `identities.id`, and the handle comes from the row, never from
+    // anything the caller sent. `identities` deliberately holds one row, so a
+    // token naming any other uid resolves to nobody.
+    if (sql.includes('SELECT * FROM identities WHERE id = ?')) {
+      return new FakeStatement({ first: ([id]) => this.identities.get(String(id)) ?? null });
+    }
+    if (sql.includes('SELECT 1 FROM identities WHERE handle = ?')) {
+      return new FakeStatement({
+        first: ([handle]) =>
+          [...this.identities.values()].some((row) => row.handle === handle) ? { 1: 1 } : null,
       });
     }
     if (sql.includes('SELECT COUNT(*) AS count FROM ideas')) {
@@ -785,24 +819,19 @@ class FakeD1 {
   }
 }
 
-function mockSignedInSerge() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          user: {
-            handle: 'serge-the-dev',
-            displayName: 'Serge The Dev',
-            provider: 'github',
-            avatarUrl: 'https://example.com/avatar.png',
-          },
-        }),
-        { headers: { 'content-type': 'application/json' } },
-      ),
-    ),
-  );
-}
+/**
+ * A real FIS-signed session for `identity-serge`, which `FakeD1` resolves to the
+ * `serge-the-dev` identity row.
+ *
+ * Until #38 this file signed a request in by stubbing `globalThis.fetch` so the
+ * external `/v1/auth/me` call returned a user payload — a handle asserted by
+ * another store, with no `identities` row behind it. That path is gone, so the
+ * only way to be signed in now is to hold a token this store's key signed and an
+ * identity row it wrote. `fas-removal.test.ts` asserts that is the ONLY way.
+ */
+const SERGE_SESSION = await mintSession('identity-serge', TEST_SIGNING_KEY);
+const SERGE_BEARER = `Bearer ${SERGE_SESSION}`;
+const SERGE_COOKIE = `__Host-fis_session=${SERGE_SESSION}`;
 
 /** Minimal R2 stand-in. `failWrites` exercises the inline fallback. */
 class FakeR2 {
@@ -837,6 +866,11 @@ function env(
   return {
     DB: db,
     ASSETS: { fetch: () => Promise.resolve(assetResponse.clone()) },
+    // Sign-in is FIS's own since #38: a signing key plus a provider client is
+    // the whole configuration, and without them the worker can identify nobody.
+    SESSION_SIGNING_KEY: TEST_SIGNING_KEY,
+    GH_OAUTH_CLIENT_ID: 'gh-client-id',
+    GH_OAUTH_CLIENT_SECRET: 'gh-client-secret',
     ...(bucket ? { IDEA_BUCKET: bucket } : {}),
   } as unknown as Parameters<typeof worker.fetch>[1] & { DB: FakeD1 };
 }
@@ -919,12 +953,11 @@ describe('FreeIdeaStore worker', () => {
     // treats a `#` heading as a chapter. So this chapter was rendered inline on
     // the index AND served at its own URL: the exact duplication chapter
     // pagination exists to remove. The lead-in comes from the same parser now.
-    mockSignedInSerge();
     const testEnv = env();
     const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           body: [
             '# Opening Chapter',
@@ -1201,10 +1234,9 @@ describe('FreeIdeaStore worker', () => {
    */
   describe('metadata-only updates', () => {
     const DOCUMENT = ['## Snapshot', filler(60), '', '## Risk', filler(60)].join('\n');
-    const headers = { Authorization: 'Bearer fis-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
 
     async function seeded() {
-      mockSignedInSerge();
       const bucket = new FakeR2();
       const testEnv = env(new FakeD1(), undefined, bucket);
       await worker.fetch(
@@ -1364,12 +1396,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('patches one section and leaves the rest of the document intact', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const patch = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
         method: 'PUT',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ content: 'Rewritten snapshot only.' }),
       }),
       testEnv,
@@ -1384,12 +1415,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('appends to a section, which is how research should accumulate', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const append = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ content: 'A later finding, appended.' }),
       }),
       testEnv,
@@ -1433,14 +1463,13 @@ describe('FreeIdeaStore worker', () => {
       worker.fetch(
         new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
           method: 'PUT',
-          headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+          headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
           body: JSON.stringify(payload),
         }),
         testEnv,
       );
 
     it('shatters a source file into siblings when the flag is absent', async () => {
-      mockSignedInSerge();
       const testEnv = env();
 
       expect((await write(testEnv, { content: sourceFile })).status).toBe(200);
@@ -1449,7 +1478,6 @@ describe('FreeIdeaStore worker', () => {
     });
 
     it('writes the same file as one chapter when the flag is set', async () => {
-      mockSignedInSerge();
       const testEnv = env();
 
       expect((await write(testEnv, { content: sourceFile, demote_headings: true })).status).toBe(200);
@@ -1467,12 +1495,11 @@ describe('FreeIdeaStore worker', () => {
     });
 
     it('demotes a new section body too, not only a patched one', async () => {
-      mockSignedInSerge();
       const testEnv = env();
       const response = await worker.fetch(
         new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
           method: 'POST',
-          headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+          headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'Evidence', content: sourceFile, demote_headings: true }),
         }),
         testEnv,
@@ -1485,12 +1512,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('refuses a section write from someone who does not own the idea', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       // asx-filings-analyst is owned by profile-system, not the signed-in user.
       new Request('https://fis.test/api/ideas/asx-filings-analyst/sections/risk', {
         method: 'PUT',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ content: 'Should not be written.' }),
       }),
       env(),
@@ -1503,11 +1529,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('rejects a write to an unknown section and points at the section list', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections/not-a-section', {
         method: 'PUT',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ content: 'Nowhere to put this.' }),
       }),
       env(),
@@ -1523,7 +1548,7 @@ describe('FreeIdeaStore worker', () => {
     const create = await worker.fetch(
       new Request(`https://fis.test/api/ideas/${ideaId}/contributions`, {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           kind: 'refinement',
           section,
@@ -1539,12 +1564,11 @@ describe('FreeIdeaStore worker', () => {
   }
 
   it('adds a section the document does not have yet', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const add = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'Validation', content: 'The cheapest test.' }),
       }),
       testEnv,
@@ -1560,9 +1584,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('renames and moves a section in one call', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
         method: 'POST',
@@ -1587,9 +1610,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('merges a thin section into another and removes the source', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
         method: 'POST',
@@ -1617,9 +1639,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('deletes a section', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
         method: 'POST',
@@ -1638,8 +1659,7 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('404s a structural edit that references a section that is not there', async () => {
-    mockSignedInSerge();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
         method: 'POST',
@@ -1654,11 +1674,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('refuses a structural edit from someone who does not own the idea', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/sections', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'X', content: 'y' }),
       }),
       env(),
@@ -1668,9 +1687,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('serves a requested page of the research record', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     // Enough entries to need a second page.
     for (let index = 0; index < RESEARCH_PAGE_SIZE + 3; index += 1) {
       await worker.fetch(
@@ -1696,9 +1714,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('counts research and comments from the whole record, not the current page', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     // More research than one page holds, plus comments that must not be paged in.
     for (let index = 0; index < RESEARCH_PAGE_SIZE + 2; index += 1) {
       await worker.fetch(
@@ -1731,9 +1748,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('pages the contributions API on request but stays unpaged by default', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     for (let index = 0; index < 5; index += 1) {
       await worker.fetch(
         new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
@@ -1775,12 +1791,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('finds a claim across ideas and links to where it lives', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           kind: 'evidence',
           claim: 'ETIM is free under Open Data Commons.',
@@ -1802,9 +1817,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('indexes document sections, and drops them when the document changes', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
@@ -1829,9 +1843,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('ranks a superseded entry below the correction that replaced it', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
         method: 'POST',
@@ -1867,12 +1880,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('renders a search page with highlighted snippets', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ body: '## Snapshot\nPorcelain grouping comes from the standard.' }),
       }),
       testEnv,
@@ -1890,12 +1902,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('does not let a search query inject markup through the snippet', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ body: '## Snapshot\nA <script>alert(1)</script> in the body.' }),
       }),
       testEnv,
@@ -1908,12 +1919,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('indexes the sources a document cites, per section', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           body: [
             '## Snapshot',
@@ -1941,9 +1951,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('stops listing a source once the document stops citing it', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
@@ -1972,10 +1981,9 @@ describe('FreeIdeaStore worker', () => {
    * response to a 500 is a retry, which for a section merge is destructive.
    */
   describe('a post-commit re-index failure', () => {
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
 
     async function patchWhile(failOn: string, body: string) {
-      mockSignedInSerge();
       const db = new FakeD1();
       const testEnv = env(db);
       db.failOn = failOn;
@@ -2015,7 +2023,6 @@ describe('FreeIdeaStore worker', () => {
     });
 
     it('does not fail a section merge, whose retry would be destructive', async () => {
-      mockSignedInSerge();
       const db = new FakeD1();
       const testEnv = env(db);
       await worker.fetch(
@@ -2050,9 +2057,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('keeps a contribution citation even when the document drops the link', async () => {
-    mockSignedInSerge();
     const testEnv = env();
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
         method: 'POST',
@@ -2086,12 +2092,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('renders the sources section on the idea page', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ body: '## Snapshot\nSee https://www.iso.org/standard/63406.html' }),
       }),
       testEnv,
@@ -2156,11 +2161,10 @@ describe('FreeIdeaStore worker', () => {
     // different remedies. A document one character over the free cap fits in a
     // request comfortably, so the author must be told about the DOCUMENT budget
     // rather than being handed a transport error.
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           title: 'Over Budget',
           summary: 'A document one character past the free-tier character cap.',
@@ -2177,12 +2181,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('still treats an absent body as no fields', async () => {
-    mockSignedInSerge();
     // promote takes no fields; an empty body must not become an error.
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/promote', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token' },
+        headers: { Authorization: SERGE_BEARER },
       }),
       env(),
     );
@@ -2191,11 +2194,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('refuses a refinement targeting a section the document does not have', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         // 'design' is an aspect, not one of this document's section ids.
         body: JSON.stringify({ kind: 'refinement', section: 'design', body: 'Proposal:\nSomething.' }),
       }),
@@ -2210,11 +2212,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('still accepts a refinement with no target, to be routed at apply time', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'refinement', body: 'Proposal:\nSomething general.' }),
       }),
       env(),
@@ -2224,11 +2225,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('does not section-validate non-refinement contributions', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'evidence', section: 'design', body: 'A finding.' }),
       }),
       env(),
@@ -2238,7 +2238,6 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('surfaces queued refinements instead of leaving them invisible', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
 
@@ -2254,14 +2253,13 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('applies a refinement into its target section and ties it to a revision', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
 
     const apply = await worker.fetch(
       new Request(`https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`, {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({}),
       }),
       testEnv,
@@ -2291,14 +2289,13 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('lets the author control the merged wording', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
 
     await worker.fetch(
       new Request(`https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`, {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ mode: 'replace', content: 'Rewritten in the maintainer voice.' }),
       }),
       testEnv,
@@ -2312,11 +2309,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('refuses to apply the same refinement twice', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
     const path = `https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`;
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
 
     await worker.fetch(new Request(path, { method: 'POST', headers, body: '{}' }), testEnv);
     const second = await worker.fetch(new Request(path, { method: 'POST', headers, body: '{}' }), testEnv);
@@ -2326,11 +2322,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('closes a refinement without merging, but demands a reason', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
     const path = `https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/resolve`;
-    const headers = { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' };
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
 
     const noReason = await worker.fetch(
       new Request(path, { method: 'POST', headers, body: JSON.stringify({ status: 'rejected' }) }),
@@ -2360,12 +2355,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('stores typed research fields and renders provenance on the page', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           kind: 'evidence',
           claim: 'Porcelain is definitionally under 0.5% water absorption.',
@@ -2391,11 +2385,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('rejects a provenance or confidence value outside the vocabulary', async () => {
-    mockSignedInSerge();
     const badProvenance = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'evidence', body: 'A finding.', provenance: 'vibes' }),
       }),
       env(),
@@ -2403,7 +2396,7 @@ describe('FreeIdeaStore worker', () => {
     const badSource = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'evidence', body: 'A finding.', source_url: 'javascript:alert(1)' }),
       }),
       env(),
@@ -2416,12 +2409,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('marks a corrected entry as superseded instead of showing peers', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const first = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'evidence', claim: 'Matrixify is a direct competitor.', body: 'Initial scan.' }),
       }),
       testEnv,
@@ -2439,7 +2431,7 @@ describe('FreeIdeaStore worker', () => {
     const correction = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           kind: 'evidence',
           claim: 'Matrixify was overstated: no UI into the data.',
@@ -2461,11 +2453,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('refuses to supersede a contribution that does not exist on this idea', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'evidence', body: 'A finding.', supersedes: 'contribution-does-not-exist' }),
       }),
       env(),
@@ -2476,12 +2467,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('records the replaced document as a revision on a canonical update', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ body: '## Snapshot\nA completely different document.' }),
       }),
       testEnv,
@@ -2504,12 +2494,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('records a revision for a section write too', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ content: 'Appended detail.' }),
       }),
       testEnv,
@@ -2522,12 +2511,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('does not record a revision when the body is unchanged', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ stage: 'researching' }),
       }),
       testEnv,
@@ -2540,14 +2528,13 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('reverts to a revision, and the revert is itself undoable', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const original = '## Snapshot\nOwned by the signed-in account.';
 
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ body: '## Snapshot\nOverwritten by a parallel session.' }),
       }),
       testEnv,
@@ -2558,7 +2545,7 @@ describe('FreeIdeaStore worker', () => {
     const revert = await worker.fetch(
       new Request(`https://fis.test/api/ideas/serge-idea-lab/revisions/${revisions[0]?.id}/revert`, {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: '{}',
       }),
       testEnv,
@@ -2577,12 +2564,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('reports what a revision changed as added and removed lines', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ body: '## Snapshot\nOwned by the signed-in account.\nPlus one new line.' }),
       }),
       testEnv,
@@ -2603,11 +2589,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('refuses a revert from someone who does not own the idea', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/revisions/whatever/revert', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: '{}',
       }),
       env(),
@@ -2720,10 +2705,9 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('renders signed-in account-owned ideas and contributions', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/profile/', {
-        headers: { Cookie: '__Host-fis_session=session-1' },
+        headers: { Cookie: SERGE_COOKIE },
       }),
       env(),
     );
@@ -2739,10 +2723,9 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('returns signed-in account-owned ideas through the API', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/me/ideas', {
-        headers: { Cookie: '__Host-fis_session=session-1' },
+        headers: { Cookie: SERGE_COOKIE },
       }),
       env(),
     );
@@ -2754,11 +2737,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('accepts bearer auth for MCP and API user attribution', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const session = await worker.fetch(
       new Request('https://fis.test/api/session', {
-        headers: { Authorization: 'Bearer fas-session-token' },
+        headers: { Authorization: SERGE_BEARER },
       }),
       testEnv,
     );
@@ -2766,7 +2748,7 @@ describe('FreeIdeaStore worker', () => {
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -2784,13 +2766,12 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('blocks cross-site browser mutations while allowing bearer agent mutations', async () => {
-    mockSignedInSerge();
     const blocked = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
         headers: {
           Origin: 'https://evil.example',
-          Cookie: '__Host-fis_session=session-1',
+          Cookie: SERGE_COOKIE,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -2805,7 +2786,7 @@ describe('FreeIdeaStore worker', () => {
         method: 'POST',
         headers: {
           Origin: 'https://evil.example',
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -2822,13 +2803,12 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('lets the authenticated owner update the canonical idea document', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -2883,7 +2863,6 @@ describe('FreeIdeaStore worker', () => {
     // discriminating fixture cheap: 101 chapters is a few kilobytes, where an
     // over-length body would be a megabyte. On the unguarded code this request
     // returns 400 "document would have 101 chapters".
-    mockSignedInSerge();
     const bucket = new FakeR2();
     const testEnv = env(new FakeD1(), undefined, bucket);
     // Seed a normal document first so `body_key` points into object storage,
@@ -2893,7 +2872,7 @@ describe('FreeIdeaStore worker', () => {
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({ body: '## Snapshot\nSmall for now.' }),
@@ -2910,7 +2889,7 @@ describe('FreeIdeaStore worker', () => {
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         // No `body` key at all — this is the metadata-only path.
@@ -2928,13 +2907,12 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('rejects an oversized contribution instead of silently truncating it', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const body = 'x'.repeat(8001);
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'evidence', body }),
       }),
       testEnv,
@@ -2952,14 +2930,13 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('stores a long contribution whole, up to the raised limit', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     // Previously anything over 2000 chars lost its tail without warning.
     const body = `${'e'.repeat(3000)}END`;
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ kind: 'evidence', body }),
       }),
       testEnv,
@@ -2974,11 +2951,10 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('rejects oversized idea fields on update instead of truncating them', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'PATCH',
-        headers: { Authorization: 'Bearer fas-session-token', 'content-type': 'application/json' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ nextStep: 'n'.repeat(501) }),
       }),
       env(),
@@ -3011,13 +2987,12 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('supports registered-user blog-style comments on ideas', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
         method: 'POST',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -3055,13 +3030,12 @@ describe('FreeIdeaStore worker', () => {
       env(),
     );
 
-    mockSignedInSerge();
     const testEnv = env();
     const registered = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/reactions', {
         method: 'POST',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({ type: 'support' }),
@@ -3077,12 +3051,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('blocks non-owners from updating canonical idea documents', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst', {
         method: 'PATCH',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({ body: '## Snapshot\nShould not overwrite system idea.' }),
@@ -3095,13 +3068,12 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('lets the authenticated owner soft-delete an idea', async () => {
-    mockSignedInSerge();
     const testEnv = env();
     const deleted = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
         method: 'DELETE',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({ confirm_title: 'Serge Idea Lab' }),
@@ -3120,12 +3092,11 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('blocks non-owners from deleting ideas', async () => {
-    mockSignedInSerge();
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst', {
         method: 'DELETE',
         headers: {
-          Authorization: 'Bearer fas-session-token',
+          Authorization: SERGE_BEARER,
           'content-type': 'application/json',
         },
         body: JSON.stringify({ confirm_title: 'ASX Filings Analyst' }),
@@ -3154,14 +3125,15 @@ describe('FreeIdeaStore worker', () => {
     expect(response.status).toBe(404);
   });
 
-  it('starts OAuth through the FreeAppStore auth API with a nonce cookie', async () => {
+  it('starts OAuth at the provider with FIS\'s own client id and a nonce cookie', async () => {
     const response = await worker.fetch(new Request('https://fis.test/.fis/auth/start?provider=github&return_to=/console/'), env());
-    const location = response.headers.get('location') || '';
+    const location = new URL(response.headers.get('location') || '');
 
     expect(response.status).toBe(302);
-    expect(location).toContain('https://api.freeappstore.online/v1/auth/github/start');
-    expect(location).toContain('app_id=freeideastore');
-    expect(location).toContain('response_mode=query');
+    // Straight to GitHub, with FIS's registration. No other store is in the flow.
+    expect(location.origin + location.pathname).toBe('https://github.com/login/oauth/authorize');
+    expect(location.searchParams.get('client_id')).toBe('gh-client-id');
+    expect(location.searchParams.get('redirect_uri')).toBe('https://fis.test/.fis/auth/callback/github');
     expect(response.headers.get('set-cookie')).toContain('__Host-fis_auth_nonce=');
   });
 
@@ -3191,12 +3163,11 @@ describe('FreeIdeaStore worker', () => {
   it('requires the authenticated owner to promote an idea to a pro candidate', async () => {
     const guest = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/promote', { method: 'POST' }), env());
 
-    mockSignedInSerge();
     const testEnv = env();
     const owned = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/promote', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token' },
+        headers: { Authorization: SERGE_BEARER },
       }),
       testEnv,
     );
@@ -3204,7 +3175,7 @@ describe('FreeIdeaStore worker', () => {
     const nonOwner = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/promote', {
         method: 'POST',
-        headers: { Authorization: 'Bearer fas-session-token' },
+        headers: { Authorization: SERGE_BEARER },
       }),
       testEnv,
     );

@@ -221,19 +221,24 @@ describe("oauth callback", () => {
     await expect(store.get("authreq:nonce-1")).resolves.toBeNull();
   });
 
-  it("still accepts the pre-cutover parameter names", async () => {
+  it("no longer accepts the pre-cutover parameter names", async () => {
+    // #38 deleted the external sign-in path, so nothing emits `fas_session` or
+    // `session` any more. A validly signed token under one of those names is
+    // still refused — the point is that only the name the site sends is a name
+    // this server answers to.
     for (const param of ["fas_session", "session"]) {
       const store = makeStore({ "authreq:nonce-1": authRequest });
       const session = await mintSession("identity-1", SIGNING_KEY, { ttlSeconds: 300 });
 
       const res = await handleOAuthRoute(
         new Request(`${ISSUER}/oauth/callback?nonce=nonce-1&${param}=${session}`, {
-        headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
-      }),
+          headers: { Cookie: `fis_mcp_oauth_inflight=nonce-1` },
+        }),
         config(store),
       );
 
-      expect(res?.status).toBe(302);
+      expect(res?.status).not.toBe(302);
+      await expect(res?.text()).resolves.toContain("Sign-in did not complete");
     }
   });
 

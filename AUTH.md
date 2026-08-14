@@ -283,15 +283,16 @@ check a stranger could file ideas under any contributor's profile simply by asse
 header. It still falls back rather than erroring because the MCP client sends this header on
 every call, signed in or not, defaulting it to `fis-mcp`.
 
-> **Not fixed by #42, and still open: the FreeAppStore fallback.** `authUserFor` falls
-> through to `/v1/auth/me` for a token that is not FIS-minted, and `normalizeAuthUser` builds
-> the handle by slugging whatever login that returns — with no identity row involved, so none
-> of the guards above are on that path. A FreeAppStore account whose login slugs to a legacy
-> handle still resolves to that profile and still passes `ownedIdea`. The window closes on
-> its own when the last pre-cutover session expires (30 days from the 2026-08-13 cutover),
-> and [#38](https://github.com/freeideastore-online/platform/issues/38) deletes the path
-> outright. It cannot be closed by tightening it, because honouring pre-cutover handles is
-> precisely what it is for.
+> **The second entrance these guards did not cover is now closed
+> ([#38](https://github.com/freeideastore-online/platform/issues/38)).** `authUserFor` used
+> to fall through to FreeAppStore's `/v1/auth/me` for any token that was not FIS-minted, and
+> `normalizeAuthUser` built the handle by slugging whatever login came back — with no
+> identity row involved, so none of the guards above ran. A FreeAppStore account whose login
+> slugged to a legacy handle resolved to that profile and passed `ownedIdea`. It could not be
+> closed by tightening it, because honouring pre-cutover handles was precisely what it was
+> for; it was closed by deleting it, a month ahead of the last pre-cutover session expiring.
+> A handle can now only enter the system through `upsertIdentity`, which is where every guard
+> on this page lives.
 
 ## Secrets and configuration
 
@@ -325,10 +326,12 @@ is provider-agnostic and unchanged by any of this.
 What changed is the identity behind it. The MCP server does not authenticate anyone itself:
 it hands the human off to a browser sign-in, and then verifies the resulting session token
 locally with `SESSION_SIGNING_KEY` before issuing its own authorization code. That
-verification is where #34 failed, and it now uses FIS's own key. Cutting the browser hand-off
-from FreeAppStore over to FIS's own `/.fis/auth/start`, and retiring the `fas_session`
-vocabulary that goes with it, is
-[#37](https://github.com/freeideastore-online/platform/issues/37).
+verification is where #34 failed, and it now uses FIS's own key. The browser hand-off was cut over
+from FreeAppStore to FIS's own `/.fis/auth/start` in
+[#37](https://github.com/freeideastore-online/platform/issues/37), and the `fas_session`
+vocabulary that went with it was retired in
+[#38](https://github.com/freeideastore-online/platform/issues/38): `fis_session` is the only
+parameter name `/oauth/callback` accepts.
 
 Because the key on `freeideastore-mcp` is now FIS's own, the MCP server can only verify
 FIS-minted tokens. The two halves are not independently deployable: they must agree on both
@@ -363,25 +366,48 @@ minutes. Between sign-in and redemption the code *is* a write credential, so a c
 be redeemed by the MCP session that started it — except when that session started none, which
 is the human-initiated case.
 
-## The FreeAppStore fallback
+## The FreeAppStore fallback is gone (#38)
 
-The FreeAppStore path has not been deleted yet. It is still reachable in two situations, both
-deliberate:
+Deleted on 2026-08-14, about a month before the last pre-cutover session would have expired
+on its own. `AUTH_API_BASE`, `AUTH_APP_ID`, `fetchAuthPayload`, `normalizeAuthUser`, the
+unqualified `/.fis/auth/callback` route and the `fas_session` parameter alias (on both the
+site and the MCP server) are all gone. Nothing in either Worker calls a FreeAppStore host.
 
-- **Sessions issued before the cutover.** `authUserFor` verifies locally first; a token that
-  fails that check falls through to `/v1/auth/me`, so a session minted by the old path keeps
-  working until it expires rather than logging someone out mid-visit. (A token that verifies
-  but whose identity row no longer exists resolves to nobody — it does not fall through.)
-- **A half-configured deploy.** `nativeCredentials` requires a signing key *and* both halves
-  of a provider client. If any of those is missing, `/.fis/auth/start` falls back to the
-  FreeAppStore redirect instead of failing, which is what keeps a partial deploy from locking
-  everyone out. The native callback route, by contrast, answers 503 `sign-in is not
-  configured` — by then there is nothing safe left to fall back to.
+Two behaviours changed with it, and both are refusals where there used to be a fallback:
 
-[#38](https://github.com/freeideastore-online/platform/issues/38) removes this path for good:
-`AUTH_API_BASE`, `AUTH_APP_ID`, `fetchAuthPayload`, and the `fas_session` parameter alias all
-go, and `grep -ri freeappstore packages/` should return nothing. Until it lands, the fallback
-is what makes a cutover problem recoverable. It is not an accident and it is not dead code.
+- **A pre-cutover session is now nobody.** A token this store's key did not sign resolves to
+  no user. `/.fis/auth/me` answers 401 and clears the cookie, so the browser stops retrying
+  it, and the next sign-in goes through the FIS flow and lands on an `identities` row.
+- **A half-configured deploy refuses instead of delegating.** `signInCredentials` requires a
+  signing key *and* both halves of a provider client; without them `/.fis/auth/start` answers
+  503 `sign-in is not configured` rather than redirecting to another store. `SESSION_SIGNING_KEY`
+  is a required field of `Env` for the same reason: a deploy that cannot identify anyone must
+  fail visibly, not quietly borrow an answer.
+
+The reason this was worth doing early is that it was the last live path onto a legacy handle
+that carried no proof. Everything on this page — the reservation rule, the `claim_email`
+binding, the collision policy — sits on `upsertIdentity`, and none of it was consulted when
+a handle arrived from `/v1/auth/me`.
+
+### Someone who only ever signed in through the old path
+
+They are signed out. Signing in again with the same provider account mints a new identity;
+because `availableHandle` reserves anything either table holds, it will be `alice-github` or
+`alice-2`, **not** the legacy `alice` their work hangs off. Reuniting them is the
+`claim_email` procedure above, and it is the only route — recorded by a human who has
+established who they are, and binding on their next sign-in whether or not they have signed
+in already (#91).
+
+Profiles in that position at the time of removal were `simon` (1 idea) and `guest`,
+`fis-mcp`, `system`, `not-the-owner`. Of those only `simon` looks like a person: `guest` is
+the anonymous fallback, `system` is the seeder, `not-the-owner` is a test row, and `fis-mcp`
+is the MCP client's default `x-idea-handle` for unauthenticated writes. **`fis-mcp` gets no
+identity and no `claim_email`** — it is an attribution bucket, not a human, and there is no
+provider account it could belong to. Minting one would mean issuing a credential to a service
+and putting 24 contributions and 2 ideas behind something that can sign in; recording a claim
+would make it adoptable by whoever holds that address. It stays reserved by the `profiles`
+half of the availability probe, permanently unclaimable, and after #38 there is no code path
+that can authenticate as it at all.
 
 ## Diagnosing a failed sign-in
 
@@ -395,7 +421,7 @@ in the UI renders these codes today — read them in the address bar.
 | `invalid_state` | The `state` parameter did not match the nonce cookie, or the cookie was absent. | The user sat on the provider's consent screen for more than the nonce's 10 minutes; cookies blocked; the callback was replayed or forged. |
 | `denied` | The provider came back with no `code`. | The user declined consent, or the provider refused the request. Ordinary, not a defect. |
 | `provider_error` | The code exchange or the profile fetch failed. | A wrong or rotated client secret, a redirect URI that no longer matches the registration, a provider outage, or a profile with no usable handle. |
-| `missing_session` / `invalid_session` | Legacy FreeAppStore callback only. | Only reachable via the pre-cutover path; #38 removes both. |
+| `missing_session` / `invalid_session` | Retired with the legacy callback in #38. | No longer emitted. `/.fis/auth/callback` with no provider segment is a 404. |
 
 Two failure modes that are *not* `#auth_error` codes and are worth recognizing:
 
@@ -407,6 +433,7 @@ Two failure modes that are *not* `#auth_error` codes and are worth recognizing:
   the cookie. Either the token expired, or it verified against a signing key that has since
   been rotated, or its identity row is gone.
 
-When sign-in breaks, the first question is which flow ran. A redirect to `github.com` or
-`accounts.google.com` is the FIS-owned path; a redirect to `api.freeappstore.online` means
-the fallback was taken, which means the Worker is missing a credential.
+When sign-in breaks, the first question is which flow ran. There is only one: `/.fis/auth/start`
+redirects to `github.com` or `accounts.google.com`, or it answers 503. A redirect anywhere
+else, or any outbound request to a host other than the two providers, is a regression — there
+is a test asserting `authUserFor` makes no network call at all.
