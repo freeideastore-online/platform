@@ -195,6 +195,43 @@ describe("handleOAuthRoute", () => {
     expect(res?.status).toBe(400);
     await expect(res?.text()).resolves.toBe("unsupported provider");
   });
+
+  it("refuses a redirect_uri the client never registered", async () => {
+    // Registration is open to anyone, so the redirect_uri on an authorization
+    // request is not a hint — it is the address a code gets delivered to. Taking
+    // it at face value would let a caller name someone else's client_id and have
+    // the code posted wherever it liked. Nothing later in the flow re-checks
+    // this: /oauth/callback reads the redirect_uri back out of the stored
+    // authreq record and trusts it.
+    const store = makeStore({
+      "client:client-1": JSON.stringify({ redirect_uris: ["http://127.0.0.1:9876/callback"] }),
+    });
+
+    const res = await handleOAuthRoute(
+      new Request(
+        `${ISSUER}/authorize?response_type=code&client_id=client-1&redirect_uri=https%3A%2F%2Fattacker.example%2Fcollect&code_challenge=abc&code_challenge_method=S256`,
+      ),
+      config(store),
+    );
+
+    expect(res?.status).toBe(400);
+    await expect(res?.text()).resolves.toBe("redirect_uri not registered");
+    // Refused before anything was written: no nonce to lure a victim into
+    // completing, and no cookie handed out.
+    expect(res?.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("refuses a client_id that was never registered", async () => {
+    const res = await handleOAuthRoute(
+      new Request(
+        `${ISSUER}/authorize?response_type=code&client_id=never-registered&redirect_uri=http%3A%2F%2F127.0.0.1%3A9876%2Fcallback&code_challenge=abc&code_challenge_method=S256`,
+      ),
+      config(makeStore()),
+    );
+
+    expect(res?.status).toBe(400);
+    await expect(res?.text()).resolves.toBe("invalid client_id");
+  });
 });
 
 describe("oauth callback", () => {
@@ -385,5 +422,111 @@ describe("token exchange", () => {
 
     expect(res?.status).toBe(400);
     await expect(res?.json()).resolves.toMatchObject({ error: "invalid_grant" });
+  });
+
+  it("burns an authorization code on first use, so a second redemption gets nothing", async () => {
+    // The code rides back on a redirect, which means it lands in browser
+    // history, in whatever the client logs, and in the referrer of anything the
+    // client's callback page loads afterwards. What makes a stray copy of it
+    // worthless is the delete at first lookup, not the ten-minute TTL — and
+    // that delete is one line with nothing else pointing at it, so a refactor
+    // could drop it and every other test here would still pass.
+    const store = makeStore();
+    const verifier = "verifier-abcdefghijklmnopqrstuvwxyz";
+    const code = await codeFor(store, verifier);
+
+    const redeem = () =>
+      handleOAuthRoute(
+        new Request(`${ISSUER}/token`, {
+          method: "POST",
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: "http://127.0.0.1:9876/callback",
+            client_id: "client-1",
+            code_verifier: verifier,
+          }).toString(),
+        }),
+        config(store),
+      );
+
+    const first = await redeem();
+    expect(first?.status).toBe(200);
+
+    // Same code, same verifier, same client: everything that made the first
+    // exchange legitimate is still true, and it must be refused anyway.
+    const second = await redeem();
+    expect(second?.status).toBe(400);
+    await expect(second?.json()).resolves.toMatchObject({ error: "invalid_grant" });
+
+    // Refused because the record is gone, not because something downstream
+    // happened to reject it.
+    await expect(store.get(`code:${code}`)).resolves.toBeNull();
+  });
+});
+
+describe("client registration", () => {
+  const REGISTRATION = JSON.stringify({
+    redirect_uris: ["http://127.0.0.1:9876/callback"],
+    client_name: "Codex",
+  });
+
+  function register(store: OAuthStore, ip: string, body = REGISTRATION) {
+    return handleOAuthRoute(
+      new Request(`${ISSUER}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip },
+        body,
+      }),
+      config(store),
+    );
+  }
+
+  it("issues a client id and stores what the client may be handed a code on", async () => {
+    const store = makeStore();
+
+    const res = await register(store, "203.0.113.1");
+
+    expect(res?.status).toBe(201);
+    const client = (await res?.json()) as { client_id: string; token_endpoint_auth_method: string };
+    expect(client.client_id).toBeTruthy();
+    // Public client: there is no secret to check at /token, which is the whole
+    // reason PKCE is mandatory rather than optional here.
+    expect(client.token_endpoint_auth_method).toBe("none");
+    await expect(store.get(`client:${client.client_id}`)).resolves.toContain("127.0.0.1:9876");
+  });
+
+  it("refuses a registration that names nowhere to send a code", async () => {
+    const store = makeStore();
+
+    const res = await register(store, "203.0.113.1", JSON.stringify({ client_name: "Codex" }));
+
+    expect(res?.status).toBe(400);
+    await expect(res?.json()).resolves.toMatchObject({ error: "invalid_redirect_uri" });
+  });
+
+  it("stops one address from filling the store with clients", async () => {
+    // /register is unauthenticated by necessity — a client has no credentials
+    // before it registers. The only thing standing between that and an
+    // unbounded write primitive against the KV namespace is this counter.
+    const store = makeStore();
+
+    for (let i = 0; i < 20; i += 1) {
+      expect((await register(store, "203.0.113.9"))?.status).toBe(201);
+    }
+
+    const blocked = await register(store, "203.0.113.9");
+    expect(blocked?.status).toBe(429);
+    await expect(blocked?.json()).resolves.toMatchObject({ error: "rate_limit_exceeded" });
+  });
+
+  it("counts the registrations per address, not across everybody", async () => {
+    // A shared limit would let one abusive address lock every genuine client
+    // out of connecting.
+    const store = makeStore();
+    for (let i = 0; i < 20; i += 1) await register(store, "203.0.113.9");
+    expect((await register(store, "203.0.113.9"))?.status).toBe(429);
+
+    expect((await register(store, "198.51.100.4"))?.status).toBe(201);
   });
 });
