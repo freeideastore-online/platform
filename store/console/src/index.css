@@ -45,3 +45,9 @@
     font: inherit;
   }
 }
+
+@layer components {
+  .console-markdown > :first-child {
+    margin-top: 0;
+  }
+}
