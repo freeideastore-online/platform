@@ -2631,6 +2631,64 @@ describe('FreeIdeaStore worker', () => {
     expect(response.status).toBe(200);
   });
 
+  it('renders an empty chapter as not yet written while keeping it in chapter navigation', async () => {
+    const testEnv = env();
+    const body = [
+      '## Opening',
+      filler(55),
+      '',
+      '## Not Written',
+      '   ',
+      '',
+      '## Legacy Loading',
+      '*(chapter loading)*',
+      '',
+      '## Closing',
+      filler(55),
+    ].join('\n');
+    const update = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: JSON.stringify({ body }),
+      }),
+      testEnv,
+    );
+    const updateData = (await update.json()) as { usage: { chapters: number; chapters_remaining: number } };
+    const home = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/'), testEnv);
+    const homeHtml = await home.text();
+    const chapter = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/not-written/'), testEnv);
+    const chapterHtml = await chapter.text();
+    const legacy = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/legacy-loading/'), testEnv);
+    const legacyHtml = await legacy.text();
+
+    expect(update.status).toBe(200);
+    expect(updateData.usage.chapters).toBe(4);
+    expect(updateData.usage.chapters_remaining).toBe(FIELD_LIMITS.chapters - 4);
+    expect(home.status).toBe(200);
+    expect(homeHtml).toContain(
+      '<strong>Sections</strong><nav class="toc-box"><a href="/ideas/serge-idea-lab/opening/">Opening</a><a href="/ideas/serge-idea-lab/not-written/">Not Written</a><a href="/ideas/serge-idea-lab/legacy-loading/">Legacy Loading</a><a href="/ideas/serge-idea-lab/closing/">Closing</a>',
+    );
+    expect(homeHtml).toContain('href="/ideas/serge-idea-lab/not-written/"');
+    expect(homeHtml).toContain('Not Written</a> &mdash; This chapter is not yet written.');
+    expect(homeHtml).toContain('Legacy Loading</a> &mdash; This chapter is not yet written.');
+    expect(homeHtml).not.toContain('chapter loading');
+    expect(chapter.status).toBe(200);
+    expect(chapterHtml).toContain('<h1>Not Written</h1>');
+    expect(chapterHtml).toContain('<div class="chapter-body"><p class="chapter-empty">This chapter is not yet written.</p></div>');
+    expect(chapterHtml).toContain('Chapter 2 of 4');
+    expect(chapterHtml).toContain(
+      '<a class="chapter-link active" href="/ideas/serge-idea-lab/not-written/"><b>2</b><span>Not Written</span></a>',
+    );
+    expect(chapterHtml).toContain('<small>Previous</small>Opening');
+    expect(chapterHtml).toContain('<small>Next</small>Legacy Loading');
+    expect(chapterHtml).not.toContain('<h2 id="not-written">Not Written</h2>');
+    expect(legacy.status).toBe(200);
+    expect(legacyHtml).toContain('<h1>Legacy Loading</h1>');
+    expect(legacyHtml).toContain('<div class="chapter-body"><p class="chapter-empty">This chapter is not yet written.</p></div>');
+    expect(legacyHtml).not.toContain('chapter loading');
+  });
+
   it('renders all publication chapters through the dynamic Worker publisher', async () => {
     const response = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/design-sketch/'), env());
     const html = await response.text();

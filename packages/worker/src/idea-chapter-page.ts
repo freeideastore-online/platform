@@ -1,7 +1,16 @@
 import { brandHead, brandLockup, brandCss } from './brand';
 import { ideaBody, ideaById } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
-import { ideaChapterById, ideaChapters, isPaginated, MARKDOWN_CSS, markdownHeadings, markdownToHtml } from './markdown';
+import {
+  ideaChapterById,
+  ideaChapters,
+  isUnwrittenChapterBody,
+  isPaginated,
+  MARKDOWN_CSS,
+  markdownHeadings,
+  markdownToHtml,
+  UNWRITTEN_CHAPTER_EXCERPT,
+} from './markdown';
 import {
   readerSettingsBootScript,
   readerSettingsCss,
@@ -36,9 +45,12 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
   const previous = chapters[index - 1];
   const next = chapters[index + 1];
   const canonical = `${new URL(request.url).origin}/ideas/${idea.id}/${chapter.id}/`;
-  const chapterBody = chapter.markdown.replace(/^##\s+.+\n\n?/, '');
+  const chapterBody = chapter.markdown.replace(/^##[^\n]*(?:\n\n?)?/, '');
   const chapterToc = markdownHeadings(chapterBody);
   const chapterTocLinks = chapterToc.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('');
+  const renderedChapterBody = isUnwrittenChapterBody(chapterBody)
+    ? `<p class="chapter-empty">${escapeHtml(UNWRITTEN_CHAPTER_EXCERPT)}</p>`
+    : markdownToHtml(chapterBody);
   const progress = Math.round(((index + 1) / chapters.length) * 100);
   const page = `<!DOCTYPE html>
 <html lang="en">
@@ -73,7 +85,7 @@ h1{font-family:Fraunces,serif;font-size:clamp(1.6rem,3.5vw,2.8rem);line-height:1
 h2{font-family:Fraunces,serif;font-size:1.7rem;margin:1.55rem 0 .55rem;scroll-margin-top:1rem}h3{font-size:1.08rem;margin:1.35rem 0 .35rem;scroll-margin-top:1rem}
 p{color:var(--body-text);margin:.78rem 0;max-width:760px}ul,ol{display:grid;gap:.42rem;margin:.78rem 0 1rem 1.25rem;color:var(--body-text);max-width:760px}li::marker{color:var(--accent-strong);font-weight:900}
 .summary{border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--panel);padding:1rem 1.05rem;border-radius:8px;color:var(--body-text);font-weight:800;box-shadow:var(--shadow);margin-bottom:1rem;max-width:820px}.meta{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:1.25rem}.pill{border:1px solid var(--line);border-radius:999px;background:var(--panel);padding:.32rem .62rem;color:var(--title-text);font-size:.7rem;font-weight:900;text-transform:uppercase}
-.chapter-body{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:1.1rem 1.15rem}.chapter-body>*:first-child{margin-top:0}
+.chapter-body{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:1.1rem 1.15rem}.chapter-body>*:first-child{margin-top:0}.chapter-empty{color:var(--muted);font-weight:800}
 .chapter-nav{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;border-top:1px solid var(--line);margin-top:1.6rem;padding-top:1rem}.chapter-nav a,.chapter-nav span{min-height:70px;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:.7rem .8rem;color:var(--accent-strong);font-size:.78rem;font-weight:900}.chapter-nav a{display:grid;gap:.1rem}.chapter-nav small{color:var(--muted);font-size:.66rem;text-transform:uppercase}.chapter-nav .next{text-align:right}
 .toc-rail{position:sticky;top:52px;height:calc(100vh - 52px);overflow:auto;border-left:1px solid var(--line);background:var(--panel-alt);padding:1.1rem .95rem}.toc-box{display:grid;gap:.32rem}.toc-title{color:var(--title-text);font-size:.68rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.35rem}.toc-box a{display:block;border-left:2px solid transparent;color:var(--title-text);font-size:.78rem;font-weight:900;line-height:1.35;padding:.28rem 0 .28rem .55rem}.toc-box a:hover{border-left-color:var(--accent);color:var(--accent-strong);background:var(--mark)}.toc-empty{color:var(--muted);font-size:.78rem}
 footer{max-width:920px;margin:1.8rem auto 0;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.78rem}
@@ -108,7 +120,7 @@ ${chapterTocLinks ? `<section class="mobile-page-toc" aria-label="On this page">
       <h1>${escapeHtml(chapter.title)}</h1>
       <div class="summary">${escapeHtml(chapter.excerpt || idea.summary)}</div>
       <div class="meta"><span class="pill">${escapeHtml(idea.title)}</span><span class="pill">${escapeHtml(idea.stage)}</span><span class="pill">Chapter ${index + 1} of ${chapters.length}</span></div>
-      <div class="chapter-body">${markdownToHtml(chapterBody)}</div>
+      <div class="chapter-body">${renderedChapterBody}</div>
       <nav class="chapter-nav">
         ${previous ? `<a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(previous.id)}/"><small>Previous</small>${escapeHtml(previous.title)}</a>` : '<span></span>'}
         ${next ? `<a class="next" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(next.id)}/"><small>Next</small>${escapeHtml(next.title)}</a>` : '<span></span>'}

@@ -131,6 +131,16 @@ export type IdeaChapter = {
   aliases: string[];
 };
 
+export const UNWRITTEN_CHAPTER_EXCERPT = 'This chapter is not yet written.';
+const LEGACY_CHAPTER_LOADING = '(chapter loading)';
+
+export function isUnwrittenChapterBody(markdown: string) {
+  const trimmed = markdown.trim();
+  if (!trimmed) return true;
+  const unstyled = trimmed.replace(/^[*_]+|[*_]+$/g, '').trim().toLowerCase();
+  return unstyled === LEGACY_CHAPTER_LOADING || unstyled === 'chapter loading';
+}
+
 /**
  * When a document earns chapter URLs.
  *
@@ -537,7 +547,7 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
       id,
       title: range.title,
       markdown: `## ${range.title}\n\n${body}`.trim(),
-      excerpt: excerpt(body) || 'Open this chapter.',
+      excerpt: isUnwrittenChapterBody(body) ? UNWRITTEN_CHAPTER_EXCERPT : excerpt(body) || 'Open this chapter.',
       aliases: Array.from(new Set(aliases)),
     };
   });
