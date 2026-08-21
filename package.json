@@ -12,6 +12,8 @@
     "docs:build": "zensical build",
     "dev": "pnpm --filter @fis/worker dev",
     "deploy": "pnpm --filter @fis/worker run deploy",
+    "console:dev": "pnpm --filter @fis/console dev",
+    "console:build": "pnpm --filter @fis/console build",
     "mcp:dev": "pnpm --filter @fis/mcp dev",
     "mcp:deploy": "pnpm --filter @fis/mcp run deploy",
     "mcp:oauth:smoke": "pnpm --filter @fis/mcp oauth:smoke",
@@ -20,7 +22,7 @@
     "migrations:validate": "node scripts/validate-migrations.mjs",
     "test": "pnpm skills:validate && pnpm migrations:validate && pnpm --filter @fis/worker test && pnpm --filter @fis/mcp test",
     "test:e2e": "playwright test",
-    "typecheck": "pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
+    "typecheck": "pnpm --filter @fis/sdk typecheck && pnpm --filter @fis/console typecheck && pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
     "db:migrate:local": "pnpm --filter @fis/worker db:migrate:local",
     "db:migrate:prod": "pnpm --filter @fis/worker db:migrate:prod"
   },
