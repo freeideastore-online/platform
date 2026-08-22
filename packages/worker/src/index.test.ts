@@ -2744,12 +2744,10 @@ describe('FreeIdeaStore worker', () => {
     expect(contributorHtml).toContain('Serge The Dev');
     expect(contributorHtml).not.toContain('Risk Finder');
     expect(consolePage.status).toBe(200);
-    expect(consoleHtml).toContain('Create idea');
-    expect(consoleHtml).toContain('My ideas');
-    expect(consoleHtml).toContain('id="my-ideas-list"');
-    expect(consoleHtml).toContain('/api/me/activity?idea_limit=100&contribution_limit=10');
-    expect(consoleHtml).toContain('id="account-slot"');
-    expect(consoleHtml).toContain('Sign in with GitHub');
+    expect(consoleHtml).toContain('Idea Console - FreeIdeaStore');
+    expect(consoleHtml).toContain('<div id="root"></div>');
+    expect(consoleHtml).toContain('/console/dist/assets/bundle.js');
+    expect(consolePage.headers.get('cache-control')).toBe('no-store');
   });
 
   it('renders signed-out account profile controls', async () => {
@@ -3330,7 +3328,6 @@ describe('mobile navigation', () => {
     ['idea home', 'https://fis.test/ideas/asx-filings-analyst/'],
     ['idea chapter', 'https://fis.test/ideas/asx-filings-analyst/snapshot/'],
     ['idea catalog', 'https://fis.test/ideas/'],
-    ['console', 'https://fis.test/console/'],
     ['contributors', 'https://fis.test/contributors/'],
     ['account', 'https://fis.test/profile/'],
   ] as const;
@@ -3354,11 +3351,14 @@ describe('mobile navigation', () => {
     });
   }
 
-  it('keeps the account slot outside the drawer so signed-in state stays visible', async () => {
-    const response = await worker.fetch(new Request('https://fis.test/console/'), env());
+  it('serves the console shell for client-routed idea URLs', async () => {
+    const response = await worker.fetch(new Request('https://fis.test/console/ideas/asx-filings-analyst/snapshot'), env());
     const html = await response.text();
 
-    expect(html).toContain('</nav><span id="account-slot"></span>');
+    expect(response.status).toBe(200);
+    expect(html).toContain('Idea Console - FreeIdeaStore');
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain('/console/dist/assets/index.css');
   });
 });
 

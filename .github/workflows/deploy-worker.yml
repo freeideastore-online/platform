@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "packages/worker/**"
+      - "packages/sdk/**"
       - "store/**"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -34,6 +35,8 @@ jobs:
         run: pnpm test
       - name: Typecheck
         run: pnpm typecheck
+      - name: Build console
+        run: pnpm --filter @fis/console build
       - name: Apply D1 migrations
         working-directory: packages/worker
         run: pnpm exec wrangler d1 migrations apply freeideastore --remote

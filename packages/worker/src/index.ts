@@ -85,8 +85,12 @@ export default {
       }
     }
 
-    if (url.pathname === '/console' || url.pathname === '/console/') {
-      return renderConsolePage(request);
+    if (
+      url.pathname === '/console' ||
+      url.pathname === '/console/' ||
+      (url.pathname.startsWith('/console/') && !url.pathname.startsWith('/console/dist/'))
+    ) {
+      return renderConsolePage();
     }
 
     if (url.pathname === '/contributors' || url.pathname === '/contributors/') {

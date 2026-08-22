@@ -72,9 +72,9 @@ test('contributors and console pages are available', async ({ page }) => {
 
   await page.goto('/console/');
 
-  await expect(page.getByRole('heading', { name: 'Put an idea into the refinery.' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Sign in with GitHub' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create idea' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Idea console' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  await expect(page.getByText('ASX Filings Analyst')).toBeVisible();
 });
 
 test('about and docs pages explain the portal', async ({ page }) => {
