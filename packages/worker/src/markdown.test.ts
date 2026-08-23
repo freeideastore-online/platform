@@ -20,6 +20,7 @@ import {
   removeIdeaSection,
   renameIdeaSection,
   replaceIdeaSection,
+  visibleIdeaChapters,
 } from './markdown';
 
 describe('markdownToHtml', () => {
@@ -329,6 +330,34 @@ describe('ideaChapters', () => {
     expect(chapters[0]?.excerpt).toContain('StudentRide');
     expect(chapters[0]?.excerpt).not.toContain('**');
     expect(chapters[0]?.excerpt).not.toContain('](https://');
+  });
+
+  it('filters unwritten chapters from the visible chapter list only', () => {
+    const markdown = [
+      '## Snapshot',
+      'Ready to read.',
+      '',
+      '## Empty',
+      '',
+      '## Whitespace',
+      '   ',
+      '\t',
+      '',
+      '## Legacy placeholder',
+      '**(chapter loading)**',
+      '',
+      '## New placeholder',
+      '_chapter loading_',
+    ].join('\n');
+
+    expect(ideaChapters(markdown).map((chapter) => chapter.title)).toEqual([
+      'Snapshot',
+      'Empty',
+      'Whitespace',
+      'Legacy placeholder',
+      'New placeholder',
+    ]);
+    expect(visibleIdeaChapters(markdown).map((chapter) => chapter.title)).toEqual(['Snapshot']);
   });
 });
 

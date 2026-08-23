@@ -561,6 +561,16 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
   }];
 }
 
+function ideaChapterBody(chapter: IdeaChapter) {
+  return chapter.markdown.replace(/^##[^\n]*(?:\n\n?)?/, '');
+}
+
+export function visibleIdeaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
+  return ideaChapters(markdown, documentTitle).filter(
+    (chapter) => !isUnwrittenChapterBody(ideaChapterBody(chapter)),
+  );
+}
+
 export function ideaChapterById(chapters: IdeaChapter[], rawChapterId: string) {
   return chapters.find((chapter) => chapter.aliases.includes(rawChapterId));
 }

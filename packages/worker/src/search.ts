@@ -1,5 +1,5 @@
 import { runInBatches, type SizedStatement } from './d1';
-import { ideaChapters } from './markdown';
+import { visibleIdeaChapters } from './markdown';
 import type { Env, IdeaRow } from './types';
 
 export type SearchHit = {
@@ -48,7 +48,7 @@ export async function indexDocument(env: Env, idea: IdeaRow, body: string) {
       statement: env.DB.prepare("DELETE FROM search_index WHERE idea_id = ? AND kind = 'section'").bind(idea.id),
     },
   ];
-  for (const chapter of ideaChapters(body, idea.title)) {
+  for (const chapter of visibleIdeaChapters(body, idea.title)) {
     statements.push({
       statement: env.DB.prepare(
         `INSERT INTO search_index (title, text, idea_id, kind, ref) VALUES (?, ?, ?, 'section', ?)`,

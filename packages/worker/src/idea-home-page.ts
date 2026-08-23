@@ -9,7 +9,7 @@ import { ideaHomeStyles } from './idea-home-styles';
 import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
 import { openRefinementCount } from './refinements';
 import { listIdeaSources } from './sources';
-import { ideaChapters, ideaPreamble, isPaginated, markdownHeadings, markdownToHtml } from './markdown';
+import { ideaPreamble, isPaginated, markdownHeadings, markdownToHtml, visibleIdeaChapters } from './markdown';
 import { readerSettingsBootScript } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE } from './site-nav';
 import type { Env } from './types';
@@ -50,7 +50,7 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   // What the idea rests on, gathered from the document and its research.
   const sources = await listIdeaSources(env, idea.id);
   const headings = markdownHeadings(body);
-  const chapters = ideaChapters(body, idea.title);
+  const chapters = visibleIdeaChapters(body, idea.title);
   // Short documents read as one page: the body is rendered inline below, so
   // chapter pages would only re-present content the reader can already scroll.
   const paginated = isPaginated(body, idea.title);

@@ -3,13 +3,11 @@ import { ideaBody, ideaById } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
 import {
   ideaChapterById,
-  ideaChapters,
-  isUnwrittenChapterBody,
   isPaginated,
   MARKDOWN_CSS,
   markdownHeadings,
   markdownToHtml,
-  UNWRITTEN_CHAPTER_EXCERPT,
+  visibleIdeaChapters,
 } from './markdown';
 import {
   readerSettingsBootScript,
@@ -24,7 +22,7 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
   if (!idea) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
 
   const body = await ideaBody(env, idea);
-  const chapters = ideaChapters(body, idea.title);
+  const chapters = visibleIdeaChapters(body, idea.title);
   const chapter = ideaChapterById(chapters, requestedChapterId);
   if (!chapter) return new Response('Idea chapter not found', { status: 404, headers: SECURITY_HEADERS });
 
@@ -48,9 +46,7 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
   const chapterBody = chapter.markdown.replace(/^##[^\n]*(?:\n\n?)?/, '');
   const chapterToc = markdownHeadings(chapterBody);
   const chapterTocLinks = chapterToc.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('');
-  const renderedChapterBody = isUnwrittenChapterBody(chapterBody)
-    ? `<p class="chapter-empty">${escapeHtml(UNWRITTEN_CHAPTER_EXCERPT)}</p>`
-    : markdownToHtml(chapterBody);
+  const renderedChapterBody = markdownToHtml(chapterBody);
   const progress = Math.round(((index + 1) / chapters.length) * 100);
   const page = `<!DOCTYPE html>
 <html lang="en">

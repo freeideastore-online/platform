@@ -1,6 +1,6 @@
 import { chunk, MAX_BOUND_PARAMS, runInBatches } from './d1';
 import { id } from './http';
-import { ideaChapters } from './markdown';
+import { visibleIdeaChapters } from './markdown';
 import type { Env, IdeaRow } from './types';
 
 /** Tracking parameters carry no meaning about the source itself. */
@@ -135,7 +135,7 @@ async function linkSources(
 export async function syncDocumentSources(env: Env, idea: IdeaRow, body: string) {
   const citations: Array<{ url: string; section: string }> = [];
   const seen = new Set<string>();
-  for (const chapter of ideaChapters(body, idea.title)) {
+  for (const chapter of visibleIdeaChapters(body, idea.title)) {
     for (const url of extractUrls(chapter.markdown)) {
       seen.add(url);
       citations.push({ url, section: chapter.id });
