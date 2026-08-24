@@ -858,14 +858,21 @@ class FakeR2 {
   }
 }
 
+type AssetFixture = Response | ((request: Request) => Response | Promise<Response>);
+
 function env(
   db = new FakeD1(),
-  assetResponse = new Response('asset fallback', { status: 404 }),
+  assetResponse: AssetFixture = new Response('asset fallback', { status: 404 }),
   bucket?: FakeR2,
 ) {
+  const fetchAsset = (request: Request) => {
+    const response = typeof assetResponse === 'function' ? assetResponse(request) : assetResponse;
+    return Promise.resolve(response).then((item) => item.clone());
+  };
+
   return {
     DB: db,
-    ASSETS: { fetch: () => Promise.resolve(assetResponse.clone()) },
+    ASSETS: { fetch: fetchAsset },
     // Sign-in is FIS's own since #38: a signing key plus a provider client is
     // the whole configuration, and without them the worker can identify nobody.
     SESSION_SIGNING_KEY: TEST_SIGNING_KEY,
@@ -2741,6 +2748,55 @@ describe('FreeIdeaStore worker', () => {
     expect(consoleHtml).toContain('<div id="root"></div>');
     expect(consoleHtml).toContain('/console/dist/assets/bundle.js');
     expect(consolePage.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('keeps the console shell and built asset routes split under /console/', async () => {
+    const assetRequests: string[] = [];
+    const testEnv = env(new FakeD1(), (request) => {
+      const pathname = new URL(request.url).pathname;
+      assetRequests.push(pathname);
+
+      if (pathname === '/console/dist/assets/bundle.js') {
+        return new Response('console.log("console bundle");', {
+          headers: { 'content-type': 'application/javascript;charset=UTF-8' },
+        });
+      }
+
+      if (pathname === '/console/dist/assets/index.css') {
+        return new Response(':root{color-scheme:light dark}', {
+          headers: { 'content-type': 'text/css;charset=UTF-8' },
+        });
+      }
+
+      return new Response('missing asset', { status: 404 });
+    });
+
+    const shell = await worker.fetch(new Request('https://fis.test/console/'), testEnv);
+    const shellHtml = await shell.text();
+    const bundle = await worker.fetch(new Request('https://fis.test/console/dist/assets/bundle.js'), testEnv);
+    const stylesheet = await worker.fetch(new Request('https://fis.test/console/dist/assets/index.css'), testEnv);
+    const nestedRoute = await worker.fetch(new Request('https://fis.test/console/ideas/asx-filings-analyst/snapshot'), testEnv);
+    const nestedHtml = await nestedRoute.text();
+
+    expect(shell.status).toBe(200);
+    expect(shell.headers.get('content-type')).toContain('text/html');
+    expect(shellHtml).toContain('<div id="root"></div>');
+    expect(shellHtml).toContain('/console/dist/assets/bundle.js');
+    expect(shellHtml).toContain('/console/dist/assets/index.css');
+
+    expect(bundle.status).toBe(200);
+    expect(bundle.headers.get('content-type')).toContain('javascript');
+    expect(await bundle.text()).toContain('console bundle');
+
+    expect(stylesheet.status).toBe(200);
+    expect(stylesheet.headers.get('content-type')).toContain('text/css');
+    expect(await stylesheet.text()).toContain('color-scheme');
+
+    expect(nestedRoute.status).toBe(200);
+    expect(nestedRoute.headers.get('content-type')).toContain('text/html');
+    expect(nestedHtml).toContain('Idea Console - FreeIdeaStore');
+    expect(nestedHtml).toContain('<div id="root"></div>');
+    expect(assetRequests).toEqual(['/console/dist/assets/bundle.js', '/console/dist/assets/index.css']);
   });
 
   it('renders signed-out account profile controls', async () => {
