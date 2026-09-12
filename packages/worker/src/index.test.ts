@@ -367,7 +367,7 @@ class FakeD1 {
       return new FakeStatement({
         first: ([id]) => {
           const idea = this.ideas.get(String(id));
-          return idea && idea.status !== 'removed' ? idea : null;
+          return idea && (!sql.includes("i.status != 'removed'") || idea.status !== 'removed') ? idea : null;
         },
       });
     }
@@ -3192,7 +3192,7 @@ describe('FreeIdeaStore worker', () => {
     expect(deleted.status).toBe(200);
     await expect(deleted.json()).resolves.toEqual({ ok: true, idea: 'serge-idea-lab', status: 'removed' });
     expect(testEnv.DB.removed).toEqual(['serge-idea-lab']);
-    expect(read.status).toBe(404);
+    expect(read.status).toBe(410);
     expect(listData.ideas.map((idea) => idea.id)).not.toContain('serge-idea-lab');
   });
 
@@ -3211,6 +3211,47 @@ describe('FreeIdeaStore worker', () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: 'only the idea owner can delete this idea' });
+  });
+
+  it('returns 410 tombstone JSON for a soft-deleted idea via API', async () => {
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'DELETE',
+        headers: {
+          Authorization: SERGE_BEARER,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ confirm_title: 'Serge Idea Lab' }),
+      }),
+      testEnv,
+    );
+    const response = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const data = (await response.json()) as { error: string; status: string };
+
+    expect(response.status).toBe(410);
+    expect(data.error).toBe('idea has been removed');
+    expect(data.status).toBe('removed');
+  });
+
+  it('renders 410 tombstone HTML page for a soft-deleted idea', async () => {
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'DELETE',
+        headers: {
+          Authorization: SERGE_BEARER,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ confirm_title: 'Serge Idea Lab' }),
+      }),
+      testEnv,
+    );
+    const response = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab'), testEnv);
+    const html = await response.text();
+
+    expect(response.status).toBe(410);
+    expect(html).toContain('been removed');
   });
 
   it('renders rich user profile pages with public work sections', async () => {

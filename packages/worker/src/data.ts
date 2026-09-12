@@ -85,6 +85,24 @@ export async function ideaById(env: Env, ideaId: string) {
     .first<IdeaRow>();
 }
 
+export async function ideaByIdIncludeRemoved(env: Env, ideaId: string) {
+  return env.DB.prepare(
+    `SELECT
+       i.*,
+       COUNT(DISTINCT CASE WHEN r.type = 'support' THEN r.id END) AS support,
+       COUNT(DISTINCT CASE WHEN r.type = 'trash' THEN r.id END) AS trash,
+       COUNT(DISTINCT CASE WHEN r.type = 'pivot' THEN r.id END) AS pivot,
+       COUNT(DISTINCT c.id) AS contribution_count
+     FROM ideas i
+     LEFT JOIN reactions r ON r.idea_id = i.id
+     LEFT JOIN contributions c ON c.idea_id = i.id
+     WHERE i.id = ?
+     GROUP BY i.id`,
+  )
+    .bind(ideaId)
+    .first<IdeaRow>();
+}
+
 /**
  * How many derived children a parent lists in its Signals rail.
  *

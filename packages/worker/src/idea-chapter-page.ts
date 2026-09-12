@@ -1,5 +1,5 @@
 import { brandHead, brandLockup, brandCss } from './brand';
-import { ideaBody, ideaById } from './data';
+import { ideaBody, ideaByIdIncludeRemoved } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
 import {
   ideaChapterById,
@@ -18,7 +18,21 @@ import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
 import type { Env } from './types';
 
 export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: string, requestedChapterId: string) {
-  const idea = await ideaById(env, ideaId);
+  const idea = await ideaByIdIncludeRemoved(env, ideaId);
+  if (idea?.status === 'removed') {
+    return new Response(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Idea removed</title>
+</head>
+<body>
+<h1>Idea removed</h1>
+<p>This idea has been removed. The link you followed is no longer active.</p>
+</body>
+</html>`, { status: 410, headers: SECURITY_HEADERS });
+  }
   if (!idea) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
 
   const body = await ideaBody(env, idea);

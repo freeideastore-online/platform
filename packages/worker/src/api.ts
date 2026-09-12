@@ -16,7 +16,7 @@ import {
   updateIdea,
   updateIdeaSection,
 } from './api-idea-mutations';
-import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideasByProfile, listContributors, listIdeas } from './data';
+import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { documentMetrics, ideaPreamble, ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
@@ -108,7 +108,10 @@ async function handleGetIdea(env: Env, ideaParam: string, url: URL) {
   if (!(BODY_VIEWS as readonly string[]).includes(requested)) {
     return bad(`body must be one of ${BODY_VIEWS.join(', ')}`);
   }
-  const idea = await ideaById(env, ideaId);
+  const idea = await ideaByIdIncludeRemoved(env, ideaId);
+  if (idea?.status === 'removed') {
+    return Response.json({ error: 'idea has been removed', status: 'removed' }, { status: 410, headers: SECURITY_HEADERS });
+  }
   if (!idea) return bad('idea not found', 404);
   const body = await ideaBody(env, idea);
   return json({
