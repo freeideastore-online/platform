@@ -274,7 +274,18 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     // Only an explicit `response_mode=query` opts into the URL handoff, so an
     // ordinary browser sign-in that happens to name an allowlisted origin still
     // gets a cookie and nothing else.
-    const handoff = url.searchParams.get('response_mode') === 'query' ? handoffTarget(requestedReturn) : null;
+    const responseModeQuery = url.searchParams.get('response_mode') === 'query';
+    const handoff = responseModeQuery ? handoffTarget(requestedReturn) : null;
+    if (responseModeQuery && !handoff) {
+      // response_mode=query is an MCP handoff; refuse loudly if the origin is
+      // missing or not on the allowlist rather than silently falling back to a
+      // same-origin redirect.  A silent fallback would hand an MCP client a
+      // cookie-based session it cannot use, with no indication of the real error.
+      return new Response(
+        'response_mode=query requires a return_to URL whose origin is on the MCP handoff allowlist',
+        { status: 400, headers: SECURITY_HEADERS },
+      );
+    }
     const returnTarget = handoff ? handoff.toString() : sameOriginPath(url, requestedReturn || '/console/');
     const nonce = crypto.randomUUID();
 

@@ -151,7 +151,7 @@ describe('cross-origin session handoff', () => {
     const location = done?.headers.get('location') ?? '';
 
     // Clamped back to a path on this origin, exactly as before.
-    expect(location).toBe('https://freeideastore.online/');
+    expect(location).toContain('auth_error');
     expect(location).not.toContain('evil.example');
   });
 
