@@ -183,6 +183,19 @@ describe('cross-origin session handoff', () => {
     expect(location.searchParams.get('fis_session')).toBeNull();
   });
 
+  it('puts same-origin failures in a single readable fragment', async () => {
+    stubGitHub();
+    const env = fakeEnv();
+    const started = await start('provider=github&return_to=/console/#draft', env);
+    const { header } = nonceCookie(started);
+
+    const done = await callback('not-the-nonce', env, header);
+    const location = new URL(done?.headers.get('location') ?? '');
+
+    expect(location.toString()).toBe('https://freeideastore.online/console/#auth_error=invalid_state');
+    expect(location.hash).toBe('#auth_error=invalid_state');
+  });
+
   it('refuses a handoff it cannot mint for itself', async () => {
     // A handoff hands another Worker a token to verify, so it may only ever be
     // a token this store signed. Before #38 a Worker without a signing key

@@ -120,7 +120,11 @@ function handoffTarget(raw: string | null): URL | null {
  * the reason has to travel as a query parameter to be reported to the user.
  */
 function authErrorUrl(url: URL, handoff: URL | null, returnPath: string, reason: string) {
-  if (!handoff) return `${url.origin}${returnPath}#auth_error=${reason}`;
+  if (!handoff) {
+    const target = new URL(returnPath, url.origin);
+    target.hash = `auth_error=${encodeURIComponent(reason)}`;
+    return target.toString();
+  }
   const target = new URL(handoff.toString());
   target.searchParams.set('auth_error', reason);
   return target.toString();

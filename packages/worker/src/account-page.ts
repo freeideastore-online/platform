@@ -1,6 +1,7 @@
 import { brandHead, brandLockup } from './brand';
 import { contributorByHandle, contributionsByProfile, ideasByProfile } from './data';
 import { AUTH_PREFIX, authUserFor } from './auth';
+import { AUTH_ERROR_FRAGMENT_SCRIPT } from './auth-error-fragment';
 import { escapeHtml, SECURITY_HEADERS } from './http';
 import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
 import { THEME_BOOT, THEME_CSS, THEME_SCRIPT } from './theme';
@@ -53,6 +54,7 @@ ${navCss(760)}
 </head>
 <body>
 <header>${brandLockup()}<nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a class="account-link" href="/console/">Sign in</a>`}<button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
+<div data-auth-error-host style="padding:1rem 1.25rem 0"></div>
 <main class="shell">
   ${
     user
@@ -81,10 +83,10 @@ if (logout) logout.onclick = async () => {
   location.href = '/';
 };
 </script>
+<script>${AUTH_ERROR_FRAGMENT_SCRIPT}</script>
 ${THEME_SCRIPT}
 ${NAV_SCRIPT}
 </body></html>`, {
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'no-store' },
   });
 }
-

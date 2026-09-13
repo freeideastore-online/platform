@@ -1,3 +1,4 @@
+import { AUTH_ERROR_FRAGMENT_SCRIPT } from './auth-error-fragment';
 import { SECURITY_HEADERS } from './http';
 
 export function renderConsolePage() {
@@ -16,7 +17,9 @@ export function renderConsolePage() {
 <link rel="stylesheet" href="/console/dist/assets/index.css">
 </head>
 <body>
+<div data-auth-error-host style="padding:16px 16px 0"></div>
 <div id="root"></div>
+<script>${AUTH_ERROR_FRAGMENT_SCRIPT}</script>
 <script type="module" src="/console/dist/assets/bundle.js"></script>
 </body>
 </html>`, {
