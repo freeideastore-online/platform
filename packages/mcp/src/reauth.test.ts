@@ -230,6 +230,19 @@ describe("pairing records", () => {
     expect(await readPairing(store, code)).toBeNull();
   });
 
+  it("keeps the first completed identity when a code is completed twice", async () => {
+    const store = makeStore();
+    const code = await startPairing(store);
+    const first = { session: "session-token", uid: UID, expiresAt: 999 };
+    const second = { session: "other-session-token", uid: "identity-99", expiresAt: 1000 };
+
+    await completePairing(store, code, first);
+    await completePairing(store, code, second);
+
+    expect(await readPairing(store, code)).toEqual({ status: "ready", ...first });
+    expect(await redeemPairing(store, code)).toEqual(first);
+  });
+
   it("refuses to hand over an identity nobody has signed in for yet", async () => {
     const store = makeStore();
     const code = await startPairing(store);

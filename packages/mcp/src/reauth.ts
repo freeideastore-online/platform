@@ -127,6 +127,11 @@ export async function completePairing(
   code: string,
   identity: { session: string; uid: string; expiresAt: number },
 ): Promise<void> {
+  // First-writer-wins: if a pairing is already ready, don't let a second
+  // OAuth callback overwrite the first one. The first completion wins.
+  const existing = await readPairing(store, code);
+  if (existing?.status === "ready") return;
+
   await store.put(
     pairingKey(code),
     JSON.stringify({
