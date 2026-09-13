@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { extractUrls, normaliseSourceUrl, syncDocumentSources } from './sources';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { checkSources, extractUrls, normaliseSourceUrl, syncDocumentSources } from './sources';
 import type { Env, IdeaRow } from './types';
 
 /**
@@ -13,6 +13,7 @@ class CountingD1 {
   roundTrips = 0;
   readonly registry = new Map<string, string>();
   readonly links: Array<{ sourceId: string; ideaId: string; section: string; contributionId: string }> = [];
+  readonly statusUpdates: Array<{ id: string; status: number }> = [];
 
   prepare(sql: string) {
     return new CountingStatement(sql, this);
@@ -49,10 +50,19 @@ class CountingD1 {
         const link = this.links[index];
         if (link && link.ideaId === ideaId && link.contributionId === '') this.links.splice(index, 1);
       }
+      return;
+    }
+    if (sql.includes('UPDATE sources SET status = ?')) {
+      const [status, sourceId] = binds as [number, string];
+      this.statusUpdates.push({ id: sourceId, status });
     }
   }
 
   select(statement: CountingStatement) {
+    if (statement.sql.includes('SELECT id, url FROM sources ORDER BY')) {
+      const limit = Number(statement.binds[0] ?? this.registry.size);
+      return [...this.registry].slice(0, limit).map(([url, id]) => ({ id, url }));
+    }
     if (!statement.sql.includes('SELECT id, url FROM sources WHERE url IN')) return [];
     // D1 rejects a statement with more than 100 bound parameters, so a
     // read-back that is not chunked is a production failure, not a slow query.
@@ -98,6 +108,11 @@ function stubEnv(db: CountingD1) {
 }
 
 const IDEA = { id: 'cellar-door-cycling', title: 'Cellar Door Cycling' } as IdeaRow;
+const USER_AGENT = 'FreeIdeaStore-LinkChecker/1.0 (+https://freeideastore.com/)';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('normaliseSourceUrl', () => {
   it('treats the same source cited different ways as one url', () => {
@@ -211,5 +226,49 @@ describe('syncDocumentSources', () => {
 
     await syncDocumentSources(stubEnv(db), IDEA, '## Snapshot\nNothing cited any more.');
     expect(db.links).toHaveLength(0);
+  });
+});
+
+describe('checkSources', () => {
+  it('does not count 403 responses as broken', async () => {
+    const db = new CountingD1();
+    db.registry.set('https://example.com/auth-gated', 'source_auth');
+    const fetchMock = vi.fn(async () => new Response(null, { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(checkSources(stubEnv(db))).resolves.toEqual({ checked: 1, broken: 0 });
+    expect(db.statusUpdates).toEqual([{ id: 'source_auth', status: 403 }]);
+  });
+
+  it('counts 404 responses as broken', async () => {
+    const db = new CountingD1();
+    db.registry.set('https://example.com/missing', 'source_missing');
+    const fetchMock = vi.fn(async () => new Response(null, { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(checkSources(stubEnv(db))).resolves.toEqual({ checked: 1, broken: 1 });
+    expect(db.statusUpdates).toEqual([{ id: 'source_missing', status: 404 }]);
+  });
+
+  it('sends the User-Agent header on HEAD and fallback GET requests', async () => {
+    const db = new CountingD1();
+    db.registry.set('https://example.com/headless', 'source_headless');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 405 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(checkSources(stubEnv(db))).resolves.toEqual({ checked: 1, broken: 0 });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://example.com/headless', {
+      method: 'HEAD',
+      redirect: 'follow',
+      headers: { 'User-Agent': USER_AGENT },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://example.com/headless', {
+      method: 'GET',
+      redirect: 'follow',
+      headers: { 'User-Agent': USER_AGENT },
+    });
   });
 });

@@ -236,6 +236,7 @@ export async function sourceCitations(env: Env, sourceId: string) {
  * error in the checker.
  */
 export async function checkSources(env: Env, limit = 20) {
+  const USER_AGENT = 'FreeIdeaStore-LinkChecker/1.0 (+https://freeideastore.com/)';
   const rows = await env.DB.prepare(
     `SELECT id, url FROM sources ORDER BY last_checked ASC, id ASC LIMIT ?`,
   )
@@ -248,15 +249,23 @@ export async function checkSources(env: Env, limit = 20) {
     let status = 0;
     try {
       // HEAD first: most hosts answer it and it avoids pulling the body.
-      let response = await fetch(row.url, { method: 'HEAD', redirect: 'follow' });
+      let response = await fetch(row.url, {
+        method: 'HEAD',
+        redirect: 'follow',
+        headers: { 'User-Agent': USER_AGENT },
+      });
       if (response.status === 405 || response.status === 501) {
-        response = await fetch(row.url, { method: 'GET', redirect: 'follow' });
+        response = await fetch(row.url, {
+          method: 'GET',
+          redirect: 'follow',
+          headers: { 'User-Agent': USER_AGENT },
+        });
       }
       status = response.status;
     } catch {
       status = 0;
     }
-    if (status === 0 || status >= 400) broken += 1;
+    if (status === 0 || (status >= 400 && status !== 403)) broken += 1;
     checked += 1;
     await env.DB.prepare('UPDATE sources SET status = ?, last_checked = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(status, row.id)
