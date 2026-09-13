@@ -2753,6 +2753,8 @@ describe('FreeIdeaStore worker', () => {
     expect(consolePage.status).toBe(200);
     expect(consoleHtml).toContain('Idea Console - FreeIdeaStore');
     expect(consoleHtml).toContain('<div id="root"></div>');
+    expect(consoleHtml).toContain('data-auth-error-host');
+    expect(consoleHtml).toContain("new URLSearchParams(fragment).get('auth_error')");
     expect(consoleHtml).toContain('/console/dist/assets/bundle.js');
     expect(consolePage.headers.get('cache-control')).toBe('no-store');
   });
@@ -2814,6 +2816,8 @@ describe('FreeIdeaStore worker', () => {
     expect(html).toContain('Sign in to view your profile.');
     expect(html).toContain('Sign in with GitHub');
     expect(html).toContain('Sign in with Google');
+    expect(html).toContain('data-auth-error-host');
+    expect(html).toContain("new URLSearchParams(fragment).get('auth_error')");
   });
 
   it('renders signed-in account-owned ideas and contributions', async () => {

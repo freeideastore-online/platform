@@ -74,6 +74,20 @@ describe("inspectSession", () => {
   it("reports anything unparseable as malformed rather than guessing", async () => {
     await expect(inspectSession("", "test-signing-key")).resolves.toEqual({ ok: false, reason: "malformed" });
     await expect(inspectSession("no-dot", "test-signing-key")).resolves.toEqual({ ok: false, reason: "malformed" });
+    const valid = await sign({ uid: "user-1", iat: 1_780_272_000, exp: 1_780_275_600 });
+    const [body = "", sig = ""] = valid.split(".");
+    await expect(inspectSession(`${body.slice(0, -4)}.${sig}`, "test-signing-key")).resolves.toEqual({
+      ok: false,
+      reason: "malformed",
+    });
+    await expect(inspectSession(`${body}.${sig}.extra`, "test-signing-key")).resolves.toEqual({
+      ok: false,
+      reason: "malformed",
+    });
+    await expect(inspectSession(`${body}.not+base64url`, "test-signing-key")).resolves.toEqual({
+      ok: false,
+      reason: "malformed",
+    });
     // A key this worker does not have makes every token unverifiable, which must
     // not be reported as the user's token being wrong.
     await expect(inspectSession("a.b", "")).resolves.toEqual({ ok: false, reason: "malformed" });

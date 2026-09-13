@@ -40,22 +40,31 @@ export type SessionCheck =
 
 export async function inspectSession(token: string, signingKey: string): Promise<SessionCheck> {
   if (!token || !signingKey) return { ok: false, reason: "malformed" };
-  const dot = token.lastIndexOf(".");
-  if (dot < 0) return { ok: false, reason: "malformed" };
-  const body = token.slice(0, dot);
-  const sig = token.slice(dot + 1);
-  // Signature first: never parse attacker-controlled JSON we have not authenticated.
+  const parts = token.split(".");
+  if (parts.length !== 2) return { ok: false, reason: "malformed" };
+  const [body, sig] = parts;
+  if (!isB64UrlPart(body) || !isB64UrlPart(sig)) return { ok: false, reason: "malformed" };
+  const decoded = decodeSessionBody(body);
+  if (!decoded.ok) return { ok: false, reason: "malformed" };
   if (!timingSafeEqual(sig, await hmac(body, signingKey))) return { ok: false, reason: "bad_signature" };
-  let payload: SessionPayload;
-  try {
-    payload = JSON.parse(b64urlDecode(body)) as SessionPayload;
-  } catch {
-    return { ok: false, reason: "malformed" };
-  }
+  const payload = decoded.value as SessionPayload;
   if (typeof payload?.uid !== "string" || !payload.uid) return { ok: false, reason: "malformed" };
   if (typeof payload.exp !== "number") return { ok: false, reason: "malformed" };
   if (payload.exp < Math.floor(Date.now() / 1000)) return { ok: false, reason: "expired" };
   return { ok: true, payload };
+}
+
+function isB64UrlPart(value: string | undefined): value is string {
+  if (!value || value.length % 4 === 1) return false;
+  return /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+function decodeSessionBody(body: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(b64urlDecode(body)) as unknown };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export async function verifySession(token: string, signingKey: string): Promise<SessionPayload | null> {
