@@ -245,6 +245,30 @@ describe('ideaChapters', () => {
     expect(chapters[1]?.markdown).toContain('### Cheapest Test');
   });
 
+  it('keeps h4 (####) headings inside the chapter body so they are not invisible to the TOC', () => {
+    const chapters = ideaChapters([
+      '## Overview',
+      '',
+      '### Snapshot',
+      'The short version.',
+      '',
+      '#### Detail',
+      'A finer point.',
+      '',
+      '## Validation',
+      '',
+      '#### Quick check',
+      'One interview.',
+    ].join('\n'));
+
+    expect(chapters).toHaveLength(2);
+    expect(chapters[0]?.markdown).toContain('### Snapshot');
+    expect(chapters[0]?.markdown).toContain('#### Detail');
+    expect(chapters[0]?.markdown).toContain('A finer point.');
+    expect(chapters[1]?.markdown).toContain('#### Quick check');
+    expect(chapters[1]?.markdown).toContain('One interview.');
+  });
+
   it('does not turn content before the first heading into a chapter', () => {
     const chapters = ideaChapters([
       '> **Status: scan complete.** A lead-in, not a chapter.',
