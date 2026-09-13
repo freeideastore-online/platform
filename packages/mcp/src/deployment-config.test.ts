@@ -85,8 +85,8 @@ describe("MCP deployment config", () => {
     expect(publishingTools).toMatch(/body: z\.string\(\)[^\n]*\.optional\(\)/);
     expect(publishingTools).toMatch(/title: z\.string\(\)[^\n]*\.optional\(\)/);
     expect(collaborationTools).toContain('"react_to_idea"');
-    expect(skillTools).toContain('"dynamic_idea_book_template"');
-    expect(skillTools).toContain('"dry_run_dynamic_idea_book"');
+    expect(skillTools).toContain('"preview_dynamic_idea_book"');
+    expect(skillTools).toContain('"preview_idea_book_template"');
     expect(`${skillTools}${publishingTools}${collaborationTools}`).not.toContain(["dry_run", "proidea_book_export"].join("_"));
     expect(`${skillTools}${publishingTools}${collaborationTools}`).not.toContain("idea-books/${slug}");
   });
