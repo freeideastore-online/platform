@@ -49,14 +49,14 @@ export function registerSkillTools(server: McpServer, env: Env) {
   );
 
   server.tool(
-    "dynamic_idea_book_template",
+    "preview_idea_book_template",
     "Return the canonical Markdown heading spine used by dynamic FreeIdeaStore idea publications.",
     {},
     async () => text(CHAPTERS.map(([title, prompt]) => `## ${title}\n${prompt}`).join("\n\n")),
   );
 
   server.tool(
-    "dry_run_dynamic_idea_book",
+    "preview_dynamic_idea_book",
     "Preview the canonical Markdown and dynamic chapter URLs for a FreeIdeaStore idea. This does not write files.",
     {
       title: z.string().min(2),

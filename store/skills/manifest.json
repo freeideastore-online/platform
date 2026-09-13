@@ -78,7 +78,7 @@
       "title": "Pro Candidate Assessor",
       "path": "/skills/pro-candidate-assessor.md",
       "summary": "Decide whether an idea deserves ProIdeaStore diligence or should stay in FreeIdeaStore.",
-      "suggestedTools": ["get_idea", "add_idea_contribution", "promote_to_pro_candidate", "dry_run_dynamic_idea_book"]
+      "suggestedTools": ["get_idea", "add_idea_contribution", "promote_to_pro_candidate", "preview_idea_book_template"]
     }
   ]
 }
