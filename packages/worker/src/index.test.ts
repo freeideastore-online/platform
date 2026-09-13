@@ -2485,9 +2485,11 @@ describe('FreeIdeaStore worker', () => {
     );
     const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
     const data = (await list.json()) as { revisions: Array<{ id: string; source: string }> };
+    const updateData = (await update.json()) as { revision: string | null };
 
     expect(update.status).toBe(200);
     expect(data.revisions).toHaveLength(1);
+    expect(updateData.revision).toBe(data.revisions[0]?.id);
     expect(data.revisions[0]?.source).toBe('update');
 
     // The revision holds what was replaced, so the prior state is recoverable.
@@ -2502,7 +2504,7 @@ describe('FreeIdeaStore worker', () => {
 
   it('records a revision for a section write too', async () => {
     const testEnv = env();
-    await worker.fetch(
+    const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
         method: 'POST',
         headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
@@ -2511,9 +2513,11 @@ describe('FreeIdeaStore worker', () => {
       testEnv,
     );
     const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
-    const data = (await list.json()) as { revisions: Array<{ source: string; section: string }> };
+    const data = (await list.json()) as { revisions: Array<{ id: string; source: string; section: string }> };
+    const updateData = (await update.json()) as { revision: string | null };
 
     expect(data.revisions).toHaveLength(1);
+    expect(updateData.revision).toBe(data.revisions[0]?.id);
     expect(data.revisions[0]).toMatchObject({ source: 'section-append', section: 'snapshot' });
   });
 
@@ -2559,15 +2563,18 @@ describe('FreeIdeaStore worker', () => {
     );
     const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
     const data = (await read.json()) as { body: string };
+    const revertData = (await revert.json()) as { revision: string; new_revision: string | null };
 
     expect(revert.status).toBe(200);
+    expect(revertData.revision).toBe(revisions[0]?.id);
+    expect(revertData.new_revision).toBeTruthy();
     expect(data.body).toBe(original);
 
     // The overwrite that was undone is still on record.
     const after = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
-    const afterData = (await after.json()) as { revisions: Array<{ source: string }> };
+    const afterData = (await after.json()) as { revisions: Array<{ id: string; source: string }> };
     expect(afterData.revisions).toHaveLength(2);
-    expect(afterData.revisions.some((revision) => revision.source === 'revert')).toBe(true);
+    expect(afterData.revisions).toContainEqual(expect.objectContaining({ id: revertData.new_revision, source: 'revert' }));
   });
 
   it('reports what a revision changed as added and removed lines', async () => {
@@ -2943,6 +2950,7 @@ describe('FreeIdeaStore worker', () => {
     await expect(update.json()).resolves.toEqual({
       ok: true,
       idea: 'serge-idea-lab',
+      revision: expect.any(String),
       url: '/ideas/serge-idea-lab/',
       usage: {
         chars: 83,

@@ -528,6 +528,7 @@ export async function updateIdeaSection(
     idea: idea.id,
     section: sectionId,
     mode,
+    revision: result.revisionId,
     words: result.words,
     chapters: result.chapters,
     usage: result.usage,
@@ -600,8 +601,9 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   }
   const metrics = documentMetrics(body, title);
   // publish_idea_update replaces the whole document; keep what it replaced.
+  let revisionId: string | null = null;
   if (bodyProvided && body !== previousBody) {
-    await recordRevision(env, idea, previousBody, {
+    revisionId = await recordRevision(env, idea, previousBody, {
       authorProfileId: profile.id,
       source: 'update',
       reason: String(input.reason || ''),
@@ -682,6 +684,7 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   return json({
     ok: true,
     idea: idea.id,
+    revision: revisionId,
     usage: documentUsage(body, metrics),
     url: `/ideas/${idea.id}/`,
     ...indexWarning(reindexed),
@@ -756,6 +759,7 @@ export async function revertIdeaToRevision(
     ok: true,
     idea: idea.id,
     revision: revision.id,
+    new_revision: metrics.revisionId,
     words: metrics.words,
     chapters: metrics.chapters,
     url: `/ideas/${idea.id}/`,
