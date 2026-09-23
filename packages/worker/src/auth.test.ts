@@ -138,21 +138,20 @@ describe('cross-origin session handoff', () => {
     expect(cookieSession).toContain(`Max-Age=${30 * 24 * 60 * 60}`);
   });
 
-  it('never sends a session to an origin that is not allowlisted', async () => {
-    stubGitHub();
+  it('returns a loud 503 for an origin that is not allowlisted', async () => {
     const env = fakeEnv();
     const started = await start(
       `provider=github&response_mode=query&return_to=${encodeURIComponent('https://evil.example/steal')}`,
       env,
     );
-    const { header, state } = nonceCookie(started);
+    const body = await started?.json();
 
-    const done = await callback(state, env, header);
-    const location = done?.headers.get('location') ?? '';
-
-    // Clamped back to a path on this origin, exactly as before.
-    expect(location).toBe('https://freeideastore.online/');
-    expect(location).not.toContain('evil.example');
+    expect(started?.status).toBe(503);
+    expect(started?.headers.get('location')).toBeNull();
+    expect(body).toEqual({
+      error: 'session handoff origin is not allowlisted',
+      origin: 'https://evil.example',
+    });
   });
 
   it('ignores an allowlisted origin unless the query handoff was asked for', async () => {
