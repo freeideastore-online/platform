@@ -32,6 +32,13 @@ type BackfillMetricsRow = {
   title: string;
 };
 
+type BackfillContributionSourceRow = {
+  id: string;
+  idea_id: string;
+  source_url?: string | null;
+  body?: string | null;
+};
+
 async function handleHealth(env: Env) {
   const row = await env.DB.prepare('SELECT COUNT(*) AS count FROM ideas').first<{ count: number }>();
   return json({ ok: true, service: 'freeideastore', ideas: row?.count ?? 0 });
@@ -118,6 +125,24 @@ async function handleBackfillMetrics(request: Request, env: Env) {
   }
 
   return json({ updated, skipped, errors });
+}
+
+async function handleBackfillContributionSources(request: Request, env: Env) {
+  const registered = await registeredProfileFor(request, env);
+  if (!registered) return json({ error: 'authentication required' }, { status: 401 });
+
+  const rows = await env.DB.prepare(
+    'SELECT id, idea_id, source_url, body FROM contributions',
+  ).all<BackfillContributionSourceRow>();
+
+  for (const row of rows.results) {
+    await syncContributionSources(env, row.idea_id, row.id, {
+      sourceUrl: row.source_url ?? undefined,
+      body: row.body ?? undefined,
+    });
+  }
+
+  return json({ ok: true, processed: rows.results.length });
 }
 
 /**
@@ -453,6 +478,12 @@ const routes: Route[] = [
     pattern: /^\/api\/admin\/backfill-metrics$/,
     methods: {
       POST: (request, env) => handleBackfillMetrics(request, env),
+    },
+  },
+  {
+    pattern: /^\/api\/admin\/backfill-contribution-sources$/,
+    methods: {
+      POST: (request, env) => handleBackfillContributionSources(request, env),
     },
   },
   {
