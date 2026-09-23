@@ -47,13 +47,14 @@ ${brandHead()}
 ${THEME_BOOT}
 <style>
 ${THEME_CSS}
-*{box-sizing:border-box;margin:0;padding:0}body{font-family:Manrope,system-ui,sans-serif;line-height:1.5}a{color:inherit;text-decoration:none}button{font:inherit}header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}.brand{display:flex;align-items:center;gap:.6rem;font-weight:800;margin-right:auto}.mark{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900}.brand span:last-child{font-family:Fraunces,serif}nav{display:flex;align-items:center;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}.account-avatar{display:inline-grid;width:36px;height:36px;place-items:center;border:2px solid var(--line);border-radius:50%;overflow:hidden;background:white}.account-avatar img{width:100%;height:100%;object-fit:cover}.account-avatar span{display:grid;place-items:center;border-radius:50%;background:#102027;color:#67e8f9;font-weight:900}.account-link{color:var(--muted);font-size:.8rem;font-weight:800}.shell{max-width:760px;margin:0 auto;padding:2rem 1.25rem}.identity{display:flex;gap:1rem;align-items:center;margin-bottom:1.5rem}.avatar-large{display:grid;width:72px;height:72px;place-items:center;border-radius:50%;overflow:hidden;background:#102027;color:#67e8f9;font-size:1.5rem;font-weight:900;box-shadow:inset 0 -6px 0 rgba(245,158,11,.9)}.avatar-large img{width:100%;height:100%;object-fit:cover}h1{font-family:Fraunces,serif;font-size:clamp(2rem,5vw,3.2rem);line-height:1}.muted{color:var(--muted);font-size:.88rem}.panel{border:1px solid var(--line);border-radius:8px;background:white;padding:1rem;margin-bottom:1rem;box-shadow:0 10px 22px rgba(16,32,39,.04)}.panel h2{font-size:.95rem;margin-bottom:.75rem}.row{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--line);padding:.7rem 0}.row:first-of-type{border-top:0}.row span{color:var(--muted);font-size:.85rem}.idea-list{display:grid;gap:.55rem}.idea-item{display:grid;gap:.18rem;border:1px solid var(--line);border-radius:8px;background:#fbfdfd;padding:.75rem}.idea-item strong{font-size:.95rem}.idea-item span,.idea-item time{color:var(--muted);font-size:.8rem}.pill{justify-self:start;border:1px solid var(--line);border-radius:999px;background:#ecfeff;color:#155e75;font-size:.66rem;font-weight:900;padding:.18rem .45rem;text-transform:uppercase}.button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;cursor:pointer;padding:.62rem .85rem;font-weight:900}.button.secondary{background:white;color:var(--accent)}.button.danger{border-color:var(--bad);background:white;color:var(--bad)}.seg{display:flex;gap:.5rem;flex-wrap:wrap}.seg button{border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);cursor:pointer;padding:.5rem .65rem;font-weight:800}.seg button.active{border-color:var(--accent);background:#ecfeff;color:#155e75}.danger{border-color:#fecaca}.actions{display:flex;gap:.55rem;flex-wrap:wrap}.panel-head{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.75rem}.panel-head h2{margin:0}.small-link{color:var(--accent);font-size:.78rem;font-weight:900}@media(max-width:760px){.panel-head{align-items:flex-start;flex-direction:column}}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Manrope,system-ui,sans-serif;line-height:1.5}a{color:inherit;text-decoration:none}button{font:inherit}header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--line);background:var(--topbar-bg);padding:.7rem 1.25rem;backdrop-filter:blur(14px)}.brand{display:flex;align-items:center;gap:.6rem;font-weight:800;margin-right:auto}.mark{display:grid;height:34px;width:34px;place-items:center;border-radius:8px;background:#102027;color:#67e8f9;font-weight:900}.brand span:last-child{font-family:Fraunces,serif}nav{display:flex;align-items:center;gap:.9rem;color:var(--muted);font-size:.8rem;font-weight:800}.account-avatar{display:inline-grid;width:36px;height:36px;place-items:center;border:2px solid var(--line);border-radius:50%;overflow:hidden;background:white}.account-avatar img{width:100%;height:100%;object-fit:cover}.account-avatar span{display:grid;place-items:center;border-radius:50%;background:#102027;color:#67e8f9;font-weight:900}.account-link{color:var(--muted);font-size:.8rem;font-weight:800}.shell{max-width:760px;margin:0 auto;padding:2rem 1.25rem}.identity{display:flex;gap:1rem;align-items:center;margin-bottom:1.5rem}.avatar-large{display:grid;width:72px;height:72px;place-items:center;border-radius:50%;overflow:hidden;background:#102027;color:#67e8f9;font-size:1.5rem;font-weight:900;box-shadow:inset 0 -6px 0 rgba(245,158,11,.9)}.avatar-large img{width:100%;height:100%;object-fit:cover}h1{font-family:Fraunces,serif;font-size:clamp(2rem,5vw,3.2rem);line-height:1}.muted{color:var(--muted);font-size:.88rem}.panel{border:1px solid var(--line);border-radius:8px;background:white;padding:1rem;margin-bottom:1rem;box-shadow:0 10px 22px rgba(16,32,39,.04)}.panel h2{font-size:.95rem;margin-bottom:.75rem}.auth-error{border-color:#fecaca;background:#fff7f7;color:var(--bad);font-size:.9rem;font-weight:800}.row{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--line);padding:.7rem 0}.row:first-of-type{border-top:0}.row span{color:var(--muted);font-size:.85rem}.idea-list{display:grid;gap:.55rem}.idea-item{display:grid;gap:.18rem;border:1px solid var(--line);border-radius:8px;background:#fbfdfd;padding:.75rem}.idea-item strong{font-size:.95rem}.idea-item span,.idea-item time{color:var(--muted);font-size:.8rem}.pill{justify-self:start;border:1px solid var(--line);border-radius:999px;background:#ecfeff;color:#155e75;font-size:.66rem;font-weight:900;padding:.18rem .45rem;text-transform:uppercase}.button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:white;cursor:pointer;padding:.62rem .85rem;font-weight:900}.button.secondary{background:white;color:var(--accent)}.button.danger{border-color:var(--bad);background:white;color:var(--bad)}.seg{display:flex;gap:.5rem;flex-wrap:wrap}.seg button{border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);cursor:pointer;padding:.5rem .65rem;font-weight:800}.seg button.active{border-color:var(--accent);background:#ecfeff;color:#155e75}.danger{border-color:#fecaca}.actions{display:flex;gap:.55rem;flex-wrap:wrap}.panel-head{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.75rem}.panel-head h2{margin:0}.small-link{color:var(--accent);font-size:.78rem;font-weight:900}@media(max-width:760px){.panel-head{align-items:flex-start;flex-direction:column}}
 ${navCss(760)}
 </style>
 </head>
 <body>
 <header>${brandLockup()}<nav id="site-nav" class="site-nav"><a href="/#ideas">Ideas</a><a href="/docs/">Docs</a><a href="/skills/">Skills</a><a href="/contributors/">Contributors</a><a href="/search">Search</a><a href="/console/">Console</a></nav>${user ? `<a class="account-avatar" href="/profile/" aria-label="Profile">${accountAvatar(user, 36)}</a>` : `<a class="account-link" href="/console/">Sign in</a>`}<button class="theme-toggle" type="button" aria-label="Toggle theme">&#9790;</button>${NAV_TOGGLE}</header>
 <main class="shell">
+  <section id="auth-error" class="panel auth-error" hidden></section>
   ${
     user
       ? `<section class="identity"><div class="avatar-large">${accountAvatar(user, 72)}</div><div><h1>${escapeHtml(user.displayName)}</h1><p class="muted">@${escapeHtml(user.handle)} / ${escapeHtml(user.provider)} account</p></div></section>
@@ -67,6 +68,24 @@ ${navCss(760)}
   }
 </main>
 <script>
+(() => {
+  const messages = {
+    denied: 'Sign-in was declined or the provider refused it.',
+    invalid_state: 'This sign-in could not be verified. Please try again.',
+    provider_error: 'The sign-in provider did not return a usable account. Please try again.',
+  };
+  const params = new URLSearchParams(location.search);
+  const reason = params.get('auth_error');
+  if (!reason) return;
+  params.delete('auth_error');
+  history.replaceState(history.state, '', location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash);
+  const message = messages[reason];
+  const panel = document.querySelector('#auth-error');
+  if (message && panel) {
+    panel.textContent = message;
+    panel.hidden = false;
+  }
+})();
 const storedTheme = localStorage.getItem('fis:theme') || 'system';
 document.querySelectorAll('[data-theme]').forEach((button) => {
   button.classList.toggle('active', button.dataset.theme === storedTheme);
@@ -87,4 +106,3 @@ ${NAV_SCRIPT}
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'no-store' },
   });
 }
-

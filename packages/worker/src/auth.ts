@@ -123,14 +123,12 @@ function handoffOrigin(raw: string | null): string | null {
 /**
  * Where to send the browser when sign-in does not complete.
  *
- * A same-origin return keeps the reason in the fragment: the console reads it
- * client-side and it never reaches a server or its logs. A handoff target is
- * another origin's *server* route, which cannot see a fragment at all, so there
- * the reason has to travel as a query parameter to be reported to the user.
+ * The reason travels as a query parameter so it composes with return URLs that
+ * already use fragments, such as the console's client-side routes. Client pages
+ * read it on load, show the message, and remove it from browser history.
  */
 function authErrorUrl(url: URL, handoff: URL | null, returnPath: string, reason: string) {
-  if (!handoff) return `${url.origin}${returnPath}#auth_error=${reason}`;
-  const target = new URL(handoff.toString());
+  const target = new URL(handoff?.toString() ?? `${url.origin}${returnPath}`);
   target.searchParams.set('auth_error', reason);
   return target.toString();
 }

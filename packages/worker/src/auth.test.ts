@@ -211,6 +211,19 @@ describe('ordinary sign-in', () => {
     expect(done?.headers.get('location')).toBe('https://freeideastore.online/console/');
     expect(cookies.some((c) => c.startsWith('__Host-fis_session='))).toBe(true);
   });
+
+  it('puts same-origin failure reasons in the query before an existing fragment', async () => {
+    const env = fakeEnv();
+    const started = await start(`provider=github&return_to=${encodeURIComponent('/console/#/ideas/example')}`, env);
+    const { header } = nonceCookie(started);
+
+    const done = await callback('not-the-nonce', env, header);
+    const location = new URL(done?.headers.get('location') ?? '');
+
+    expect(location.origin + location.pathname).toBe('https://freeideastore.online/console/');
+    expect(location.searchParams.get('auth_error')).toBe('invalid_state');
+    expect(location.hash).toBe('#/ideas/example');
+  });
 });
 
 /**

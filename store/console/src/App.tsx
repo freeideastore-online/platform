@@ -29,6 +29,12 @@ type LoadState<T> =
   | { status: "loaded"; data: T; error?: never }
   | { status: "error"; data?: T; error: string };
 
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  denied: "Sign-in was declined or the provider refused it.",
+  invalid_state: "This sign-in could not be verified. Please try again.",
+  provider_error: "The sign-in provider did not return a usable account. Please try again.",
+};
+
 function useLoader<T>(loader: () => Promise<T>, deps: unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: "loading" });
 
@@ -72,6 +78,21 @@ function useSession() {
   return user;
 }
 
+function useAuthError() {
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const reason = url.searchParams.get("auth_error");
+    if (!reason) return;
+    url.searchParams.delete("auth_error");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    setMessage(AUTH_ERROR_MESSAGES[reason] ?? null);
+  }, []);
+
+  return message;
+}
+
 function initials(value: string) {
   return value
     .split(/[\s-]+/)
@@ -102,6 +123,7 @@ function stageOptions(ideas: Idea[]) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   const user = useSession();
+  const authError = useAuthError();
 
   return (
     <div className="min-h-dvh bg-paper text-ink">
@@ -139,6 +161,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
       </header>
+      {authError ? <ErrorBlock message={authError} /> : null}
       {children}
     </div>
   );
