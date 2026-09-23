@@ -111,6 +111,15 @@ function handoffTarget(raw: string | null): URL | null {
   }
 }
 
+function handoffOrigin(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Where to send the browser when sign-in does not complete.
  *
@@ -274,7 +283,17 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     // Only an explicit `response_mode=query` opts into the URL handoff, so an
     // ordinary browser sign-in that happens to name an allowlisted origin still
     // gets a cookie and nothing else.
-    const handoff = url.searchParams.get('response_mode') === 'query' ? handoffTarget(requestedReturn) : null;
+    const wantsHandoff = url.searchParams.get('response_mode') === 'query';
+    const handoff = wantsHandoff ? handoffTarget(requestedReturn) : null;
+    if (wantsHandoff && !handoff) {
+      return json(
+        {
+          error: 'session handoff origin is not allowlisted',
+          origin: handoffOrigin(requestedReturn),
+        },
+        { status: 503 },
+      );
+    }
     const returnTarget = handoff ? handoff.toString() : sameOriginPath(url, requestedReturn || '/console/');
     const nonce = crypto.randomUUID();
 
