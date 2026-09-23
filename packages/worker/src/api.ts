@@ -26,6 +26,12 @@ import { listIdeaSources, sourceCitations, syncContributionSources } from './sou
 import { diffSummary, listRevisions, revisionBody, revisionById } from './revisions';
 import type { Env } from './types';
 
+type BackfillMetricsRow = {
+  id: string;
+  body_key?: string | null;
+  title: string;
+};
+
 async function handleHealth(env: Env) {
   const row = await env.DB.prepare('SELECT COUNT(*) AS count FROM ideas').first<{ count: number }>();
   return json({ ok: true, service: 'freeideastore', ideas: row?.count ?? 0 });
@@ -64,6 +70,54 @@ async function handleListIdeas(env: Env, url: URL) {
       limit: clampInt(url.searchParams.get('limit'), 60, 1, 100),
     }),
   });
+}
+
+async function handleBackfillMetrics(request: Request, env: Env) {
+  const registered = await registeredProfileFor(request, env);
+  if (!registered) return json({ error: 'authentication required' }, { status: 401 });
+
+  const rows = await env.DB.prepare(
+    `SELECT id, body_key, title
+     FROM ideas
+     WHERE status != 'removed'`,
+  ).all<BackfillMetricsRow>();
+
+  let updated = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const row of rows.results || []) {
+    if (!row.body_key) {
+      skipped += 1;
+      continue;
+    }
+    if (!env.IDEA_BUCKET) {
+      errors.push(`${row.id}: IDEA_BUCKET is not bound`);
+      continue;
+    }
+    try {
+      const object = await env.IDEA_BUCKET.get(row.body_key);
+      if (!object) {
+        skipped += 1;
+        errors.push(`${row.id}: missing R2 object ${row.body_key}`);
+        continue;
+      }
+      const body = await object.text();
+      const metrics = documentMetrics(body, row.title);
+      await env.DB.prepare(
+        `UPDATE ideas
+         SET body_words = ?, chapter_count = ?
+         WHERE id = ?`,
+      )
+        .bind(metrics.words, metrics.chapters, row.id)
+        .run();
+      updated += 1;
+    } catch (error) {
+      errors.push(`${row.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  return json({ updated, skipped, errors });
 }
 
 /**
@@ -393,6 +447,12 @@ const routes: Route[] = [
     pattern: /^\/api\/me\/activity$/,
     methods: {
       GET: (request, env, url) => handleMeActivity(request, env, url),
+    },
+  },
+  {
+    pattern: /^\/api\/admin\/backfill-metrics$/,
+    methods: {
+      POST: (request, env) => handleBackfillMetrics(request, env),
     },
   },
   {
