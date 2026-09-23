@@ -17,6 +17,7 @@ import {
   addIdeaSection,
   mergeIdeaSections,
   moveIdeaSection,
+  PUBLICATION_POLICY,
   removeIdeaSection,
   renameIdeaSection,
   replaceIdeaSection,
@@ -1004,5 +1005,41 @@ describe('ideaSectionList sizing', () => {
     expect(documentMetrics(doc, 'Idea').words).toBe(3 * (295 + 8));
     expect(isPaginated(doc, 'Idea')).toBe(true);
     expect(ideaSectionList(doc, 'Idea').map((s) => s.words)).toEqual([295, 295, 295]);
+  });
+});
+
+describe('backfill metrics invariant', () => {
+  const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+  const chapter = (title: string, n: number) => `## ${title}\n\n${words(n)}`;
+
+  function sqlGate(body: string, title: string) {
+    const { words, chapters } = documentMetrics(body, title);
+    return (
+      chapters >= PUBLICATION_POLICY.minChapters &&
+      Math.floor(words / chapters) >= PUBLICATION_POLICY.minMeanChapterWords
+    );
+  }
+
+  it('matches isPaginated for a document that clears the stored-metric gate', () => {
+    const doc = [
+      chapter('North Market', PUBLICATION_POLICY.minMeanChapterWords),
+      chapter('South Market', PUBLICATION_POLICY.minMeanChapterWords),
+      chapter('West Market', PUBLICATION_POLICY.minMeanChapterWords),
+    ].join('\n\n');
+
+    expect(sqlGate(doc, 'Idea')).toBe(true);
+    expect(sqlGate(doc, 'Idea')).toBe(isPaginated(doc, 'Idea'));
+  });
+
+  it('matches isPaginated for a document below the stored-metric gate', () => {
+    const underMean = PUBLICATION_POLICY.minMeanChapterWords - 50;
+    const doc = [
+      chapter('North', underMean),
+      chapter('South', underMean),
+      chapter('West', underMean),
+    ].join('\n\n');
+
+    expect(sqlGate(doc, 'Idea')).toBe(false);
+    expect(sqlGate(doc, 'Idea')).toBe(isPaginated(doc, 'Idea'));
   });
 });
