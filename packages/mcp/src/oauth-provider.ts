@@ -289,7 +289,8 @@ const SESSION_FAILURE_ADVICE: Record<SessionFailure, string> = {
   expired: "The sign-in took too long to come back. Start the connection again from your MCP client.",
   bad_signature:
     "FreeIdeaStore signed you in, but this server could not confirm the result. That is a server-side configuration fault, not something you can fix by retrying — please report it.",
-  malformed: "The sign-in result came back unreadable. Start the connection again from your MCP client.",
+  malformed:
+    "The sign-in token was corrupted in transit. Sign in again from your MCP client.",
 };
 
 async function oauthCallback(request: Request, config: OAuthConfig): Promise<Response> {

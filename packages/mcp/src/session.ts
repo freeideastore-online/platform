@@ -27,7 +27,8 @@ export interface SessionPayload {
 
 /**
  * Why a token did not verify. Worth distinguishing because the two failures have
- * nothing in common operationally: `expired` is a user who waited too long and
+ * nothing in common operationally: `malformed` is a token that did not survive
+ * the trip back through the browser, `expired` is a user who waited too long and
  * should sign in again, `bad_signature` means the two workers disagree about the
  * signing key and no amount of retrying will help. #34 spent its whole diagnosis
  * budget on the fact that both surfaced as the same four words.
@@ -40,22 +41,26 @@ export type SessionCheck =
 
 export async function inspectSession(token: string, signingKey: string): Promise<SessionCheck> {
   if (!token || !signingKey) return { ok: false, reason: "malformed" };
-  const dot = token.lastIndexOf(".");
-  if (dot < 0) return { ok: false, reason: "malformed" };
-  const body = token.slice(0, dot);
-  const sig = token.slice(dot + 1);
-  // Signature first: never parse attacker-controlled JSON we have not authenticated.
-  if (!timingSafeEqual(sig, await hmac(body, signingKey))) return { ok: false, reason: "bad_signature" };
+  const parts = token.split(".");
+  if (parts.length !== 2) return { ok: false, reason: "malformed" };
+  const body = parts[0] ?? "";
+  const sig = parts[1] ?? "";
+  if (!isBase64Url(body) || !isBase64Url(sig)) return { ok: false, reason: "malformed" };
   let payload: SessionPayload;
   try {
     payload = JSON.parse(b64urlDecode(body)) as SessionPayload;
   } catch {
     return { ok: false, reason: "malformed" };
   }
+  if (!timingSafeEqual(sig, await hmac(body, signingKey))) return { ok: false, reason: "bad_signature" };
   if (typeof payload?.uid !== "string" || !payload.uid) return { ok: false, reason: "malformed" };
   if (typeof payload.exp !== "number") return { ok: false, reason: "malformed" };
   if (payload.exp < Math.floor(Date.now() / 1000)) return { ok: false, reason: "expired" };
   return { ok: true, payload };
+}
+
+function isBase64Url(value: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(value);
 }
 
 export async function verifySession(token: string, signingKey: string): Promise<SessionPayload | null> {

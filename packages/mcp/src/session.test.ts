@@ -74,9 +74,22 @@ describe("inspectSession", () => {
   it("reports anything unparseable as malformed rather than guessing", async () => {
     await expect(inspectSession("", "test-signing-key")).resolves.toEqual({ ok: false, reason: "malformed" });
     await expect(inspectSession("no-dot", "test-signing-key")).resolves.toEqual({ ok: false, reason: "malformed" });
+    await expect(inspectSession("too.many.dots", "test-signing-key")).resolves.toEqual({ ok: false, reason: "malformed" });
+    await expect(inspectSession("not+url.badsig", "test-signing-key")).resolves.toEqual({ ok: false, reason: "malformed" });
+    await expect(inspectSession(`${b64url("not json")}.badsig`, "test-signing-key")).resolves.toEqual({
+      ok: false,
+      reason: "malformed",
+    });
     // A key this worker does not have makes every token unverifiable, which must
     // not be reported as the user's token being wrong.
     await expect(inspectSession("a.b", "")).resolves.toEqual({ ok: false, reason: "malformed" });
+  });
+
+  it("keeps a well-shaped token with the wrong signature as bad_signature", async () => {
+    await expect(inspectSession(`${b64url("{}")}.badsig`, "test-signing-key")).resolves.toEqual({
+      ok: false,
+      reason: "bad_signature",
+    });
   });
 
   it("rejects a correctly signed token with no identity in it", async () => {
