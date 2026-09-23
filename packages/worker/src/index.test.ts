@@ -787,6 +787,18 @@ class FakeD1 {
         },
       });
     }
+    if (sql.includes('SELECT id, idea_id, source_url, body FROM contributions')) {
+      return new FakeStatement({
+        all: () => ({
+          results: this.contributions.map(({ id, idea_id, source_url, body }) => ({
+            id,
+            idea_id,
+            source_url: source_url ?? null,
+            body: body ?? null,
+          })),
+        }),
+      });
+    }
     if (sql.includes('SELECT id FROM contributions WHERE id = ?')) {
       return new FakeStatement({
         first: ([contributionId, ideaId]) => {
@@ -2096,6 +2108,74 @@ describe('FreeIdeaStore worker', () => {
     expect(data.sources[0]?.host).toBe('www.iso.org');
     expect(data.sources[0]?.sections).toEqual([]);
     expect(data.sources[0]?.contribution_citations).toBe(1);
+  });
+
+  it('backfills contribution source links without breaking the live create path', async () => {
+    const testEnv = env();
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    const createIdeaResponse = await worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          title: 'Backfill Source Test',
+          summary: 'Verifies contribution source indexing during create and backfill.',
+          body: '## Snapshot\nContribution citations drive this test.',
+        }),
+      }),
+      testEnv,
+    );
+    const created = (await createIdeaResponse.json()) as { idea: string };
+
+    expect(createIdeaResponse.status).toBe(201);
+
+    const createContributionResponse = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/${created.idea}/contributions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          kind: 'evidence',
+          body: 'The reference is https://example.com/ref1 for later replay.',
+        }),
+      }),
+      testEnv,
+    );
+    expect(createContributionResponse.status).toBe(201);
+
+    const before = await worker.fetch(new Request(`https://fis.test/api/ideas/${created.idea}/sources`), testEnv);
+    const beforeData = (await before.json()) as {
+      sources: Array<{ url: string; contribution_citations: number }>;
+    };
+    expect(beforeData.sources).toContainEqual(
+      expect.objectContaining({
+        url: 'https://example.com/ref1',
+        contribution_citations: 1,
+      }),
+    );
+
+    const backfill = await worker.fetch(
+      new Request('https://fis.test/api/admin/backfill-contribution-sources', {
+        method: 'POST',
+        headers: { Authorization: SERGE_BEARER },
+      }),
+      testEnv,
+    );
+    const backfillData = (await backfill.json()) as { ok: boolean; processed: number };
+
+    expect(backfill.status).toBe(200);
+    expect(backfillData.ok).toBe(true);
+    expect(backfillData.processed).toBeGreaterThanOrEqual(1);
+
+    const after = await worker.fetch(new Request(`https://fis.test/api/ideas/${created.idea}/sources`), testEnv);
+    const afterData = (await after.json()) as {
+      sources: Array<{ url: string; contribution_citations: number }>;
+    };
+    expect(afterData.sources).toContainEqual(
+      expect.objectContaining({
+        url: 'https://example.com/ref1',
+        contribution_citations: 1,
+      }),
+    );
   });
 
   it('renders the sources section on the idea page', async () => {
