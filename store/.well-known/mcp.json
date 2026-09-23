@@ -36,11 +36,11 @@
           "description": "Apply a skill to a rough idea or existing idea context and return questions, a checklist, or tool plan."
         },
         {
-          "name": "dynamic_idea_book_template",
+          "name": "preview_idea_book_template",
           "description": "Return the canonical Markdown heading spine used by dynamic FreeIdeaStore idea books."
         },
         {
-          "name": "dry_run_dynamic_idea_book",
+          "name": "preview_dynamic_idea_book",
           "description": "Preview canonical Markdown and dynamic chapter URLs for a FreeIdeaStore idea without writing files."
         },
         {
