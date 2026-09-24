@@ -12,7 +12,7 @@ The public MCP discovery manifest is available at `/.well-known/mcp.json`. It li
 
 ## Important Tools
 
-All 38 tools the server registers, grouped by what they are for.
+All 39 tools the server registers, grouped by what they are for.
 
 **Authorization** — see [Authorization And Expiry](#authorization-and-expiry)
 
@@ -50,6 +50,7 @@ All 38 tools the server registers, grouped by what they are for.
 **Section reads and writes** — the cheap path for everything short of a full rewrite
 
 - `list_idea_sections`
+- `validate_publication`
 - `chapter_health`
 - `read_idea_section`
 - `patch_idea_section`

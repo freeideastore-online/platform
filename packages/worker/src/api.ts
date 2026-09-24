@@ -15,6 +15,7 @@ import {
   revertIdeaToRevision,
   updateIdea,
   updateIdeaSection,
+  validatePublication,
 } from './api-idea-mutations';
 import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
@@ -516,6 +517,12 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/derive$/,
     methods: {
       POST: (request, env, __, match) => deriveIdea(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/validate$/,
+    methods: {
+      POST: (request, env, __, match) => validatePublication(request, env, match![1] || ''),
     },
   },
   {

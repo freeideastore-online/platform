@@ -22,6 +22,13 @@ const VERBOSE_SECTIONS =
 /** One row of the section list a structural write returns. */
 type SectionRow = { id: string; title: string; words: number; verdict?: string };
 
+type ValidationResponse = {
+  usage: Record<string, number | undefined>;
+  chapters: SectionRow[];
+  chapters_created: number;
+  errors: string[];
+};
+
 /**
  * Trims the section list off a write response (#47).
  *
@@ -77,6 +84,20 @@ function resolvedSection(rows: SectionRow[], newTitle?: string) {
   if (matches.length === 1) return { section: matches[0] };
   if (matches.length > 1) return { section_candidates: matches };
   return {};
+}
+
+function validationSummary(data: ValidationResponse): string {
+  return JSON.stringify(
+    {
+      ok: data.errors.length === 0,
+      usage: data.usage,
+      chapters_created: data.chapters_created,
+      errors: data.errors,
+      chapters: data.chapters,
+    },
+    null,
+    2,
+  );
 }
 
 export function registerPublishingTools(server: McpServer, env: Env, getProps: () => McpProps) {
@@ -226,6 +247,43 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         return text(`Error listing sections (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
       return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "validate_publication",
+    "Preflight a batch of section writes against the authenticated owner's idea without saving anything. It runs the same Worker helpers as real section writes and returns the usage budget, resulting chapters, chapters_created, and any write-equivalent errors.",
+    {
+      idea_id: z.string().min(2),
+      mode: z.enum(["add", "append", "replace"]).optional().describe("Default mode for sections that do not set their own mode. Defaults to add."),
+      sections: z.array(z.object({
+        mode: z.enum(["add", "append", "replace"]).optional(),
+        section: z.string().optional().describe("Existing section id for append or replace. If omitted, an exact title match is used when possible."),
+        title: z.string().max(120).optional().describe("New section title for add, or an existing title to resolve for append/replace."),
+        content: z.string().max(SECTION_CHARS).optional().describe(`Markdown for this operation. ${HEADING_CONTRACT} ${SECTION_LIMIT_NOTE}`),
+        after: z.string().optional().describe("For add mode, insert after this section id."),
+        before: z.string().optional().describe("For add mode, insert before this section id."),
+        demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
+      })).min(1),
+    },
+    async (input) => {
+      const props = getProps();
+      if (!props.token) {
+        return text("Error validating publication: authentication required. Connect through MCP OAuth first.");
+      }
+      const res = await fisApi<ValidationResponse>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/validate`,
+        {
+          method: "POST",
+          body: JSON.stringify({ mode: input.mode, sections: input.sections }),
+          token: props.token,
+        },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error validating publication (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(validationSummary(res.data));
     },
   );
 

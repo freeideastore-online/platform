@@ -161,13 +161,13 @@ describe("MCP deployment config", () => {
     expect(publishingTools).toContain("`###` and deeper stay inside the chapter");
     expect(publishingTools).toContain("set demote_headings: true");
 
-    // Each of the three `content` fields carries it, and each tool declares the
-    // flag and forwards it to the API — a flag the schema advertises and the
-    // request body drops is worse than no flag.
+    // Each write or preflight `content` field carries it, and each real write
+    // declares the flag and forwards it to the API — a flag the schema
+    // advertises and the request body drops is worse than no flag.
     const contentFields = publishingTools.match(/content: z\.string\(\)[^\n]*HEADING_CONTRACT/g) || [];
-    expect(contentFields).toHaveLength(3);
+    expect(contentFields).toHaveLength(4);
     const declared = publishingTools.match(/demote_headings: z\.boolean\(\)\.optional\(\)/g) || [];
-    expect(declared).toHaveLength(3);
+    expect(declared).toHaveLength(4);
     const forwarded = publishingTools.match(/demote_headings: input\.demote_headings/g) || [];
     expect(forwarded).toHaveLength(3);
   });

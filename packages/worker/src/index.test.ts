@@ -1763,6 +1763,85 @@ describe('FreeIdeaStore worker', () => {
     expect(response.status).toBe(403);
   });
 
+  describe('validate publication preflight', () => {
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    const operation = {
+      mode: 'add',
+      title: 'Evidence',
+      content: [
+        '# Source file',
+        'Opening finding.',
+        '',
+        '## Bottom line',
+        'A second chapter the parser should see.',
+      ].join('\n'),
+    };
+
+    type ValidateResponse = {
+      usage: Record<string, number>;
+      chapters: Array<{ id: string; title: string; words: number; verdict: string }>;
+      chapters_created: number;
+      errors: string[];
+    };
+
+    it('matches the subsequent real write for usage, chapters, chapters_created and errors', async () => {
+      const testEnv = env();
+      const before = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/sections'), testEnv);
+      const beforeData = (await before.json()) as { sections: Array<{ id: string }> };
+      const validate = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/validate', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ sections: [operation] }),
+        }),
+        testEnv,
+      );
+      const preflight = (await validate.json()) as ValidateResponse;
+
+      const write = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(operation),
+        }),
+        testEnv,
+      );
+      const written = (await write.json()) as {
+        usage: Record<string, number>;
+        sections: Array<{ id: string; title: string; words: number; verdict: string }>;
+      };
+
+      expect(validate.status).toBe(200);
+      expect(write.status).toBe(200);
+      expect(preflight.errors).toEqual([]);
+      expect(preflight.usage).toEqual(written.usage);
+      expect(preflight.chapters).toEqual(written.sections);
+      expect(preflight.chapters_created).toBe(written.sections.length - beforeData.sections.length);
+    });
+
+    it('does not persist the candidate document', async () => {
+      const testEnv = env();
+      const before = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+      const beforeData = (await before.json()) as { body: string };
+
+      const validate = await worker.fetch(
+        new Request('https://fis.test/api/ideas/serge-idea-lab/validate', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ sections: [operation] }),
+        }),
+        testEnv,
+      );
+      const after = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+      const afterData = (await after.json()) as { body: string };
+
+      expect(validate.status).toBe(200);
+      expect(afterData.body).toBe(beforeData.body);
+      expect(afterData.body).not.toContain('## Evidence');
+      expect(testEnv.DB.revisions).toHaveLength(0);
+    });
+  });
+
   it('serves a requested page of the research record', async () => {
     const testEnv = env();
     const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="zensical-0.0.46">
+      <meta name="generator" content="zensical-0.0.44">
     
     
       
@@ -34,7 +34,7 @@
       
         
       
-      <link rel="stylesheet" href="../assets/stylesheets/modern/main.19d3147f.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.fba56155.min.css">
       
       
 
@@ -426,6 +426,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#authorization-and-expiry" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Authorization And Expiry
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#prefer-section-writes-over-whole-document-rewrites" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -434,6 +445,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Prefer Section Writes Over Whole-Document Rewrites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headings-in-section-content-split-the-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Headings In Section Content Split The Section
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -441,6 +469,28 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         Document History Is Kept
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refinements-are-opened-and-closed-by-different-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Refinements Are Opened And Closed By Different Tools
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#look-before-you-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Look Before You Write
       </span>
     </span>
   </a>
@@ -577,6 +627,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#authorization-and-expiry" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Authorization And Expiry
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#prefer-section-writes-over-whole-document-rewrites" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -585,6 +646,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Prefer Section Writes Over Whole-Document Rewrites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headings-in-section-content-split-the-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Headings In Section Content Split The Section
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -592,6 +670,28 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         Document History Is Kept
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refinements-are-opened-and-closed-by-different-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Refinements Are Opened And Closed By Different Tools
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#look-before-you-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Look Before You Write
       </span>
     </span>
   </a>
@@ -640,18 +740,47 @@
 <h2 id="endpoint">Endpoint<a class="headerlink" href="#endpoint" title="Permanent link">&para;</a></h2>
 <p><code>https://mcp.freeideastore.online/mcp</code></p>
 <h2 id="discovery">Discovery<a class="headerlink" href="#discovery" title="Permanent link">&para;</a></h2>
-<p>The public MCP discovery manifest is available at <code>/.well-known/mcp.json</code>.</p>
+<p>The public MCP discovery manifest is available at <code>/.well-known/mcp.json</code>. It lists every tool the server registers, and a test fails the build if the two ever disagree — an unlisted tool is an uncallable tool in practice, because an agent picks what to call from the list it can read.</p>
 <h2 id="important-tools">Important Tools<a class="headerlink" href="#important-tools" title="Permanent link">&para;</a></h2>
+<p>All 39 tools the server registers, grouped by what they are for.</p>
+<p><strong>Authorization</strong> — see <a href="#authorization-and-expiry">Authorization And Expiry</a></p>
 <ul>
+<li><code>authenticate</code></li>
+<li><code>complete_authentication</code></li>
+</ul>
+<p><strong>Skills and templates</strong></p>
+<ul>
+<li><code>free_idea_template</code></li>
 <li><code>list_idea_skills</code></li>
 <li><code>get_idea_skill</code></li>
 <li><code>apply_idea_skill</code></li>
-<li><code>create_free_idea</code></li>
+<li><code>dynamic_idea_book_template</code></li>
+<li><code>preview_idea_book_layout</code></li>
+</ul>
+<p><strong>Reading</strong></p>
+<ul>
 <li><code>get_idea</code></li>
 <li><code>my_ideas</code></li>
+<li><code>my_activity</code></li>
+</ul>
+<p><strong>Creating and contributing</strong></p>
+<ul>
+<li><code>create_free_idea</code></li>
+<li><code>derive_idea</code></li>
 <li><code>add_idea_contribution</code></li>
+<li><code>react_to_idea</code></li>
+</ul>
+<p><strong>Whole-document writes</strong></p>
+<ul>
 <li><code>publish_idea_update</code></li>
+<li><code>delete_idea</code></li>
+<li><code>promote_to_pro_candidate</code></li>
+</ul>
+<p><strong>Section reads and writes</strong> — the cheap path for everything short of a full rewrite</p>
+<ul>
 <li><code>list_idea_sections</code></li>
+<li><code>validate_publication</code></li>
+<li><code>chapter_health</code></li>
 <li><code>read_idea_section</code></li>
 <li><code>patch_idea_section</code></li>
 <li><code>append_to_idea_section</code></li>
@@ -659,16 +788,33 @@
 <li><code>edit_idea_section</code></li>
 <li><code>merge_idea_sections</code></li>
 <li><code>delete_idea_section</code></li>
+</ul>
+<p><strong>Revision history</strong></p>
+<ul>
 <li><code>list_idea_revisions</code></li>
 <li><code>read_idea_revision</code></li>
 <li><code>diff_idea_revision</code></li>
 <li><code>revert_idea_to_revision</code></li>
-<li><code>delete_idea</code></li>
-<li><code>react_to_idea</code></li>
-<li><code>promote_to_pro_candidate</code></li>
-<li><code>dynamic_idea_book_template</code></li>
-<li><code>preview_idea_book_layout</code></li>
 </ul>
+<p><strong>Refinement queue</strong> — proposing a change and closing it are different tools</p>
+<ul>
+<li><code>propose_idea_refinement</code></li>
+<li><code>list_pending_refinements</code></li>
+<li><code>apply_refinement</code></li>
+<li><code>resolve_refinement</code></li>
+</ul>
+<p><strong>Search and sources</strong> — the indexes every canonical write rebuilds, made readable</p>
+<ul>
+<li><code>search_ideas</code></li>
+<li><code>list_idea_sources</code></li>
+<li><code>get_source</code></li>
+</ul>
+<h2 id="authorization-and-expiry">Authorization And Expiry<a class="headerlink" href="#authorization-and-expiry" title="Permanent link">&para;</a></h2>
+<p>An MCP access token lives 24 hours, and the FreeIdeaStore session behind it expires with it. A long authoring run can therefore outlive its own credential, and the way that used to surface was a write failing part-way through a migration with no route back inside the session — once leaving fifteen chapters reading <code>(chapter loading)</code> on a live public page.</p>
+<p>Three things now stand between an agent and that outcome.</p>
+<p><strong>Check the time you have before you spend it.</strong> <code>authenticate</code> with no arguments reports the current session: <code>user_id</code>, <code>expires_at</code>, <code>expires_in_seconds</code>, and <code>renew_recommended</code> when under thirty minutes remain. Call it before anything that writes more than once. If the credential is short, call <code>authenticate</code> with <code>force: true</code> and renew before starting rather than during.</p>
+<p><strong>Recover in-band.</strong> <code>authenticate</code> returns an <code>authorization_url</code> and a <code>pairing_code</code>. Give the URL to the user; they sign in with GitHub or Google. Then call <code>complete_authentication</code> — no arguments, the session remembers its own code — and the recovered identity is bound to the session, durably, so it also survives Durable Object hibernation. Check the <code>user_id</code> it returns owns the documents being written: GitHub and Google accounts with near-identical handles have produced silent wrong-account writes here before.</p>
+<p><strong>Recover out-of-band when the tools are gone.</strong> If the token expires outright, MCP clients withdraw the server's tools and no tool call is possible. The 401 body carries <code>reauthorize_url</code> for that case — <code>https://mcp.freeideastore.online/reauthorize</code> works with no prior tool call, and shows a pairing code after sign-in that can be read back to the agent as <code>complete_authentication</code>'s <code>pairing_code</code>. Pairing codes are single-use and expire in fifteen minutes.</p>
 <h2 id="prefer-section-writes-over-whole-document-rewrites">Prefer Section Writes Over Whole-Document Rewrites<a class="headerlink" href="#prefer-section-writes-over-whole-document-rewrites" title="Permanent link">&para;</a></h2>
 <p><code>publish_idea_update</code> replaces the entire canonical document, so revising one part costs the whole document in tokens both ways, and the whole document has to fit in one call. That pressure is why research accumulated as ten separate numbered contributions on one idea instead of landing in the document.</p>
 <p>For anything short of a full rewrite, work a section at a time:</p>
@@ -677,6 +823,7 @@
 <li><code>read_idea_section</code> — pull only the section being revised.</li>
 <li><code>patch_idea_section</code> to replace it, or <code>append_to_idea_section</code> to extend it. Everything outside the section stays byte-identical.</li>
 </ol>
+<p>The same applies to the fields that describe the document. <code>publish_idea_update</code> takes <code>body</code> as optional: omit it and only the metadata you send — <code>summary</code>, <code>title</code>, <code>stage</code>, <code>category</code>, <code>preview</code>, <code>signal</code>, <code>next_step</code>, <code>risk</code>, <code>source_url</code> — is written, and the canonical document is left byte-identical. Correcting a summary on a 116k-character document does not mean resending 116k characters, and a document past the body cap is still describable.</p>
 <p>Measured on a 9-section idea, reading one section returned 714 characters against roughly 4,700 for the whole document.</p>
 <p>Structure is editable at the same granularity. <code>patch_idea_section</code> and <code>append_to_idea_section</code> only touch sections that already exist, so growing or reshaping a document used to mean resending the whole body — the expensive path these tools exist to remove:</p>
 <ul>
@@ -686,7 +833,11 @@
 <li><code>delete_idea_section</code> — remove a section. Recoverable through revisions.</li>
 </ul>
 <p>Structural edits are ordinary canonical writes, so each one is snapshotted as a revision and re-indexes sources and search automatically.</p>
+<p><strong>Write responses do not carry the document tree.</strong> A structural write used to answer with every chapter of the document, so a ten-call consolidation pass re-read the whole structure ten times — the O(document) cost section writes exist to remove, moved from the request to the response. On a 74-chapter document that was 11,209 characters per call; it is now 419. What comes back is the outcome plus <code>usage</code> — <code>chars</code>, <code>chars_remaining</code>, <code>chapters</code>, <code>chapters_remaining</code>, <code>below_floor</code>, <code>above_ceiling</code> — so budget and chapter health stay visible without a second call, and <code>add_idea_section</code> and a rename still name the section id they produced in <code>section</code>. Pass <code>verbose: true</code> for the tree, or call <code>list_idea_sections</code>, which is the deliberate way to fetch it.</p>
 <p>Section ids stay stable under content edits, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.</p>
+<h3 id="headings-in-section-content-split-the-section">Headings In Section Content Split The Section<a class="headerlink" href="#headings-in-section-content-split-the-section" title="Permanent link">&para;</a></h3>
+<p><strong><code>#</code> and <code>##</code> both create sibling chapters; <code>###</code> and deeper stay inside the chapter.</strong> The <code>content</code> you send to <code>add_idea_section</code>, <code>patch_idea_section</code> or <code>append_to_idea_section</code> is parsed by the same rule as the rest of the document, so every <code>#</code> and every <code>##</code> in it becomes a chapter with its own URL — not only the heading you were told not to repeat. Feeding a research file in unchanged is how a migration that intended 15 chapters produced 74.</p>
+<p>To write a whole source file as ONE chapter, pass <code>demote_headings: true</code>. It shifts every heading in <code>content</code> below chapter level, uniformly, by whatever the shallowest heading present requires — two levels for a <code>#</code>-topped file, one for a <code>##</code>-topped file, none for content already at <code>###</code>. Demoting only the <code>##</code> headings by hand does not work: the <code>#</code> headings still split. The full contract is in <a href="../idea-books/#the-chapter-heading-contract">Publications</a>.</p>
 <h2 id="document-history-is-kept">Document History Is Kept<a class="headerlink" href="#document-history-is-kept" title="Permanent link">&para;</a></h2>
 <p>Every canonical write records the document as it was <strong>before</strong> the write, so the state preceding any change is recoverable — including the first change to a document that had no history. The live idea is always the head of the timeline.</p>
 <ul>
@@ -697,6 +848,20 @@
 </ul>
 <p>An unchanged body is not recorded. Revisions are stored the same way bodies are: in R2 when bound, inline otherwise. A failed snapshot never blocks the author's write.</p>
 <p>This matters for agents that rewrite boldly: nothing is destroyed, so an aggressive refinement is recoverable rather than final.</p>
+<h2 id="refinements-are-opened-and-closed-by-different-tools">Refinements Are Opened And Closed By Different Tools<a class="headerlink" href="#refinements-are-opened-and-closed-by-different-tools" title="Permanent link">&para;</a></h2>
+<p><code>propose_idea_refinement</code> records a section-level change without touching the canonical body, which is the right move for a contributor who is not the owner. It leaves an item in a queue, and the queue is worked with three other tools:</p>
+<ul>
+<li><code>list_pending_refinements</code> — proposals on an idea that have not been merged or closed. Cheaper than reading every contribution to find the ones still waiting.</li>
+<li><code>apply_refinement</code> — merge one into the canonical document and close it. Pass <code>content</code> to control the exact wording; without it the proposal text is appended verbatim. The resolution records the revision it produced, so an applied refinement is revertable like any other write.</li>
+<li><code>resolve_refinement</code> — close one without merging it, recording why. A queue nobody can close is a queue that stops being read.</li>
+</ul>
+<h2 id="look-before-you-write">Look Before You Write<a class="headerlink" href="#look-before-you-write" title="Permanent link">&para;</a></h2>
+<p>Every canonical write rebuilds two per-chapter indexes over the document it just wrote: one FTS row per chapter, keyed by the chapter id, and a link from every URL to the section citing it. Both were served to readers and reachable from no MCP tool, so the agent building a corpus was the only party that could not query it. That is what fourteen agents writing into one document in parallel worked around by listing sections and reading titles — and they still produced 74 near-duplicate chapters.</p>
+<ul>
+<li><code>search_ideas</code> — full text across idea chapters and research entries, optionally scoped to one idea. A hit's <code>ref</code> on a <code>section</code> result is exactly the <code>section</code> argument <code>read_idea_section</code> takes, so a result is directly actionable. Call it before adding a chapter, to find what the corpus already says.</li>
+<li><code>list_idea_sources</code> — every URL an idea cites, with the sections citing each one and the link-check <code>status</code> and <code>last_checked</code>. This is how an author sees citation decay; without it a source that 404s still reads as evidence in the prose.</li>
+<li><code>get_source</code> — the reverse index: one source and every idea, section and contribution citing it.</li>
+</ul>
 <h2 id="auth-rule">Auth Rule<a class="headerlink" href="#auth-rule" title="Permanent link">&para;</a></h2>
 <p>Creating public ideas may support fallback attribution. Comments, reactions, contributions, canonical updates, deletion, and owner-specific actions require authentication.</p>
 <p>Canonical updates, deletion, and <code>promote_to_pro_candidate</code> require the authenticated idea owner.</p>
@@ -758,10 +923,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.b6b7e04f.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
     
     
-      <script src="../assets/javascripts/bundle.ee611ef6.min.js"></script>
+      <script src="../assets/javascripts/bundle.6e5f0216.min.js"></script>
       
     
   </body>

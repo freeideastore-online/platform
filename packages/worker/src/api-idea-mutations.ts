@@ -9,6 +9,7 @@ import {
   demoteHeadings,
   documentMetrics,
   mergeIdeaSections,
+  ideaChapters,
   moveIdeaSection,
   ideaSectionList,
   removeIdeaSection,
@@ -158,6 +159,120 @@ export function documentUsage(
     chapters_remaining: Math.max(0, FIELD_LIMITS.chapters - metrics.chapters),
     below_floor: metrics.belowFloor,
     above_ceiling: metrics.aboveCeiling,
+  };
+}
+
+type PublicationOperation = {
+  mode?: unknown;
+  section?: unknown;
+  section_id?: unknown;
+  id?: unknown;
+  title?: unknown;
+  content?: unknown;
+  markdown?: unknown;
+  body?: unknown;
+  after?: unknown;
+  before?: unknown;
+  demote_headings?: unknown;
+  demoteHeadings?: unknown;
+};
+
+function publicationOperations(input: Record<string, unknown>): PublicationOperation[] | null {
+  const raw = Array.isArray(input) ? input : input.sections;
+  if (!Array.isArray(raw)) return null;
+  const globalMode = Array.isArray(input) ? undefined : input.mode;
+  const globalDemote = Array.isArray(input) ? undefined : input.demote_headings ?? input.demoteHeadings;
+  return raw.map((item) => {
+    const operation = typeof item === 'object' && item !== null ? item as PublicationOperation : {};
+    return {
+      ...operation,
+      mode: operation.mode ?? globalMode,
+      demote_headings: operation.demote_headings ?? operation.demoteHeadings ?? globalDemote,
+    };
+  });
+}
+
+function operationContent(input: PublicationOperation) {
+  const supplied = suppliedOperationContent(input);
+  return demoteRequested(input as Record<string, unknown>) ? demoteHeadings(supplied) : supplied;
+}
+
+function suppliedOperationContent(input: PublicationOperation) {
+  return String(input.content ?? input.markdown ?? input.body ?? '');
+}
+
+function sectionIdForOperation(body: string, title: string, input: PublicationOperation): string {
+  const explicit = String(input.section ?? input.section_id ?? input.id ?? '').trim();
+  if (explicit) return explicit;
+  const requestedTitle = String(input.title || '').trim();
+  if (!requestedTitle) return '';
+  const matched = ideaChapters(body, title).find((chapter) => chapter.title === requestedTitle);
+  return matched?.id || slug(requestedTitle);
+}
+
+function applyPublicationOperation(
+  body: string,
+  idea: IdeaRow,
+  input: PublicationOperation,
+): { body: string; error?: string; incoming?: string } {
+  const mode = String(input.mode || 'add').trim().toLowerCase();
+  const supplied = suppliedOperationContent(input);
+  const content = operationContent(input);
+
+  if (mode === 'replace' || mode === 'append') {
+    if (!supplied.trim()) return { body, error: 'section content is required' };
+    const sectionId = sectionIdForOperation(body, idea.title, input);
+    if (!pathId(sectionId)) return { body, error: 'invalid section id', incoming: content };
+    const next =
+      mode === 'append'
+        ? appendToIdeaSection(body, sectionId, content, idea.title)
+        : replaceIdeaSection(body, sectionId, content, idea.title);
+    if (next === null) {
+      return {
+        body,
+        error: `unknown section "${sectionId}" — read /api/ideas/${idea.id}/sections for the current list`,
+        incoming: content,
+      };
+    }
+    return { body: next, incoming: content };
+  }
+
+  if (mode !== 'add') return { body, error: 'mode must be one of add, append, replace', incoming: content };
+
+  const title = String(input.title || '').trim();
+  const next = addIdeaSection(body, title, content, {
+    after: String(input.after || '') || undefined,
+    before: String(input.before || '') || undefined,
+    documentTitle: idea.title,
+  });
+  if (next === null) {
+    return {
+      body,
+      error: `structural edit could not be applied — read /api/ideas/${idea.id}/sections for the current list`,
+      incoming: content,
+    };
+  }
+  return { body: next, incoming: supplied };
+}
+
+function publicationValidationResult(idea: IdeaRow, current: string, candidate: string, errors: string[]) {
+  const metrics = documentMetrics(candidate, idea.title);
+  const health = chapterHealth(candidate, idea.title);
+  const healthById = new Map(health.map((chapter) => [chapter.id, chapter]));
+  const chapters = ideaChapters(candidate, idea.title).map((chapter) => {
+    const sized = healthById.get(chapter.id);
+    return {
+      id: chapter.id,
+      title: chapter.title,
+      words: sized?.words ?? 0,
+      verdict: sized?.verdict ?? 'ok',
+    };
+  });
+  return {
+    usage: documentUsage(candidate, metrics),
+    chapters,
+    chapters_created: Math.max(0, chapters.length - ideaChapters(current, idea.title).length),
+    errors,
   };
 }
 
@@ -386,6 +501,42 @@ async function ownedIdea(request: Request, env: Env, rawIdeaId: string): Promise
     return json({ error: 'only the idea owner can update the canonical document' }, { status: 403 });
   }
   return idea;
+}
+
+export async function validatePublication(request: Request, env: Env, rawIdeaId: string) {
+  const owned = await ownedIdea(request, env, rawIdeaId);
+  if (owned instanceof Response) return owned;
+  const idea = owned;
+
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const operations = publicationOperations(parsedBody.data as Record<string, unknown>);
+  if (!operations) return bad('body must be an array of section operations, or an object with sections[]');
+
+  const current = await ideaBody(env, idea);
+  let candidate = current;
+  let incoming = '';
+  const errors: string[] = [];
+
+  for (const operation of operations) {
+    const applied = applyPublicationOperation(candidate, idea, operation);
+    if (applied.incoming) incoming += applied.incoming;
+    if (applied.error) {
+      errors.push(applied.error);
+      break;
+    }
+    candidate = applied.body;
+  }
+
+  if (errors.length === 0) {
+    const budget = documentOverflow(candidate, idea.title, {
+      current,
+      incoming: incoming || undefined,
+    });
+    if (budget) errors.push(budget);
+  }
+
+  return json(publicationValidationResult(idea, current, candidate, errors));
 }
 
 /**

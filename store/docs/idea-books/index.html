@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="zensical-0.0.46">
+      <meta name="generator" content="zensical-0.0.44">
     
     
       
@@ -34,7 +34,7 @@
       
         
       
-      <link rel="stylesheet" href="../assets/stylesheets/modern/main.19d3147f.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.fba56155.min.css">
       
       
 
@@ -396,6 +396,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-chapter-heading-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The Chapter Heading Contract
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Chapter Heading Contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#writing-a-whole-file-as-one-chapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Writing A Whole File As One Chapter
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-idea-page-itself-renders" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What The Idea Page Itself Renders
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-research-record-is-paged" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -610,6 +649,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-chapter-heading-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The Chapter Heading Contract
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Chapter Heading Contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#writing-a-whole-file-as-one-chapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Writing A Whole File As One Chapter
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-idea-page-itself-renders" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What The Idea Page Itself Renders
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-research-record-is-paged" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -731,16 +809,65 @@
 </ul>
 <p>A total-word gate was part of this and has been dropped. At 3 chapters averaging 300 words it was already implied, and it was the half that stopped mattering as documents grew: the idea that first motivated the policy now clears 3,168 words but averages 226 words per chapter. The per-chapter floor is what decides whether a chapter deserves a URL.</p>
 <p>Below any of those bars the idea renders as a single page with an in-page table of contents, and chapter deep links <code>302</code> to the matching heading anchor.</p>
-<p>This gate exists because splitting on <code>##</code> alone produced chapters that were not worth a page. Across all 11 published ideas, mean words per chapter ran 38-185, no chapter filled a laptop viewport, and the idea page — which renders the whole body inline — already showed 103% of the combined chapter content. Pagination was navigation wrapped around content the reader could already scroll, and it made the argument harder to critique by spreading it across page loads.</p>
+<p>This gate exists because splitting on <code>##</code> alone produced chapters that were not worth a page. Across all 11 published ideas, mean words per chapter ran 38-185, no chapter filled a laptop viewport, and the idea page — which at the time inlined the whole body — already showed 103% of the combined chapter content. Pagination was navigation wrapped around content the reader could already scroll, and it made the argument harder to critique by spreading it across page loads.</p>
 <p>An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.</p>
-<p>Content before the first <code>##</code> is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence.</p>
+<h2 id="the-chapter-heading-contract">The Chapter Heading Contract<a class="headerlink" href="#the-chapter-heading-contract" title="Permanent link">&para;</a></h2>
+<p><strong><code>#</code> and <code>##</code> both create sibling chapters. <code>###</code> does not.</strong></p>
+<p><code>sectionRanges()</code> in <code>packages/worker/src/markdown.ts</code> is the single place this rule lives. Chapter listing, section editing and the idea page's lead-in all build on it, so nothing may re-derive "where a chapter starts" with a regex of its own.</p>
+<p>The single exception is a <code>#</code> that is the very first thing in the document — before any other heading and before any non-blank content — whose slug equals the slug of the idea's own title. That one is the document title, already rendered as the page's <code>&lt;h1&gt;</code>, and it is skipped. <strong>Every other <code>#</code> becomes a chapter, a peer of every <code>##</code></strong>, including:</p>
+<ul>
+<li>a leading <code>#</code> whose text differs from the idea's title,</li>
+<li>a <code>#</code> that repeats the title but appears later in the document,</li>
+<li>a leading <code>#</code> in a document with no title to compare against.</li>
+</ul>
+<p>Two published documents have exactly the first case, and their first chapter <em>is</em> that <code>#</code>. Any change that stops a non-title <code>#</code> being a chapter is a URL-breaking migration for them, not a no-op.</p>
+<p>The heading level is read and then discarded: <code>headingTag()</code> renders <code>#</code> and <code>##</code> identically as <code>&lt;h2&gt;</code>, and <code>ideaChapters()</code> re-emits every chapter as <code>## Title</code> whatever level it was written at. That is why <code>read_idea_section</code> on a <code>#</code>-headed chapter hands back a <code>##</code> heading.</p>
+<p>The line is trimmed before matching, so <strong>leading whitespace does not protect a heading</strong>: <code>## Heading</code> and a tab-indented heading are both chapters. Nothing here is fence-aware either — a <code>## Heading</code> line inside a fenced code block splits the chapter.</p>
+<p>Depth below chapter level belongs in <code>###</code> and deeper, which render as in-page anchors rather than URLs. All of this is pinned by tests in <code>packages/worker/src/markdown.test.ts</code> under <code>the chapter heading contract</code>.</p>
+<h3 id="writing-a-whole-file-as-one-chapter">Writing A Whole File As One Chapter<a class="headerlink" href="#writing-a-whole-file-as-one-chapter" title="Permanent link">&para;</a></h3>
+<p>Because both <code>#</code> and <code>##</code> split, feeding a research file straight into <code>patch_idea_section</code> shatters it: a migration that intended 15 chapters produced 74, and one 1,351-word file became nine chapters. Demoting only the <code>##</code> headings — the workaround four separate agents converged on — is wrong by half, since every <code>#</code> still splits.</p>
+<p>The section-write tools (<code>add_idea_section</code>, <code>patch_idea_section</code>, <code>append_to_idea_section</code>) take <code>demote_headings: true</code> for this. It shifts every heading in <code>content</code> uniformly, by whatever the <strong>shallowest</strong> heading present requires:</p>
+<table>
+<thead>
+<tr>
+<th>Shallowest heading in <code>content</code></th>
+<th>Shift</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>#</code></td>
+<td>two levels</td>
+<td><code>#</code>→<code>###</code>, <code>##</code>→<code>####</code>, <code>###</code>→<code>#####</code></td>
+</tr>
+<tr>
+<td><code>##</code></td>
+<td>one level</td>
+<td><code>##</code>→<code>###</code>, <code>###</code>→<code>####</code></td>
+</tr>
+<tr>
+<td><code>###</code> or deeper</td>
+<td>none</td>
+<td>returned untouched</td>
+</tr>
+</tbody>
+</table>
+<p>The uniform shift keeps the source document's own hierarchy intact. Nothing is pushed past <code>######</code>, the deepest heading CommonMark has. The flag is a no-op on content that was already safe, so a bulk migration can set it unconditionally.</p>
+<p>Demotion moves exactly the lines <code>sectionRanges()</code> would split on — indented headings and headings inside fenced code blocks included. Leaving those behind would leave the chapter split, so the "one chapter" guarantee would not be one.</p>
+<p><code>markdownHeadings()</code>, which builds a chapter's in-page table of contents, matches <code>#{1,6}</code> for this reason: it has to span every level a demotion can produce, or a demoted file renders correctly and silently loses its navigation. Matching what the renderer emits is also the only range that cannot drift out of agreement with it — <code>headingTag()</code> renders and anchors every heading level.</p>
+<h2 id="what-the-idea-page-itself-renders">What The Idea Page Itself Renders<a class="headerlink" href="#what-the-idea-page-itself-renders" title="Permanent link">&para;</a></h2>
+<p>A <strong>single-page</strong> idea renders its whole body inline, with an in-page table of contents.</p>
+<p>A <strong>paginated</strong> idea does not. The chapters have their own URLs, so re-rendering them on the index would publish every chapter twice and make the landing page grow without bound as the document deepens — render cost, not storage, is the real ceiling on how large a document can get. The index shows the <strong>lead-in</strong> instead: everything before the first chapter heading, which is where a document's framing lives.</p>
+<p>Most documents have no lead-in. <code>defaultIdeaBody()</code> and the canonical nine-section spine both open directly on <code>## Snapshot</code>, so a template-built document's lead-in is empty. In that case the idea page renders a <strong>chapter summary list</strong> — each chapter's title, linked, with the excerpt already computed for the sidebar — so the landing page always carries readable, indexable prose rather than a summary line and a list of bare titles.</p>
+<p>Content before the first <code>##</code> is a lead-in, not a chapter. It renders on the idea page and does not get its own URL or a slot in the chapter sequence. Both the lead-in and the chapter list come from the same parser (<code>sectionRanges()</code> in <code>packages/worker/src/markdown.ts</code>); nothing may re-derive "where the first chapter starts" with a regex of its own, or a heading the two disagree about gets published twice.</p>
 <h2 id="the-research-record-is-paged">The Research Record Is Paged<a class="headerlink" href="#the-research-record-is-paged" title="Permanent link">&para;</a></h2>
 <p>Research entries are inlined into the idea page, so the whole record cannot be rendered on every load — one idea already carries 42 entries totalling ~79KB.</p>
 <p>The record is paged 20 at a time. Pager links are plain URLs (<code>?research=2#research</code>, <code>?research=all#research</code>), so a long record is navigable and linkable without JavaScript and each page is crawlable. The section states what it is showing (<code>Showing 20 of 42 entries</code>) rather than implying completeness.</p>
 <p><code>GET /api/ideas/:id/contributions</code> stays unpaged by default so existing callers keep working; pass <code>limit</code> (and optionally <code>offset</code>) to page, and the response then carries <code>total</code>.</p>
 <p>Search links straight to <code>#contribution-&lt;id&gt;</code>, which may be on a later page. When the targeted entry is not present the page falls through once to the unpaged view so the anchor resolves; the <code>research=all</code> guard stops that looping when the entry is genuinely gone.</p>
 <h2 id="publishing-model">Publishing Model<a class="headerlink" href="#publishing-model" title="Permanent link">&para;</a></h2>
-<p>The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits <code>##</code> headings into chapter URLs, and keeps <code>###</code> headings as sub-sections inside the chapter.</p>
+<p>The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits <code>#</code> and <code>##</code> headings into chapter URLs (see The Chapter Heading Contract above), and keeps <code>###</code> and deeper as sub-sections inside the chapter.</p>
 <p>FreeIdeaStore does not create per-idea GitHub docs, Zensical projects, generated static publication assets, or fallback static pages for free ideas.</p>
 <p>Agents should write Markdown through MCP tools such as <code>create_free_idea</code>, <code>add_idea_contribution</code>, <code>propose_idea_refinement</code>, and <code>publish_idea_update</code>. They should not upload pre-rendered HTML for publications.</p>
 <h2 id="zensical-boundary">Zensical Boundary<a class="headerlink" href="#zensical-boundary" title="Permanent link">&para;</a></h2>
@@ -800,10 +927,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.b6b7e04f.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
     
     
-      <script src="../assets/javascripts/bundle.ee611ef6.min.js"></script>
+      <script src="../assets/javascripts/bundle.6e5f0216.min.js"></script>
       
     
   </body>

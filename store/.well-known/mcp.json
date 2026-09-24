@@ -92,6 +92,10 @@
           "description": "List an idea document's sections with their ids and word counts. Start here before reading or writing a section."
         },
         {
+          "name": "validate_publication",
+          "description": "Preflight section operations against the authenticated owner's idea without saving, returning usage, resulting chapters, chapters_created, and write-equivalent errors."
+        },
+        {
           "name": "chapter_health",
           "description": "Return every chapter's word count and size verdict, sorted shortest first."
         },
