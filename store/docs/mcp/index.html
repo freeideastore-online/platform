@@ -667,7 +667,7 @@
 <li><code>react_to_idea</code></li>
 <li><code>promote_to_pro_candidate</code></li>
 <li><code>dynamic_idea_book_template</code></li>
-<li><code>dry_run_dynamic_idea_book</code></li>
+<li><code>preview_idea_book_layout</code></li>
 </ul>
 <h2 id="prefer-section-writes-over-whole-document-rewrites">Prefer Section Writes Over Whole-Document Rewrites<a class="headerlink" href="#prefer-section-writes-over-whole-document-rewrites" title="Permanent link">&para;</a></h2>
 <p><code>publish_idea_update</code> replaces the entire canonical document, so revising one part costs the whole document in tokens both ways, and the whole document has to fit in one call. That pressure is why research accumulated as ten separate numbered contributions on one idea instead of landing in the document.</p>
@@ -702,7 +702,7 @@
 <p>Canonical updates, deletion, and <code>promote_to_pro_candidate</code> require the authenticated idea owner.</p>
 <h2 id="publishing-rule">Publishing Rule<a class="headerlink" href="#publishing-rule" title="Permanent link">&para;</a></h2>
 <p>MCP clients publish idea content as Markdown, not HTML. The Worker owns HTML rendering for <code>/ideas/:id/</code> and dynamic chapter pages such as <code>/ideas/:id/research/</code>.</p>
-<p>Do not use MCP to create one repository, one Zensical project, or one generated static file tree for each free idea. <code>dynamic_idea_book_template</code> and <code>dry_run_dynamic_idea_book</code> exist so agents can build the right Markdown structure cheaply before calling <code>create_free_idea</code> or <code>publish_idea_update</code>.</p>
+<p>Do not use MCP to create one repository, one Zensical project, or one generated static file tree for each free idea. <code>dynamic_idea_book_template</code> and <code>preview_idea_book_layout</code> exist so agents can build the right Markdown structure cheaply before calling <code>create_free_idea</code> or <code>publish_idea_update</code>.</p>
 
 
 

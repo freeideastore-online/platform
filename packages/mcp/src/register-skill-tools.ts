@@ -56,8 +56,8 @@ export function registerSkillTools(server: McpServer, env: Env) {
   );
 
   server.tool(
-    "dry_run_dynamic_idea_book",
-    "Preview the canonical Markdown and dynamic chapter URLs for a FreeIdeaStore idea. This does not write files.",
+    "preview_idea_book_layout",
+    "Preview the canonical Markdown template and chapter URLs for a FreeIdeaStore idea — shows the empty layout, not a live payload. Does not write files.",
     {
       title: z.string().min(2),
       summary: z.string().min(10),

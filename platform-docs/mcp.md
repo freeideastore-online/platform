@@ -26,7 +26,7 @@ All 38 tools the server registers, grouped by what they are for.
 - `get_idea_skill`
 - `apply_idea_skill`
 - `dynamic_idea_book_template`
-- `dry_run_dynamic_idea_book`
+- `preview_idea_book_layout`
 
 **Reading**
 
@@ -163,4 +163,4 @@ Canonical updates, deletion, and `promote_to_pro_candidate` require the authenti
 
 MCP clients publish idea content as Markdown, not HTML. The Worker owns HTML rendering for `/ideas/:id/` and dynamic chapter pages such as `/ideas/:id/research/`.
 
-Do not use MCP to create one repository, one Zensical project, or one generated static file tree for each free idea. `dynamic_idea_book_template` and `dry_run_dynamic_idea_book` exist so agents can build the right Markdown structure cheaply before calling `create_free_idea` or `publish_idea_update`.
+Do not use MCP to create one repository, one Zensical project, or one generated static file tree for each free idea. `dynamic_idea_book_template` and `preview_idea_book_layout` exist so agents can build the right Markdown structure cheaply before calling `create_free_idea` or `publish_idea_update`.

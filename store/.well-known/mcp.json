@@ -40,7 +40,7 @@
           "description": "Return the canonical Markdown heading spine used by dynamic FreeIdeaStore idea books."
         },
         {
-          "name": "dry_run_dynamic_idea_book",
+          "name": "preview_idea_book_layout",
           "description": "Preview canonical Markdown and dynamic chapter URLs for a FreeIdeaStore idea without writing files."
         },
         {

@@ -94,7 +94,7 @@ MCP provisioning follows the same cheap path through `packages/mcp`:
 - `react_to_idea` adds a support, trash, or pivot signal.
 - `promote_to_pro_candidate` marks an authenticated owner's idea for ProIdeaStore review and returns a dossier draft.
 - `dynamic_idea_book_template` returns the canonical Markdown heading spine used by dynamic idea publications.
-- `dry_run_dynamic_idea_book` previews the canonical Markdown body and dynamic chapter URLs without writing files.
+- `preview_idea_book_layout` previews the canonical Markdown body and dynamic chapter URLs without writing files.
 
 The MCP Worker does not need a GitHub token for ordinary free idea creation. Browser OAuth is the expected path for true user-session actions. Comments, reactions, contributions, canonical document updates, deletion, and Pro promotion require authentication; canonical updates, deletion, and Pro promotion require the idea owner. MCP clients send Markdown for idea bodies; the FreeIdeaStore Worker renders HTML and chapter pages at request time.
 

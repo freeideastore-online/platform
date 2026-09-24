@@ -21,7 +21,7 @@ async function main() {
     "apply_idea_skill",
     "create_free_idea",
     "delete_idea",
-    "dry_run_dynamic_idea_book",
+    "preview_idea_book_layout",
     "free_idea_template",
     "get_idea",
     "get_idea_skill",
@@ -88,7 +88,7 @@ async function main() {
   }
 
   const bookPreview = await client.callTool({
-    name: "dry_run_dynamic_idea_book",
+    name: "preview_idea_book_layout",
     arguments: {
       title: "Smoke Test Idea",
       summary: "A non-writing MCP smoke test for the dynamic idea publication preview path.",
@@ -98,7 +98,7 @@ async function main() {
   });
   const bookPreviewText = textFrom(bookPreview);
   if (!bookPreviewText.includes("dynamic-worker-markdown") || !bookPreviewText.includes("/ideas/smoke-test-idea/research/")) {
-    throw new Error("dry_run_dynamic_idea_book did not include the expected dynamic research chapter");
+    throw new Error("preview_idea_book_layout did not include the expected dynamic research chapter");
   }
 
   await client.close();
@@ -108,7 +108,7 @@ async function main() {
         ok: true,
         endpoint,
         tools: toolNames,
-        checks: ["listTools", "free_idea_template", "get_idea", "dry_run_dynamic_idea_book"],
+        checks: ["listTools", "free_idea_template", "get_idea", "preview_idea_book_layout"],
       },
       null,
       2,

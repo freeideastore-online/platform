@@ -252,6 +252,6 @@ export const IDEA_SKILLS: IdeaSkill[] = [
       "Missing diligence list.",
       "If ready, call promote_to_pro_candidate.",
     ],
-    suggestedTools: ["get_idea", "add_idea_contribution", "promote_to_pro_candidate", "dry_run_dynamic_idea_book"],
+    suggestedTools: ["get_idea", "add_idea_contribution", "promote_to_pro_candidate", "preview_idea_book_layout"],
   },
 ];

@@ -29,7 +29,7 @@ After research, critique, and refinement create enough evidence for serious revi
 - `get_idea`
 - `add_idea_contribution`
 - `promote_to_pro_candidate`
-- `dry_run_dynamic_idea_book`
+- `preview_idea_book_layout`
 
 ## Rule
 
