@@ -86,6 +86,7 @@ class FakeD1 {
   readonly sources: Array<Record<string, unknown>> = [];
   readonly searchIndex: Array<Record<string, unknown>> = [];
   readonly sourceLinks: Array<Record<string, unknown>> = [];
+  readonly chapterRedirects: Array<Record<string, unknown>> = [];
 
   constructor() {
     this.profiles.set('profile-system', {
@@ -437,6 +438,99 @@ class FakeD1 {
               };
             });
           return { results };
+        },
+      });
+    }
+    if (sql.includes('SELECT chapter_id') && sql.includes('FROM chapter_redirects')) {
+      return new FakeStatement({
+        first: ([ideaId, oldId]) =>
+          this.chapterRedirects.find(
+            (row) => row.idea_id === ideaId && row.old_id === oldId,
+          ) ?? null,
+      });
+    }
+    if (sql.includes('UPDATE chapter_redirects') && sql.includes('SET chapter_id = ?')) {
+      return new FakeStatement({
+        run: ([chapterId, ideaId, ...fromIds]) => {
+          for (const row of this.chapterRedirects) {
+            if (row.idea_id === ideaId && fromIds.includes(row.chapter_id)) {
+              row.chapter_id = chapterId;
+            }
+          }
+        },
+      });
+    }
+    if (sql.includes('INSERT INTO chapter_redirects')) {
+      return new FakeStatement({
+        run: ([ideaId, oldId, chapterId]) => {
+          const existing = this.chapterRedirects.find(
+            (row) => row.idea_id === ideaId && row.old_id === oldId,
+          );
+          if (existing) {
+            existing.chapter_id = chapterId;
+            existing.created_at = `2026-06-12 02:00:${String(this.chapterRedirects.length).padStart(2, '0')}`;
+            return;
+          }
+          this.chapterRedirects.push({
+            idea_id: ideaId,
+            old_id: oldId,
+            chapter_id: chapterId,
+            created_at: `2026-06-12 02:00:${String(this.chapterRedirects.length).padStart(2, '0')}`,
+          });
+        },
+      });
+    }
+    if (sql.includes('DELETE FROM chapter_redirects') && sql.includes('LIMIT -1 OFFSET')) {
+      return new FakeStatement({
+        run: ([ideaId, , limit]) => {
+          const rows = this.chapterRedirects
+            .filter((row) => row.idea_id === ideaId)
+            .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
+          const remove = new Set(rows.slice(Number(limit)).map((row) => row.old_id));
+          for (let index = this.chapterRedirects.length - 1; index >= 0; index -= 1) {
+            const row = this.chapterRedirects[index];
+            if (!row) continue;
+            if (row.idea_id === ideaId && remove.has(row.old_id)) {
+              this.chapterRedirects.splice(index, 1);
+            }
+          }
+        },
+      });
+    }
+    if (sql.includes('DELETE FROM chapter_redirects') && sql.includes('old_id IN')) {
+      return new FakeStatement({
+        run: ([ideaId, ...oldIds]) => {
+          for (let index = this.chapterRedirects.length - 1; index >= 0; index -= 1) {
+            const row = this.chapterRedirects[index];
+            if (!row) continue;
+            if (row.idea_id === ideaId && oldIds.includes(row.old_id)) {
+              this.chapterRedirects.splice(index, 1);
+            }
+          }
+        },
+      });
+    }
+    if (sql.includes('DELETE FROM chapter_redirects') && sql.includes('chapter_id NOT IN')) {
+      return new FakeStatement({
+        run: ([ideaId, ...chapterIds]) => {
+          for (let index = this.chapterRedirects.length - 1; index >= 0; index -= 1) {
+            const row = this.chapterRedirects[index];
+            if (!row) continue;
+            if (row.idea_id === ideaId && !chapterIds.includes(row.chapter_id)) {
+              this.chapterRedirects.splice(index, 1);
+            }
+          }
+        },
+      });
+    }
+    if (sql.includes('DELETE FROM chapter_redirects') && sql.includes('WHERE idea_id = ?')) {
+      return new FakeStatement({
+        run: ([ideaId]) => {
+          for (let index = this.chapterRedirects.length - 1; index >= 0; index -= 1) {
+            if (this.chapterRedirects[index]?.idea_id === ideaId) {
+              this.chapterRedirects.splice(index, 1);
+            }
+          }
         },
       });
     }
@@ -1684,6 +1778,114 @@ describe('FreeIdeaStore worker', () => {
     expect(edit.status).toBe(200);
     // Renamed (so the id moved) and reordered in the same write.
     expect(data.sections.map((section) => section.id)).toEqual(['risks-and-constraints', 'snapshot']);
+  });
+
+  it('redirects stale chapter URLs and API section reads after a rename', async () => {
+    const testEnv = env();
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          body: [
+            '## Old Name',
+            filler(55),
+            '',
+            '## Research',
+            filler(55),
+            '',
+            '## Risk',
+            filler(55),
+          ].join('\n'),
+        }),
+      }),
+      testEnv,
+    );
+
+    const rename = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/old-name', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ title: 'New Name' }),
+      }),
+      testEnv,
+    );
+    const browser = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/old-name/'), testEnv);
+    const api = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/sections/old-name'), testEnv);
+    const apiData = (await api.json()) as { section: string; requested_section: string; markdown: string };
+
+    expect(rename.status).toBe(200);
+    expect(testEnv.DB.chapterRedirects).toContainEqual(
+      expect.objectContaining({ idea_id: 'serge-idea-lab', old_id: 'old-name', chapter_id: 'new-name' }),
+    );
+    expect(browser.status).toBe(301);
+    expect(browser.headers.get('location')).toBe('https://fis.test/ideas/serge-idea-lab/new-name/');
+    expect(api.status).toBe(200);
+    expect(apiData.section).toBe('new-name');
+    expect(apiData.requested_section).toBe('old-name');
+    expect(apiData.markdown).toContain('## New Name');
+  });
+
+  it('re-points stale chapter redirects when the same chapter is renamed again', async () => {
+    const testEnv = env();
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ title: 'Middle Name' }),
+      }),
+      testEnv,
+    );
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/middle-name', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ title: 'Final Name' }),
+      }),
+      testEnv,
+    );
+
+    expect(testEnv.DB.chapterRedirects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ old_id: 'snapshot', chapter_id: 'final-name' }),
+        expect.objectContaining({ old_id: 'middle-name', chapter_id: 'final-name' }),
+      ]),
+    );
+  });
+
+  it('lets a live chapter reclaim a retired id instead of being shadowed by a redirect', async () => {
+    const testEnv = env();
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ title: 'Final Snapshot' }),
+      }),
+      testEnv,
+    );
+    expect(testEnv.DB.chapterRedirects).toContainEqual(
+      expect.objectContaining({ old_id: 'snapshot', chapter_id: 'final-snapshot' }),
+    );
+
+    const add = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'Snapshot', content: 'A new live section owns this id.' }),
+      }),
+      testEnv,
+    );
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot'), testEnv);
+    const data = (await read.json()) as { section: string; markdown: string };
+
+    expect(add.status).toBe(200);
+    expect(testEnv.DB.chapterRedirects.find((row) => row.old_id === 'snapshot')).toBeUndefined();
+    expect(read.status).toBe(200);
+    expect(data.section).toBe('snapshot');
+    expect(data.markdown).toContain('A new live section owns this id.');
   });
 
   it('merges a thin section into another and removes the source', async () => {

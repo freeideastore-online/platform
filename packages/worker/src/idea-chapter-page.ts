@@ -1,4 +1,5 @@
 import { brandHead, brandLockup, brandCss } from './brand';
+import { chapterRedirectTarget } from './chapter-redirects';
 import { ideaBody, ideaByIdIncludeRemoved } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
 import {
@@ -37,7 +38,16 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
 
   const body = await ideaBody(env, idea);
   const chapters = visibleIdeaChapters(body, idea.title);
-  const chapter = ideaChapterById(chapters, requestedChapterId);
+  let chapter = ideaChapterById(chapters, requestedChapterId);
+  if (!chapter) {
+    const redirected = await chapterRedirectTarget(env, idea.id, requestedChapterId);
+    if (redirected) {
+      chapter = ideaChapterById(chapters, redirected);
+      if (chapter) {
+        return Response.redirect(`${new URL(request.url).origin}/ideas/${idea.id}/${chapter.id}/`, 301);
+      }
+    }
+  }
   if (!chapter) return new Response('Idea chapter not found', { status: 404, headers: SECURITY_HEADERS });
 
   if (requestedChapterId !== chapter.id) {

@@ -17,6 +17,7 @@ import {
   updateIdeaSection,
   validatePublication,
 } from './api-idea-mutations';
+import { chapterRedirectTarget } from './chapter-redirects';
 import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { chapterHealth, documentMetrics, ideaPreamble, ideaSectionList, readIdeaSection } from './markdown';
@@ -255,11 +256,22 @@ async function handleGetSection(env: Env, ideaParam: string, sectionParam: strin
   const idea = await ideaById(env, ideaId);
   if (!idea) return bad('idea not found', 404);
   const body = await ideaBody(env, idea);
-  const markdown = readIdeaSection(body, sectionId, idea.title);
+  let resolvedSectionId = sectionId;
+  let markdown = readIdeaSection(body, resolvedSectionId, idea.title);
+  if (markdown === null) {
+    const redirected = await chapterRedirectTarget(env, idea.id, sectionId);
+    if (redirected) {
+      const redirectedMarkdown = readIdeaSection(body, redirected, idea.title);
+      if (redirectedMarkdown !== null) {
+        resolvedSectionId = redirected;
+        markdown = redirectedMarkdown;
+      }
+    }
+  }
   if (markdown === null) {
     return bad(`unknown section "${sectionId}" — read /api/ideas/${idea.id}/sections for the current list`, 404);
   }
-  return json({ idea: idea.id, section: sectionId, markdown });
+  return json({ idea: idea.id, section: resolvedSectionId, requested_section: sectionId, markdown });
 }
 
 

@@ -1,4 +1,5 @@
 import { authUserFor, profileFor } from './auth';
+import { syncChapterRedirects } from './chapter-redirects';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
 import { bad, enumValue, FIELD_LIMITS, json, pathId, readJsonBody, slug, tooLong } from './http';
 import {
@@ -639,6 +640,7 @@ async function writeCanonicalBody(
       idea.id,
     )
     .run();
+  await syncChapterRedirects(env, idea.id, revision.previousBody, body, idea.title, title);
   // Re-index after the write so the registry and search reflect what is
   // published — but never at the cost of the write itself. See reindexAfterWrite.
   const reindexed = await reindexAfterWrite(env, idea, body);
@@ -864,6 +866,9 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
       idea.id,
     )
     .run();
+  if (bodyProvided || title !== idea.title) {
+    await syncChapterRedirects(env, idea.id, previousBody, body, idea.title, title);
+  }
 
   const reindexed = await reindexAfterWrite(env, idea, body);
   return json({
