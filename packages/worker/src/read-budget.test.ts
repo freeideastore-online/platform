@@ -56,6 +56,25 @@ const IDEA = {
   body_md: BODY,
 };
 
+const HEALTH_BODY = [
+  `# ${TITLE}`,
+  '',
+  '## Solid',
+  '',
+  prose(900),
+  '',
+  '## Merge',
+  '',
+  prose(30),
+  '',
+  '## Thin',
+  '',
+  prose(650),
+  '',
+].join('\n');
+
+const HEALTH_IDEA = { ...IDEA, body_md: HEALTH_BODY };
+
 async function get(path: string, idea: Record<string, unknown> | null = IDEA) {
   const url = new URL(`https://fis.test${path}`);
   const response = await handleApi(new Request(url), envFor(idea), url);
@@ -88,6 +107,16 @@ describe('read paths carry the document budget (#46)', () => {
       below_floor: 0,
       above_ceiling: 0,
     });
+  });
+
+  it('returns chapter health sorted by word count ascending', async () => {
+    const { data } = await get('/api/ideas/cellar-door-cycling/chapter-health', HEALTH_IDEA);
+
+    expect(data.health).toEqual([
+      { id: 'merge', title: 'Merge', words: 30, verdict: 'merge' },
+      { id: 'thin', title: 'Thin', words: 650, verdict: 'thin' },
+      { id: 'solid', title: 'Solid', words: 900, verdict: 'ok' },
+    ]);
   });
 
   /**

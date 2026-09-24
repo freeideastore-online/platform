@@ -1602,6 +1602,64 @@ describe('FreeIdeaStore worker', () => {
     expect((await read.json() as { body: string }).body).toContain('## Validation');
   });
 
+  it('warns when a write creates a sub-floor chapter', async () => {
+    const testEnv = env();
+    const add = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'Tiny Chapter', content: 'Too small.' }),
+      }),
+      testEnv,
+    );
+    const data = (await add.json()) as {
+      warnings: Array<{ chapter_id: string; title: string; words: number; verdict: string }>;
+    };
+
+    expect(add.status).toBe(200);
+    expect(data.warnings).toEqual([
+      { chapter_id: 'tiny-chapter', title: 'Tiny Chapter', words: 2, verdict: 'merge' },
+    ]);
+  });
+
+  it('does not warn when a rename changes a sub-floor chapter id', async () => {
+    const testEnv = env();
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          body: [
+            '## Prototype Alpha',
+            'One.',
+            '',
+            '## Prototype Beta',
+            'Two.',
+          ].join('\n'),
+        }),
+      }),
+      testEnv,
+    );
+
+    const rename = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/prototype-beta', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ title: 'Prototype Alpha' }),
+      }),
+      testEnv,
+    );
+    const data = (await rename.json()) as {
+      sections: Array<{ id: string; title: string }>;
+      warnings: Array<{ chapter_id: string }>;
+    };
+
+    expect(rename.status).toBe(200);
+    expect(data.sections.map((section) => section.id)).toEqual(['prototype', 'prototype-alpha-2']);
+    expect(data.warnings).toEqual([]);
+  });
+
   it('renames and moves a section in one call', async () => {
     const testEnv = env();
     const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
