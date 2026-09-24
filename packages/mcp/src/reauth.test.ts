@@ -143,6 +143,29 @@ describe("the edge reads the expiry off the token (#26 ask 3)", () => {
     expect((await authenticateRequest(bearer(foreign), env(store))).status).toBe("invalid");
   });
 
+  it("refuses to authenticate a session-shaped token when no signing key is configured", async () => {
+    // #39: FIS owns identity only if the MCP worker can verify the FIS-signed
+    // session. Decoding the uid without the key would make any session-shaped
+    // bearer token an identity assertion.
+    const session = await mintSession(UID, SIGNING_KEY, { ttlSeconds: 3600 });
+
+    const auth = await authenticateRequest(bearer(session), env(makeStore(), ""));
+
+    expect(auth.status).toBe("invalid");
+    expect(auth.props).toEqual({});
+  });
+
+  it("refuses a mapped access token too when the backing session cannot be verified", async () => {
+    const store = makeStore();
+    const session = await mintSession(UID, SIGNING_KEY, { ttlSeconds: 3600 });
+    store.data.set("token:access-token-1", session);
+
+    const auth = await authenticateRequest(bearer("access-token-1"), env(store, ""));
+
+    expect(auth.status).toBe("invalid");
+    expect(auth.props).toEqual({});
+  });
+
   it("reports no token at all as its own case", async () => {
     const auth = await authenticateRequest(new Request(`${ISSUER}/mcp`), env(makeStore()));
 

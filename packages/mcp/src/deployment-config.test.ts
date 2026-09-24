@@ -66,6 +66,8 @@ describe("MCP deployment config", () => {
     expect(wrangler).not.toContain("freeappstore");
     expect(index).not.toContain("freeappstore");
     expect(index).toContain('const AUTH_START_PATH = "/.fis/auth/start"');
+    expect(llmsTxt).not.toContain("FAS session token");
+    expect(llmsTxt).toContain("Authorization: Bearer <FreeIdeaStore session token>");
   });
 
   it("advertises the canonical skill and document publishing tools", () => {

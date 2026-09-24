@@ -16,16 +16,6 @@ import { resolveOAuthToken, type OAuthStore } from "./oauth-provider.js";
 import { inspectSession } from "./session.js";
 import type { Env, McpProps } from "./mcp-types.js";
 
-function decodeUid(token: string): string | undefined {
-  try {
-    const b64 = token.split(".")[0]?.replace(/-/g, "+").replace(/_/g, "/") || "";
-    const json = JSON.parse(atob(b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), "=")));
-    return typeof json.uid === "string" ? json.uid : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * What the `Authorization` header on this request turned out to be.
  *
@@ -92,9 +82,10 @@ export async function authenticateRequest(request: Request, env: Env): Promise<R
     };
   }
 
-  // No signing key configured: sessions cannot be verified here, so nothing can
-  // be claimed about expiry either. Behave as this file always did.
-  return { props: { userId: decodeUid(token), token }, status: "ok" };
+  // No signing key configured means no identity can be proven. The old fallback
+  // decoded the uid without checking a signature, which was another way for a
+  // foreign or forged token to become a FreeIdeaStore identity.
+  return { props: {}, status: "invalid" };
 }
 
 type OAuthObject = {
