@@ -3,6 +3,7 @@ export type IdeaSkill = {
   title: string;
   purpose: string;
   whenToUse: string;
+  procedure?: string[];
   questions: string[];
   outputContract: string[];
   suggestedTools: string[];
@@ -78,6 +79,34 @@ export const IDEA_SKILLS: IdeaSkill[] = [
       "Named products, companies, services, datasets, regulators, and important public sources are clickable Markdown links on first meaningful mention when credible URLs are known.",
     ],
     suggestedTools: ["create_free_idea", "add_idea_contribution"],
+  },
+  {
+    id: "idea-corpus-publisher",
+    title: "Idea Corpus Publisher",
+    purpose: "Publish an existing research corpus into a readable FreeIdeaStore idea book without turning source-document mechanics into public chapters.",
+    whenToUse: "Publishing existing research (multiple documents, or anything past a few thousand words) into an idea book, as opposed to composing from an interview.",
+    procedure: [
+      "Measure total characters against the document cap before writing anything.",
+      "Decide the chapter structure before writing any section content.",
+      "Demote source ## headings to ### so one source document becomes one chapter.",
+      "Write chapters sequentially, never in parallel.",
+      "Never write placeholder content.",
+      "Strip working-document scaffolding, file paths, scope notes, and internal cross-references before publishing.",
+    ],
+    questions: [
+      "What is the total character count, and does it fit the document cap?",
+      "Which source documents become chapters, and in what order?",
+      "Which ## headings must be demoted to ### before publication?",
+      "Which working notes, file paths, scope markers, or internal cross-references must be removed?",
+      "Does every chapter contain final reader-facing content rather than placeholders?",
+      "Which chapter should be written next after validation of the current chapter?",
+    ],
+    outputContract: [
+      "Chapters sized to CHAPTER_SIZE with a floor of 500 words and a target of 800-3,000 words.",
+      "Titles descriptive and unnumbered.",
+      "No reference to files a reader cannot see.",
+    ],
+    suggestedTools: ["add_idea_section", "patch_idea_section", "merge_idea_sections", "list_idea_sections", "validate_publication"],
   },
   {
     id: "idea-critic",

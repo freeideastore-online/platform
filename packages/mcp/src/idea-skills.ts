@@ -2,6 +2,7 @@ export const IDEA_SKILL_IDS = [
   "idea-flow-orchestrator",
   "idea-interviewer",
   "idea-document-architect",
+  "idea-corpus-publisher",
   "idea-critic",
   "competitor-finder",
   "idea-researcher",
