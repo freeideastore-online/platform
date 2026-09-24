@@ -214,16 +214,38 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     },
     async (input) => {
       const res = await fisApi<{
-      idea: string;
-      sections: Array<{ id: string; title: string; words: number }>;
-      usage: Record<string, number | undefined>;
-    }>(
+        idea: string;
+        sections: Array<{ id: string; title: string; words: number; verdict: string }>;
+        usage: Record<string, number | undefined>;
+      }>(
         env,
         `/api/ideas/${encodeURIComponent(input.idea_id)}/sections`,
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
         return text(`Error listing sections (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
+  server.tool(
+    "chapter_health",
+    "Return every chapter's word count and size verdict, sorted from the shortest chapters upward, so cleanup can start with the worst offenders.",
+    {
+      idea_id: z.string().min(2),
+    },
+    async (input) => {
+      const res = await fisApi<{
+        idea: string;
+        health: Array<{ id: string; title: string; words: number; verdict: string }>;
+      }>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/chapter-health`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error reading chapter health (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
       }
       return text(JSON.stringify(res.data, null, 2));
     },

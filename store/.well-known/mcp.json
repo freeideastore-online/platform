@@ -92,6 +92,10 @@
           "description": "List an idea document's sections with their ids and word counts. Start here before reading or writing a section."
         },
         {
+          "name": "chapter_health",
+          "description": "Return every chapter's word count and size verdict, sorted shortest first."
+        },
+        {
           "name": "read_idea_section",
           "description": "Read one section of an idea document instead of pulling the whole document into context."
         },
