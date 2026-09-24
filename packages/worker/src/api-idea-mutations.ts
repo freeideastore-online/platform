@@ -5,6 +5,7 @@ import {
   addIdeaSection,
   appendToIdeaSection,
   CHAPTER_SIZE,
+  chapterHealth,
   demoteHeadings,
   documentMetrics,
   mergeIdeaSections,
@@ -139,6 +140,13 @@ export function documentOverflow(
  */
 export type DocumentUsage = ReturnType<typeof documentUsage>;
 
+type SubFloorChapterWarning = {
+  chapter_id: string;
+  title: string;
+  words: number;
+  verdict: 'merge' | 'thin';
+};
+
 export function documentUsage(
   body: string,
   metrics: { chapters: number; belowFloor: number; aboveCeiling: number },
@@ -151,6 +159,25 @@ export function documentUsage(
     below_floor: metrics.belowFloor,
     above_ceiling: metrics.aboveCeiling,
   };
+}
+
+function subFloorChapterWarnings(previousBody: string, nextBody: string, title: string): SubFloorChapterWarning[] {
+  const previous = chapterHealth(previousBody, title);
+  const previousIds = new Set(previous.map((chapter) => chapter.id));
+  const previousTitles = new Set(previous.map((chapter) => chapter.title));
+  const warnings: SubFloorChapterWarning[] = [];
+
+  for (const chapter of chapterHealth(nextBody, title)) {
+    if (chapter.verdict !== 'merge' && chapter.verdict !== 'thin') continue;
+    if (previousIds.has(chapter.id) || previousTitles.has(chapter.title)) continue;
+    warnings.push({
+      chapter_id: chapter.id,
+      title: chapter.title,
+      words: chapter.words,
+      verdict: chapter.verdict,
+    });
+  }
+  return warnings;
 }
 
 export async function createIdea(request: Request, env: Env) {
@@ -466,7 +493,13 @@ async function writeCanonicalBody(
   const reindexed = await reindexAfterWrite(env, idea, body);
   // Every canonical write reports the budget from the metrics it already
   // computed, so no two write paths can disagree about what is left.
-  return { ...metrics, usage: documentUsage(body, metrics), revisionId, reindexed };
+  return {
+    ...metrics,
+    usage: documentUsage(body, metrics),
+    warnings: subFloorChapterWarnings(revision.previousBody, body, title),
+    revisionId,
+    reindexed,
+  };
 }
 
 /**
@@ -532,6 +565,7 @@ export async function updateIdeaSection(
     words: result.words,
     chapters: result.chapters,
     usage: result.usage,
+    warnings: result.warnings,
     url: `/ideas/${idea.id}/`,
     ...indexWarning(result.reindexed),
   });
@@ -762,6 +796,7 @@ export async function revertIdeaToRevision(
     new_revision: metrics.revisionId,
     words: metrics.words,
     chapters: metrics.chapters,
+    warnings: metrics.warnings,
     url: `/ideas/${idea.id}/`,
     ...indexWarning(metrics.reindexed),
   });
@@ -842,6 +877,7 @@ export async function applyRefinement(
     revision: result.revisionId,
     words: result.words,
     usage: result.usage,
+    warnings: result.warnings,
     url: `/ideas/${idea.id}/`,
     ...indexWarning(result.reindexed),
   });
@@ -945,6 +981,7 @@ async function writeStructuralEdit(
     revision: result.revisionId,
     sections: ideaSectionList(next, idea.title),
     usage: result.usage,
+    warnings: result.warnings,
     url: `/ideas/${idea.id}/`,
     ...indexWarning(result.reindexed),
   });
