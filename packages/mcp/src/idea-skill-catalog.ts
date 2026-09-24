@@ -76,6 +76,7 @@ export const IDEA_SKILLS: IdeaSkill[] = [
       "next_step: one cheap action.",
       "risk: one visible risk.",
       "body: markdown using the universal 2-level spine when the idea has enough substance: Overview, People And Problem, Context And Evidence, Proposed Solution, Risks And Constraints, Validation, Prototype Or Pilot, Model And Distribution, Evolution.",
+      "When publishing as chapters, size chapters to CHAPTER_SIZE with a floor of 500 words and a target of 800-3,000 words.",
       "Named products, companies, services, datasets, regulators, and important public sources are clickable Markdown links on first meaningful mention when credible URLs are known.",
     ],
     suggestedTools: ["create_free_idea", "add_idea_contribution"],
