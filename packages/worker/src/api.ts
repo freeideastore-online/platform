@@ -18,7 +18,7 @@ import {
 } from './api-idea-mutations';
 import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
-import { documentMetrics, ideaPreamble, ideaSectionList, readIdeaSection } from './markdown';
+import { chapterHealth, documentMetrics, ideaPreamble, ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
 import { REFINEMENT_KIND } from './refinements';
 import { indexContribution, search } from './search';
@@ -234,6 +234,16 @@ async function handleGetSections(env: Env, ideaParam: string) {
   if (!idea) return bad('idea not found', 404);
   const body = await ideaBody(env, idea);
   return json({ idea: idea.id, sections: ideaSectionList(body, idea.title), usage: readUsage(body, idea.title) });
+}
+
+async function handleGetChapterHealth(env: Env, ideaParam: string) {
+  const ideaId = pathId(ideaParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const body = await ideaBody(env, idea);
+  const health = chapterHealth(body, idea.title).sort((left, right) => left.words - right.words);
+  return json({ idea: idea.id, health });
 }
 
 async function handleGetSection(env: Env, ideaParam: string, sectionParam: string) {
@@ -572,6 +582,12 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/revisions\/([^/]+)\/revert$/,
     methods: {
       POST: (request, env, __, match) => revertIdeaToRevision(request, env, match![1] || '', match![2] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/chapter-health$/,
+    methods: {
+      GET: (_, env, __, match) => handleGetChapterHealth(env, match![1] || ''),
     },
   },
   {
