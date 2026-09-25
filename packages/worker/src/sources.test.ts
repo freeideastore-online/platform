@@ -166,6 +166,28 @@ describe('extractUrls', () => {
   it('ignores non-http links', () => {
     expect(extractUrls('[bad](javascript:alert(1)) and mailto:a@b.com')).toEqual([]);
   });
+
+  it('treats source-index domain/path lines as HTTPS citations', () => {
+    const urls = extractUrls([
+      'SOURCE INDEX',
+      'pimberly.com/building-materials-manufacturers/',
+      'github.com/wbsg-uni-mannheim/ExtractGPT',
+      'importier.app and importier.app/blog/shopify-bulk-product-import',
+      'www.pxier.com/en/best-pos-software-for-tiles-and-flooring-store — needs www',
+      'swatchbox.com/blog/Swatchbox-Combines-Technology-and-Design-...',
+      'Email source@example.com is not a citation.',
+      'The package.json file is not a citation.',
+    ].join('\n'));
+
+    expect(urls).toContain('https://pimberly.com/building-materials-manufacturers');
+    expect(urls).toContain('https://github.com/wbsg-uni-mannheim/ExtractGPT');
+    expect(urls).toContain('https://importier.app/');
+    expect(urls).toContain('https://importier.app/blog/shopify-bulk-product-import');
+    expect(urls).toContain('https://www.pxier.com/en/best-pos-software-for-tiles-and-flooring-store');
+    expect(urls.some((url) => url.includes('Swatchbox-Combines-Technology'))).toBe(false);
+    expect(urls).not.toContain('https://example.com/');
+    expect(urls).not.toContain('https://package.json/');
+  });
 });
 
 describe('syncDocumentSources', () => {

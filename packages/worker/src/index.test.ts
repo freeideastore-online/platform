@@ -2480,6 +2480,23 @@ describe('FreeIdeaStore worker', () => {
       testEnv,
     );
     expect(createContributionResponse.status).toBe(201);
+    const sourceIndexResponse = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/${created.idea}/contributions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          kind: 'evidence',
+          body: [
+            'SOURCE INDEX',
+            'pimberly.com/building-materials-manufacturers/',
+            'github.com/wbsg-uni-mannheim/ExtractGPT',
+            'swatchbox.com/blog/Swatchbox-Combines-Technology-and-Design-...',
+          ].join('\n'),
+        }),
+      }),
+      testEnv,
+    );
+    expect(sourceIndexResponse.status).toBe(201);
 
     const before = await worker.fetch(new Request(`https://fis.test/api/ideas/${created.idea}/sources`), testEnv);
     const beforeData = (await before.json()) as {
@@ -2489,6 +2506,23 @@ describe('FreeIdeaStore worker', () => {
       expect.objectContaining({
         url: 'https://example.com/ref1',
         contribution_citations: 1,
+      }),
+    );
+    expect(beforeData.sources).toContainEqual(
+      expect.objectContaining({
+        url: 'https://pimberly.com/building-materials-manufacturers',
+        contribution_citations: 1,
+      }),
+    );
+    expect(beforeData.sources).toContainEqual(
+      expect.objectContaining({
+        url: 'https://github.com/wbsg-uni-mannheim/ExtractGPT',
+        contribution_citations: 1,
+      }),
+    );
+    expect(beforeData.sources).not.toContainEqual(
+      expect.objectContaining({
+        url: expect.stringContaining('Swatchbox-Combines-Technology'),
       }),
     );
 
@@ -2512,6 +2546,12 @@ describe('FreeIdeaStore worker', () => {
     expect(afterData.sources).toContainEqual(
       expect.objectContaining({
         url: 'https://example.com/ref1',
+        contribution_citations: 1,
+      }),
+    );
+    expect(afterData.sources).toContainEqual(
+      expect.objectContaining({
+        url: 'https://pimberly.com/building-materials-manufacturers',
         contribution_citations: 1,
       }),
     );

@@ -5,6 +5,20 @@ import type { Env, IdeaRow } from './types';
 
 /** Tracking parameters carry no meaning about the source itself. */
 const TRACKING_PARAMS = /^(utm_|fbclid$|gclid$|mc_[ce]id$|ref$|ref_src$)/i;
+const FILE_EXTENSION_TLDS = new Set([
+  'css',
+  'html',
+  'js',
+  'json',
+  'md',
+  'sql',
+  'toml',
+  'ts',
+  'tsx',
+  'txt',
+  'yaml',
+  'yml',
+]);
 
 /**
  * Canonical form of a source URL, so the same source cited three different ways
@@ -36,6 +50,15 @@ export function normaliseSourceUrl(raw: string): string | null {
   return out;
 }
 
+function normaliseSchemelessSourceUrl(raw: string): string | null {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed || trimmed.includes('...') || trimmed.includes('…')) return null;
+  const host = trimmed.split('/')[0] || '';
+  const tld = host.split('.').pop()?.toLowerCase() || '';
+  if (FILE_EXTENSION_TLDS.has(tld)) return null;
+  return normaliseSourceUrl(`https://${trimmed}`);
+}
+
 /** Every http(s) URL in some markdown, markdown-link or bare. */
 export function extractUrls(markdown: string): string[] {
   const found = new Set<string>();
@@ -48,6 +71,18 @@ export function extractUrls(markdown: string): string[] {
     // Trailing sentence punctuation is not part of the URL.
     const cleaned = (match[0] || '').replace(/[),.;:!?]+$/, '');
     const normalised = normaliseSourceUrl(cleaned);
+    if (normalised) found.add(normalised);
+  }
+  // Old source-index contributions were written as one domain/path per line
+  // without a scheme, e.g. "pimberly.com/building-materials-manufacturers/".
+  // Treat those as HTTPS citations so backfill can make the evidence visible.
+  for (const match of String(markdown || '').matchAll(
+    /(?<![@/.\w-])((?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>)"'\]]*)?)/gi,
+  )) {
+    const raw = match[1] || '';
+    if (raw.includes('...') || raw.includes('…')) continue;
+    const cleaned = raw.replace(/[),.;:!?]+$/, '');
+    const normalised = normaliseSchemelessSourceUrl(cleaned);
     if (normalised) found.add(normalised);
   }
   return [...found];
