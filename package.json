@@ -20,6 +20,7 @@
     "mcp:smoke": "pnpm --filter @fis/mcp smoke",
     "skills:validate": "node scripts/validate-skills.mjs",
     "migrations:validate": "node scripts/validate-migrations.mjs",
+    "cellar-door:reference-integrity": "node scripts/cellar-door-reference-integrity-check.mjs",
     "test": "pnpm skills:validate && pnpm migrations:validate && pnpm --filter @fis/worker test && pnpm --filter @fis/mcp test",
     "test:e2e": "playwright test",
     "typecheck": "pnpm --filter @fis/sdk typecheck && pnpm --filter @fis/console typecheck && pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
