@@ -22,7 +22,7 @@ The first public idea page should be short, readable, and complete enough for st
 8. Model And Distribution: sustainability model, pricing or funding hypothesis, channels, and partnerships.
 9. Evolution: open questions, contribution prompts, next decisions, and ProIdeaStore readiness.
 
-Use these as `##` top-level sections. Use the listed items as `###` sub-sections when the idea has enough substance. For a raw first page, keep empty sections out rather than pretending evidence exists.
+Use these as `##` top-level sections in the canonical body. Use the listed items as `###` sub-sections under their parent `##` when the idea has enough substance. Do not make the listed items `##` headings: `##` creates sibling chapters and possible chapter URLs, while `###` is the required second level for depth without more URLs. For a raw first page, keep empty sections out rather than pretending evidence exists.
 
 ## Output Contract
 
@@ -33,7 +33,7 @@ Use these as `##` top-level sections. Use the listed items as `###` sub-sections
 - `signal`: one sentence describing why it deserves attention.
 - `next_step`: one cheap action.
 - `risk`: one visible risk.
-- `body`: markdown using the universal 2-level spine when the idea has enough substance, with named products, companies, services, datasets, regulators, and important public sources linked when credible URLs are known.
+- `body`: markdown using the universal two-level spine (`##` sections plus `###` sub-sections) when the idea has enough substance, with named products, companies, services, datasets, regulators, and important public sources linked when credible URLs are known.
 
 ## Suggested MCP Tools
 

@@ -92,6 +92,11 @@ test('about and docs pages explain the portal', async ({ page }) => {
   await expect(page).toHaveURL(/\/docs\/idea-pages\/$/);
   await expect(page.locator('meta[name="generator"]')).toHaveAttribute('content', /zensical-/);
   await expect(page.locator('main').getByRole('heading', { name: 'Idea Pages' })).toBeVisible();
+  await expect(page.locator('main #two-level-idea-spine')).toBeVisible();
+  await expect(page.locator('main').getByText('Use ## headings for the top-level sections.')).toBeVisible();
+  await expect(page.locator('main').getByText('Use ### headings for depth inside a section.')).toBeVisible();
+  await expect(page.locator('main code').filter({ hasText: '## People And Problem' })).toBeVisible();
+  await expect(page.locator('main code').filter({ hasText: '### Pricing or funding hypothesis' })).toBeVisible();
 
   await page.goto('/docs/idea-books/');
   await expect(page).toHaveURL(/\/docs\/idea-books\/$/);

@@ -220,6 +220,62 @@ describe('section editing', () => {
 });
 
 describe('ideaChapters', () => {
+  it('keeps the universal idea spine at two levels: sections become chapters and sub-sections stay inside them', () => {
+    const markdown = [
+      '## Overview',
+      '',
+      '### Snapshot',
+      'A compact view.',
+      '',
+      '### Current thesis',
+      'The current argument.',
+      '',
+      '## People And Problem',
+      '',
+      '### First user or buyer',
+      'The first buyer.',
+      '',
+      '### Problem moment',
+      'The painful moment.',
+      '',
+      '## Validation',
+      '',
+      '### Riskiest assumption',
+      'The thing to test.',
+      '',
+      '### Cheapest test',
+      'The smallest proof.',
+      '',
+      '## Model And Distribution',
+      '',
+      '### Pricing or funding hypothesis',
+      'A first commercial guess.',
+      '',
+      '### Channels',
+      'Where it reaches buyers.',
+    ].join('\n');
+
+    const chapters = ideaChapters(markdown, 'Spine Test');
+
+    expect(chapters.map((chapter) => chapter.title)).toEqual([
+      'Overview',
+      'People And Problem',
+      'Validation',
+      'Model And Distribution',
+    ]);
+    expect(chapters.map((chapter) => chapter.id)).toEqual([
+      'overview',
+      'people-and-problem',
+      'validation',
+      'model-and-distribution',
+    ]);
+    expect(chapters[0]?.markdown).toContain('### Snapshot');
+    expect(chapters[0]?.markdown).toContain('### Current thesis');
+    expect(chapters[1]?.markdown).toContain('### First user or buyer');
+    expect(chapters[2]?.markdown).toContain('### Riskiest assumption');
+    expect(chapters[3]?.markdown).toContain('### Pricing or funding hypothesis');
+  });
+
   it('uses h2 headings as chapters and keeps h3 headings inside the chapter body', () => {
     const chapters = ideaChapters([
       '# Test Idea',

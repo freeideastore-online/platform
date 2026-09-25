@@ -13,6 +13,73 @@ One page is enough when:
 - The audience only needs a quick snapshot.
 - The next action is a simple comment, reaction, or validation question.
 
+## Two-Level Idea Spine
+
+When an idea has enough substance to be shaped, researched, validated, or considered for ProIdeaStore, write the canonical body with the universal two-level spine.
+
+- Use `##` headings for the top-level sections. These are the chapters the publishing model can turn into dynamic chapter URLs.
+- Use `###` headings for depth inside a section. These are sub-sections and stay inside the parent chapter as in-page anchors.
+- Do not promote sub-sections to `##` just to add detail. That creates more sibling chapters and more possible URLs; `###` is the mechanism for depth without more URLs.
+- Raw ideas may omit sections that would be empty or dishonest. Researching-stage ideas and above should at least make the missing spine sections visible as gaps to fill.
+
+The standard spine is:
+
+```markdown
+## Overview
+### Snapshot
+### Current thesis
+### Status
+### Why this deserves attention
+
+## People And Problem
+### First user or buyer
+### Problem moment
+### Current workaround
+### Urgency or frequency
+
+## Context And Evidence
+### Existing alternatives
+### Competitors or substitutes
+### Source trail
+### Unknowns
+
+## Proposed Solution
+### Core promise
+### User workflow
+### Smallest useful version
+### Out of scope
+
+## Risks And Constraints
+### Trust and safety
+### Legal or regulatory constraints
+### Operational or technical constraints
+### Kill signals
+
+## Validation
+### Riskiest assumption
+### Cheapest test
+### Success threshold
+### Pivot or trash criteria
+
+## Prototype Or Pilot
+### Demo or pilot
+### Required resources
+### Manual or fakeable parts
+### Must be real
+
+## Model And Distribution
+### Sustainability model
+### Pricing or funding hypothesis
+### Channels
+### Partnerships
+
+## Evolution
+### Open questions
+### Contribution prompts
+### Next decisions
+### ProIdeaStore readiness
+```
+
 ## What Appears On An Idea Page
 
 - Canonical idea body.
