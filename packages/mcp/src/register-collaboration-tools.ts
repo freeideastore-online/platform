@@ -121,6 +121,33 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
     },
   );
 
+  // #64: the overflow error tells an author to move chapters into a derived
+  // annex, and nothing let them list the annexes they had just made.
+  server.tool(
+    "list_derived_ideas",
+    "List the ideas derived from a parent — the annexes a document overflows into — oldest first, paged, with `total`. Use it to enumerate the shards you created with derive_idea, or to find the rest of a multi-document work. Each child carries id, title and url; page with offset until offset + children.length reaches total.",
+    {
+      idea_id: z.string().min(2).describe("The parent idea whose derived ideas to list."),
+      limit: z.number().int().min(1).max(200).optional().describe("Children per page. Defaults to 50."),
+      offset: z.number().int().min(0).optional().describe("How many children to skip. Defaults to 0."),
+    },
+    async (input) => {
+      const params = new URLSearchParams();
+      if (input.limit) params.set("limit", String(input.limit));
+      if (input.offset) params.set("offset", String(input.offset));
+      const query = params.toString();
+      const res = await fisApi<Record<string, unknown>>(
+        env,
+        `/api/ideas/${encodeURIComponent(input.idea_id)}/derived${query ? `?${query}` : ""}`,
+        { token: getProps().token },
+      );
+      if (!res.ok || "error" in res.data) {
+        return text(`Error listing derived ideas (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+      }
+      return text(JSON.stringify(res.data, null, 2));
+    },
+  );
+
   server.tool(
     "add_idea_contribution",
     "Add a signed contribution to an existing FreeIdeaStore idea: evidence, risk, pivot, refinement, prototype note, or kill signal.",

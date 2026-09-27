@@ -127,16 +127,19 @@ export const DERIVED_CHILDREN_LIMIT = 50;
  *
  * `total` is counted rather than inferred from `children.length`, which cannot
  * distinguish "exactly at the cap" from "over it". The caller renders it.
+ *
+ * `limit` and `offset` page the same stable order, which is what makes
+ * `GET /api/ideas/:id/derived` safe to walk page by page (#64).
  */
-export async function derivedIdeas(env: Env, parentId: string) {
+export async function derivedIdeas(env: Env, parentId: string, limit = DERIVED_CHILDREN_LIMIT, offset = 0) {
   const [rows, count] = await Promise.all([
     env.DB.prepare(
       `SELECT id, title FROM ideas
        WHERE parent_id = ? AND status != 'removed'
        ORDER BY created_at ASC, id ASC
-       LIMIT ?`,
+       LIMIT ? OFFSET ?`,
     )
-      .bind(parentId, DERIVED_CHILDREN_LIMIT)
+      .bind(parentId, limit, offset)
       .all<{ id: string; title: string }>(),
     env.DB.prepare(
       `SELECT COUNT(*) AS n FROM ideas WHERE parent_id = ? AND status != 'removed'`,
@@ -146,6 +149,17 @@ export async function derivedIdeas(env: Env, parentId: string) {
   ]);
   const children = rows.results || [];
   return { children, total: count?.n ?? children.length };
+}
+
+/**
+ * The live parent of a derived idea, or null. A removed parent reads as no
+ * parent, so a crumb never links to a 410.
+ */
+export async function parentIdea(env: Env, parentId: string | null | undefined) {
+  if (!parentId) return null;
+  return env.DB.prepare("SELECT id, title FROM ideas WHERE id = ? AND status != 'removed'")
+    .bind(parentId)
+    .first<{ id: string; title: string }>();
 }
 
 export async function ideaBody(env: Env, idea: IdeaRow) {

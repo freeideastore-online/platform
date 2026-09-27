@@ -150,7 +150,7 @@ describe('derivedIdeas (#80)', () => {
     await derivedIdeas(env, 'asx-filings-analyst');
 
     const listed = DB.only('SELECT id, title FROM ideas');
-    expect(listed.binds).toEqual(['asx-filings-analyst', DERIVED_CHILDREN_LIMIT]);
+    expect(listed.binds).toEqual(['asx-filings-analyst', DERIVED_CHILDREN_LIMIT, 0]);
     expect(listed.sql).toMatch(/LIMIT \?/);
     expect(listed.sql).not.toMatch(/LIMIT \d/);
   });

@@ -1,6 +1,6 @@
 import { brandHead, brandLockup, brandCss } from './brand';
 import { chapterRedirectTarget } from './chapter-redirects';
-import { ideaBody, ideaByIdIncludeRemoved } from './data';
+import { derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
 import {
   ideaChapterById,
@@ -17,6 +17,43 @@ import {
 } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE, navCss } from './site-nav';
 import type { Env } from './types';
+
+type LinkedIdea = { id: string; title: string };
+
+/**
+ * The documents this one belongs with: its parent, the parent's other derived
+ * annexes, and the annexes derived from this document.
+ *
+ * A derived annex is a separate document with its own URL, so it is linked as
+ * one — but from every chapter page, not only the idea home page, so a reader
+ * forty chapters into an annex still has a route to the rest of the work
+ * (#64). #19 solved this by hand-writing an index into each annex body, which
+ * spent document budget and went stale when a sixth annex appeared.
+ *
+ * Both lists are capped by `derivedIdeas()`, so each states "N of M" rather
+ * than dropping the tail in silence (#80).
+ */
+export function relatedDocumentsNav(
+  ideaId: string,
+  parent: LinkedIdea | null,
+  siblings: { children: LinkedIdea[]; total: number },
+  derived: { children: LinkedIdea[]; total: number },
+) {
+  const link = (item: LinkedIdea) =>
+    `<a class="related-link${item.id === ideaId ? ' active' : ''}" href="/ideas/${escapeHtml(item.id)}/"${item.id === ideaId ? ' aria-current="page"' : ''}>${escapeHtml(item.title)}</a>`;
+  const count = (shown: number, total: number) => (total > shown ? `<small>Showing ${shown} of ${total}</small>` : '');
+  const groups: string[] = [];
+  if (parent) {
+    groups.push(`<div class="related-group"><div class="nav-title"><span>Part of</span></div><a class="related-link parent" href="/ideas/${escapeHtml(parent.id)}/" rel="up">${escapeHtml(parent.title)}</a></div>`);
+    if (siblings.children.length) {
+      groups.push(`<div class="related-group"><div class="nav-title"><span>Annexes</span><span>${siblings.total}</span></div>${siblings.children.map(link).join('')}${count(siblings.children.length, siblings.total)}</div>`);
+    }
+  }
+  if (derived.children.length) {
+    groups.push(`<div class="related-group"><div class="nav-title"><span>Derived annexes</span><span>${derived.total}</span></div>${derived.children.map(link).join('')}${count(derived.children.length, derived.total)}</div>`);
+  }
+  return groups.length ? `<nav class="related-docs" aria-label="Related documents">${groups.join('')}</nav>` : '';
+}
 
 export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: string, requestedChapterId: string) {
   const idea = await ideaByIdIncludeRemoved(env, ideaId);
@@ -63,6 +100,10 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
     return Response.redirect(target, 302);
   }
 
+  const [parent, derived] = await Promise.all([parentIdea(env, idea.parent_id), derivedIdeas(env, idea.id)]);
+  const siblings = parent ? await derivedIdeas(env, parent.id) : { children: [], total: 0 };
+  const relatedNav = relatedDocumentsNav(idea.id, parent, siblings, derived);
+
   const index = chapters.indexOf(chapter);
   const previous = chapters[index - 1];
   const next = chapters[index + 1];
@@ -97,6 +138,7 @@ ${brandCss()}
 .nav-title{display:flex;justify-content:space-between;gap:.75rem;color:var(--title-text);font-size:.68rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.7rem 0 .42rem}.nav-title span:last-child{letter-spacing:0;text-transform:none}
 .progress{height:6px;border-radius:999px;background:var(--progress-track);margin:.4rem 0 .8rem;overflow:hidden}.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#f59e0b);width:${progress}%}
 .chapter-list{display:grid;gap:.28rem}.chapter-link{display:grid;grid-template-columns:28px minmax(0,1fr);gap:.55rem;align-items:center;border:1px solid transparent;border-radius:8px;padding:.54rem .56rem;color:var(--strong-text)}.chapter-link:hover,.chapter-link.active{background:var(--mark);border-color:var(--hover-line)}.chapter-link b{display:grid;width:26px;height:26px;place-items:center;border-radius:999px;background:var(--chapter-badge);color:var(--accent-strong);font-size:.7rem}.chapter-link.active b{background:var(--accent);color:#fff}.chapter-link span{display:block;font-size:.82rem;font-weight:900;line-height:1.25}
+.related-docs{display:grid;gap:.4rem;border-top:1px solid var(--line);margin-top:1rem;padding-top:.4rem}.related-group{display:grid;gap:.2rem}.related-link{display:block;border:1px solid transparent;border-radius:8px;padding:.42rem .56rem;color:var(--strong-text);font-size:.8rem;font-weight:800;line-height:1.3}.related-link:hover,.related-link.active{background:var(--mark);border-color:var(--hover-line)}.related-link.parent{color:var(--accent-strong)}.related-group small{color:var(--muted);font-size:.7rem;padding:0 .56rem}
 .mobile-book-nav{display:none;border-bottom:1px solid var(--line);background:var(--panel);padding:.75rem 1rem}.mobile-book-nav summary{cursor:pointer;color:var(--accent-strong);font-weight:900}.mobile-book-nav .chapter-list{margin-top:.65rem;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
 .mobile-page-toc{display:none;border-bottom:1px solid var(--line);background:var(--panel-alt);padding:.7rem 1rem}.mobile-page-toc strong{display:block;color:var(--title-text);font-size:.68rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.45rem}.mobile-page-toc nav{display:flex;gap:.45rem;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:.15rem}.mobile-page-toc a{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--accent-strong);font-size:.75rem;font-weight:900;line-height:1.15;padding:.42rem .62rem;white-space:nowrap}.mobile-page-toc a:hover{border-color:var(--hover-line);background:var(--mark)}
 .content-wrap{display:grid;grid-template-columns:minmax(0,920px);justify-content:center;padding:2.2rem 1.35rem 4rem}
@@ -126,6 +168,7 @@ ${readerSettingsCss()}
 <details class="mobile-book-nav">
   <summary>Chapters</summary>
   <nav class="chapter-list">${chapters.map((item, chapterIndex) => `<a class="chapter-link${item.id === chapter.id ? ' active' : ''}" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(item.id)}/"><b>${chapterIndex + 1}</b><span>${escapeHtml(item.title)}</span></a>`).join('')}</nav>
+  ${relatedNav}
 </details>
 ${chapterTocLinks ? `<section class="mobile-page-toc" aria-label="On this page"><strong>On this page</strong><nav>${chapterTocLinks}</nav></section>` : ''}
 <div class="book-shell">
@@ -134,9 +177,11 @@ ${chapterTocLinks ? `<section class="mobile-page-toc" aria-label="On this page">
     <div class="nav-title"><span>Chapters</span><span>${index + 1}/${chapters.length}</span></div>
     <div class="progress" aria-hidden="true"><i></i></div>
     <nav class="chapter-list" id="chapter-list">${chapters.map((item, chapterIndex) => `<a class="chapter-link${item.id === chapter.id ? ' active' : ''}" data-title="${escapeHtml(item.title)} ${escapeHtml(item.excerpt)}" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(item.id)}/"><b>${chapterIndex + 1}</b><span>${escapeHtml(item.title)}</span></a>`).join('')}</nav>
+    ${relatedNav}
   </aside>
   <main class="content-wrap">
     <article class="article">
+      ${parent ? `<div class="crumb"><a href="/ideas/${escapeHtml(parent.id)}/">${escapeHtml(parent.title)}</a><span>/</span><a href="/ideas/${escapeHtml(idea.id)}/">${escapeHtml(idea.title)}</a></div>` : ''}
       <h1>${escapeHtml(chapter.title)}</h1>
       <div class="summary">${escapeHtml(chapter.excerpt || idea.summary)}</div>
       <div class="meta"><span class="pill">${escapeHtml(idea.title)}</span><span class="pill">${escapeHtml(idea.stage)}</span><span class="pill">Chapter ${index + 1} of ${chapters.length}</span></div>

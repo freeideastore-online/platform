@@ -18,7 +18,7 @@ import {
   validatePublication,
 } from './api-idea-mutations';
 import { chapterRedirectTarget } from './chapter-redirects';
-import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
+import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, DERIVED_CHILDREN_LIMIT, derivedIdeas, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { chapterHealth, documentMetrics, ideaPreamble, ideaSectionList, readIdeaSection } from './markdown';
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
@@ -224,6 +224,33 @@ async function handleGetContributions(env: Env, ideaParam: string, url: URL) {
   return json({
     contributions: await contributionsByIdea(env, ideaId, limit, offset),
     total: await contributionCount(env, ideaId),
+    limit,
+    offset,
+  });
+}
+
+/**
+ * The ideas derived from this one — the annexes a document overflows into.
+ *
+ * `documentOverflow()` tells an author to move the overflow into a derived
+ * annex, and until this route nothing returned the children it produced, so an
+ * agent that sharded a corpus as instructed could not enumerate its own shards
+ * (#64). Paged, with `total`, over the same stable creation order the parent
+ * page uses — the parent list was bitten once already by an unstated LIMIT (#80).
+ */
+async function handleGetDerived(env: Env, ideaParam: string, url: URL) {
+  const ideaId = pathId(ideaParam);
+  if (!ideaId) return bad('invalid idea id', 400);
+  const idea = await ideaById(env, ideaId);
+  if (!idea) return bad('idea not found', 404);
+  const limit = clampInt(url.searchParams.get('limit'), DERIVED_CHILDREN_LIMIT, 1, 200);
+  const offset = clampInt(url.searchParams.get('offset'), 0, 0, 100000);
+  const { children, total } = await derivedIdeas(env, idea.id, limit, offset);
+  return json({
+    idea: idea.id,
+    parent_id: idea.parent_id || null,
+    children: children.map((child) => ({ ...child, url: `/ideas/${child.id}/` })),
+    total,
     limit,
     offset,
   });
@@ -529,6 +556,12 @@ const routes: Route[] = [
     pattern: /^\/api\/ideas\/([^/]+)\/derive$/,
     methods: {
       POST: (request, env, __, match) => deriveIdea(request, env, match![1] || ''),
+    },
+  },
+  {
+    pattern: /^\/api\/ideas\/([^/]+)\/derived$/,
+    methods: {
+      GET: (_, env, url, match) => handleGetDerived(env, match![1] || '', url),
     },
   },
   {

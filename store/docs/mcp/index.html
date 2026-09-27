@@ -742,7 +742,7 @@
 <h2 id="discovery">Discovery<a class="headerlink" href="#discovery" title="Permanent link">&para;</a></h2>
 <p>The public MCP discovery manifest is available at <code>/.well-known/mcp.json</code>. It lists every tool the server registers, and a test fails the build if the two ever disagree — an unlisted tool is an uncallable tool in practice, because an agent picks what to call from the list it can read.</p>
 <h2 id="important-tools">Important Tools<a class="headerlink" href="#important-tools" title="Permanent link">&para;</a></h2>
-<p>All 39 tools the server registers, grouped by what they are for.</p>
+<p>All 40 tools the server registers, grouped by what they are for.</p>
 <p><strong>Authorization</strong> — see <a href="#authorization-and-expiry">Authorization And Expiry</a></p>
 <ul>
 <li><code>authenticate</code></li>
@@ -767,6 +767,7 @@
 <ul>
 <li><code>create_free_idea</code></li>
 <li><code>derive_idea</code></li>
+<li><code>list_derived_ideas</code> — the ideas derived from a parent, oldest first, paged with <code>total</code>. The overflow error sends chapters into a derived annex; this is how an author enumerates the annexes they made, and how an agent finds the rest of a multi-document work.</li>
 <li><code>add_idea_contribution</code></li>
 <li><code>react_to_idea</code></li>
 </ul>

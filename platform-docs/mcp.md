@@ -12,7 +12,7 @@ The public MCP discovery manifest is available at `/.well-known/mcp.json`. It li
 
 ## Important Tools
 
-All 39 tools the server registers, grouped by what they are for.
+All 40 tools the server registers, grouped by what they are for.
 
 **Authorization** — see [Authorization And Expiry](#authorization-and-expiry)
 
@@ -38,6 +38,7 @@ All 39 tools the server registers, grouped by what they are for.
 
 - `create_free_idea`
 - `derive_idea`
+- `list_derived_ideas` — the ideas derived from a parent, oldest first, paged with `total`. The overflow error sends chapters into a derived annex; this is how an author enumerates the annexes they made, and how an agent finds the rest of a multi-document work.
 - `add_idea_contribution`
 - `react_to_idea`
 

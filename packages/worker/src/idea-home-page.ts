@@ -1,6 +1,6 @@
 import { brandHead, brandLockup } from './brand';
 import { AUTH_PREFIX } from './auth';
-import { contributionCount, contributionsByIdea, derivedIdeas, DERIVED_CHILDREN_LIMIT, ideaBody, ideaByIdIncludeRemoved } from './data';
+import { contributionCount, contributionsByIdea, derivedIdeas, DERIVED_CHILDREN_LIMIT, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
 import { escapeHtml, FIELD_LIMITS, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { sourcesSection } from './idea-sources-section';
@@ -33,11 +33,7 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   if (!idea) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
 
   const body = await ideaBody(env, idea);
-  const parent = idea.parent_id
-    ? await env.DB.prepare("SELECT id, title FROM ideas WHERE id = ? AND status != 'removed'")
-        .bind(idea.parent_id)
-        .first<{ id: string; title: string }>()
-    : null;
+  const parent = await parentIdea(env, idea.parent_id);
   // Children are listed oldest-first and capped, so the rail says how many of
   // how many it is showing rather than dropping the rest in silence (#80).
   const { children: derived, total: derivedTotal } = await derivedIdeas(env, idea.id);

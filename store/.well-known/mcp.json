@@ -64,6 +64,10 @@
           "description": "Fork a new idea from an existing one, seeded with the parent body and linked back to the source."
         },
         {
+          "name": "list_derived_ideas",
+          "description": "List the ideas derived from a parent — the annexes a document overflows into — oldest first, paged, with total."
+        },
+        {
           "name": "add_idea_contribution",
           "description": "Record evidence, risk, pivot, prototype, refinement, or kill-signal notes on an idea."
         },
