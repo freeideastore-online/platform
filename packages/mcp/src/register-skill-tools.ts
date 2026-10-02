@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { applyIdeaSkill, CHAPTERS, FREE_IDEA_SECTIONS, IDEA_SKILL_IDS, IDEA_SKILLS, skillSummary } from "./idea-skills.js";
+import { applyIdeaSkill, BOOK_ARCHETYPES, ideaBookTemplate, FREE_IDEA_SECTIONS, IDEA_SKILL_IDS, IDEA_SKILLS, skillSummary } from "./idea-skills.js";
 import { dynamicIdeaBookPreview, slugify } from "./fis-api.js";
 import { STAGES, text, type Env } from "./mcp-types.js";
 
@@ -50,9 +50,9 @@ export function registerSkillTools(server: McpServer, env: Env) {
 
   server.tool(
     "dynamic_idea_book_template",
-    "Return the canonical Markdown heading spine used by dynamic FreeIdeaStore idea publications.",
-    {},
-    async () => text(CHAPTERS.map(([title, prompt]) => `## ${title}\n${prompt}`).join("\n\n")),
+    "Return advisory question-based Markdown templates for idea, research-annex, audit, or financial-model publications. Selection does not assign a stored archetype.",
+    { archetype: z.enum(BOOK_ARCHETYPES).optional() },
+    async (input) => text(ideaBookTemplate(input.archetype)),
   );
 
   server.tool(

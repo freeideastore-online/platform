@@ -41,6 +41,37 @@ export const CHAPTERS = [
   ["Evolution", "### Open Questions\nWhat decisions are still unresolved?\n\n### Contribution Prompts\nWhat help should researchers, builders, designers, operators, or critics add?\n\n### Next Decisions\nWhat should happen after the next evidence pass?\n\n### ProIdeaStore Readiness\nWhat is missing before this deserves serious diligence?"],
 ] as const;
 
+// Template selection is advisory and does not assign metadata to a document or part.
+export const BOOK_ARCHETYPES = ["idea", "research-annex", "audit", "financial-model"] as const;
+export const BOOK_CHAPTERS = {
+  idea: CHAPTERS,
+  "research-annex": [
+    ["Method And Limits", "What was searched, and what could this method not see?"],
+    ["Findings By Subject", "What was found, per subject?"],
+    ["Unknowns", "What could not be established?"],
+  ],
+  audit: [
+    ["Verdict", "What is the verdict?"],
+    ["Findings By Severity", "What is wrong, by severity?"],
+    ["Corrections", "What was corrected?"],
+    ["Scope And Limits", "What was not checked?"],
+  ],
+  "financial-model": [
+    ["Headline Number", "What is the headline number?"],
+    ["Cost Lines", "What are the cost lines?"],
+    ["Profit And Loss", "What does the P&L look like?"],
+    ["Sensitivity And Risks", "What breaks it?"],
+    ["Verdict", "What is the verdict?"],
+  ],
+} as const;
+
+export function ideaBookTemplate(archetype: (typeof BOOK_ARCHETYPES)[number] = "idea") {
+  const spine = BOOK_CHAPTERS[archetype].map(([title, prompt]) => `## ${title}\n${prompt}`).join("\n\n");
+  // Preserve the existing no-argument idea template verbatim.
+  if (archetype === "idea") return spine;
+  return "Advisory questions: choose chapter boundaries by meaning. A question may need several chapters (for example, one finding chapter per subject). Word counts are diagnostics, never targets or chapter budgets. Each chapter should answer a question and function alone for a reader arriving cold.\n\n" + spine;
+}
+
 export const IDEA_SKILLS = CATALOG_IDEA_SKILLS as IdeaSkill[];
 
 export function skillSummary(skill: IdeaSkill) {
