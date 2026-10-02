@@ -155,3 +155,20 @@ Agents should write Markdown through MCP tools such as `create_free_idea`, `add_
 ## Zensical Boundary
 
 Zensical is the standard generator for the platform documentation at `/docs/`. Free idea publications intentionally do not use one Zensical instance per idea because that would create too many generated files and too much publishing overhead.
+
+
+## Advisory book archetypes (#54)
+
+`dynamic_idea_book_template` accepts optional `archetype`: `idea` (the existing
+nine-section template), `research-annex`, `audit`, or `financial-model`.
+The latter templates ask the questions agreed in #54; repeat findings chapters
+per subject where needed. These are prompts, not fixed chapter counts. Choose
+boundaries by meaning and make each chapter understandable to a reader arriving
+cold. Word bands and `merge`/`thin`/`split` verdicts are advisory review signals;
+completeness cannot be inferred from length alone.
+
+Template selection assigns no stored document or part metadata. No existing
+publication is backfilled to `idea`. Document-versus-part ownership, the default
+for existing unclassified publications, and enforcement remain open decisions in
+#54/#82/#63. Preflight currently reports structural errors and word diagnostics;
+it does not establish whether prose answers an archetype's questions.

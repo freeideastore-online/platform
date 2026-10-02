@@ -167,39 +167,27 @@ export const PUBLICATION_POLICY = {
 } as const;
 
 /**
- * The size a chapter should be to earn its own page.
+ * Advisory word-count diagnostics for chapter review, never chapter budgets.
  *
- * This is topic-based authoring: a page is one topic that completely answers one
- * question, not a formatting unit. The band below is where that tradition lands
- * — Wikipedia's WP:SIZERULE divides above ~8,000 words of readable prose and
- * declines to divide below ~1,500 on length alone; technical book chapters run
- * 3,000–8,000; documentation pages run 500–3,000 with an in-page table of
- * contents. A research chapter sits at the lower end of that because it is read
- * to be checked rather than read straight through.
- *
- * Both edges matter, and only having one is how the corpus got where it is:
- *
- * - Without a FLOOR, chapters become paragraphs. Every idea in the store
- *   currently averages 78–255 words per chapter, so the entire corpus is a
- *   paragraph-per-page waiting to happen.
- * - Without a CEILING, a chapter grows without limit and the reader gets one
- *   endless page.
+ * A chapter should completely answer a question and function alone for a reader
+ * arriving cold (Mark Baker's Every Page is Page One). Length cannot establish
+ * that: a complete 250-word answer may work, while a 900-word fragment may not.
+ * The floor is a heuristic for reviewing context and completeness, not proof
+ * that a chapter must be merged. Likewise, the ceiling prompts review of topic
+ * boundaries rather than an automatic split. No chapter count is derived from
+ * these bands. Wikipedia's article-size guidance cannot justify a minimum
+ * chapter size; the previous 1,500-word attribution was incorrect (#79).
  *
  * Depth below chapter level belongs in `###` sub-sections, which render as
- * in-page anchors. Never paginate below a chapter — that is what turns reading
- * into navigating between paragraphs.
- *
- * A document grows by chapters getting deeper and then SPLITTING at the ceiling,
- * never by adding more thin chapters. That is what makes depth unbounded (#16)
- * without fragmenting it.
+ * in-page anchors. Never paginate below a chapter.
  */
 export const CHAPTER_SIZE = {
-  /** Below this a chapter cannot stand alone — merge it into a neighbour. */
+  /** Below this, review whether the chapter supplies its own context and answer. */
   floorWords: 500,
-  /** The band a chapter should live in. */
+  /** Legacy diagnostic band; not a required word target. */
   targetMinWords: 800,
   targetMaxWords: 3000,
-  /** Above this a chapter has become two topics — split it. */
+  /** Above this, review whether there are distinct questions worth separating. */
   ceilingWords: 4000,
 } as const;
 
