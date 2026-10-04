@@ -34,6 +34,26 @@ Fallback while DNS is propagating:
 
 https://freeideastore-mcp.serge-the-dev.workers.dev/mcp
 
+## Commit checks
+
+`pnpm install` installs the Husky pre-commit hook. Every commit runs the whole
+workspace TypeScript check (packages run in parallel), ESLint on staged JavaScript/TypeScript files via
+lint-staged, and `pnpm test:unit:fast`. The fast Vitest subset covers reader
+settings, Markdown rendering, book templates, and publication validation. The
+explicit allowlist lives in `vitest.unit.config.ts` and never runs Playwright or tests
+requiring a deployed target. Run `pnpm precommit` to check locally, `pnpm lint`
+for all source files, and `pnpm test` for the full local test suite used in CI.
+
+For a genuine emergency (such as an urgent production fix blocked by a known
+unrelated local failure), bypass the hook with:
+
+```bash
+git commit --no-verify -m "Describe the urgent fix"
+```
+
+Use this sparingly, record why checks were skipped, and run the checks as soon
+as possible. Skipping the local hook does not skip CI.
+
 ## Product Principle
 
 Ideas are not the product. The contributors are the product: their critiques, evidence, pivots, prototypes, and judgment create visible reputation.

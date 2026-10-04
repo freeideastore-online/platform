@@ -24,13 +24,24 @@
     "cellar-door:reference-integrity": "node scripts/cellar-door-reference-integrity-check.mjs",
     "test": "pnpm skills:validate && pnpm migrations:validate && pnpm --filter @fis/worker test && pnpm --filter @fis/mcp test",
     "test:e2e": "playwright test",
-    "typecheck": "pnpm --filter @fis/sdk typecheck && pnpm --filter @fis/console typecheck && pnpm --filter @fis/worker typecheck && pnpm --filter @fis/mcp typecheck",
+    "typecheck": "pnpm -r --parallel typecheck",
     "db:migrate:local": "pnpm --filter @fis/worker db:migrate:local",
-    "db:migrate:prod": "pnpm --filter @fis/worker db:migrate:prod"
+    "db:migrate:prod": "pnpm --filter @fis/worker db:migrate:prod",
+    "prepare": "husky",
+    "lint": "eslint .",
+    "test:unit:fast": "vitest run --config vitest.unit.config.ts",
+    "precommit": "pnpm typecheck && pnpm exec lint-staged && pnpm test:unit:fast"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
+    "eslint": "^10.12.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.71.0",
     "vitest": "^4.1.8"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,jsx,ts,tsx}": "eslint --no-warn-ignored --max-warnings=0"
   }
 }
