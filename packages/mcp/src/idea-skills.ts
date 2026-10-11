@@ -37,7 +37,6 @@ export const CHAPTERS = [
   ["Risks And Constraints", "### Trust And Safety\nWhat could harm users, contributors, partners, or public trust?\n\n### Legal Or Regulatory Constraints\nWhat laws, permissions, licenses, or platform rules matter?\n\n### Operational Or Technical Constraints\nWhat makes delivery hard?\n\n### Kill Signals\nWhat evidence should make us stop, park, or pivot?"],
   ["Validation", "### Riskiest Assumption\nWhat must be true for this idea to work?\n\n### Cheapest Test\nWhat can be tested this week without overbuilding?\n\n### Success Threshold\nWhat result means continue?\n\n### Pivot Or Trash Criteria\nWhat result means change direction or stop?"],
   ["Prototype Or Pilot", "### Demo Or Pilot\nWhat should the first demo, pilot, manual service, or concierge test show?\n\n### Required Resources\nWhat data, people, permissions, integrations, assets, or locations are needed?\n\n### Manual Or Fakeable Parts\nWhat can be done manually without lying to users?\n\n### Must Be Real\nWhat must be real for the test to be honest?"],
-  ["Model And Distribution", "### Sustainability Model\nHow could this be funded, sold, maintained, or supported?\n\n### Pricing Or Funding Hypothesis\nWho might pay, sponsor, or contribute?\n\n### Channels\nHow would first users find it?\n\n### Partnerships\nWho could make distribution or delivery easier?"],
   ["Evolution", "### Open Questions\nWhat decisions are still unresolved?\n\n### Contribution Prompts\nWhat help should researchers, builders, designers, operators, or critics add?\n\n### Next Decisions\nWhat should happen after the next evidence pass?\n\n### ProIdeaStore Readiness\nWhat is missing before this deserves serious diligence?"],
 ] as const;
 
@@ -110,7 +109,7 @@ export function applyIdeaSkill(skill: IdeaSkill, context: string, mode: "questio
     qualityGate: [
       "No fake sources, fake users, fake metrics, or fake contributor names.",
       "Named products, companies, services, datasets, regulators, and important public sources are clickable Markdown links when credible URLs are known.",
-      "Use the universal publication spine for serious canonical updates: Overview, People And Problem, Context And Evidence, Proposed Solution, Risks And Constraints, Validation, Prototype Or Pilot, Model And Distribution, Evolution.",
+      "Use the universal publication spine for serious canonical updates: Overview, People And Problem, Context And Evidence, Proposed Solution, Risks And Constraints, Validation, Prototype Or Pilot, Evolution.",
       "Main risk is visible.",
       "Next validation step is cheap and concrete.",
       "Public document is understandable without reading the chat.",

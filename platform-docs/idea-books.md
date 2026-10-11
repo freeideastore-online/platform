@@ -45,12 +45,7 @@ Use this spine for serious idea publications across products, services, communit
    - Required resources
    - Manual or fakeable parts
    - Must be real
-8. Model And Distribution
-   - Sustainability model
-   - Pricing or funding hypothesis
-   - Channels
-   - Partnerships
-9. Evolution
+8. Evolution
    - Open questions
    - Contribution prompts
    - Next decisions

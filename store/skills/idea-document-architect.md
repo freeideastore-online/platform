@@ -19,8 +19,7 @@ The first public idea page should be short, readable, and complete enough for st
 5. Risks And Constraints: trust and safety, legal or regulatory constraints, operational or technical constraints, and kill signals.
 6. Validation: riskiest assumption, cheapest test, success threshold, and pivot or trash criteria.
 7. Prototype Or Pilot: demo or pilot, required resources, manual or fakeable parts, and what must be real.
-8. Model And Distribution: sustainability model, pricing or funding hypothesis, channels, and partnerships.
-9. Evolution: open questions, contribution prompts, next decisions, and ProIdeaStore readiness.
+8. Evolution: open questions, contribution prompts, next decisions, and ProIdeaStore readiness.
 
 Use these as `##` top-level sections in the canonical body. Use the listed items as `###` sub-sections under their parent `##` when the idea has enough substance. Do not make the listed items `##` headings: `##` creates sibling chapters and possible chapter URLs, while `###` is the required second level for depth without more URLs. For a raw first page, keep empty sections out rather than pretending evidence exists.
 

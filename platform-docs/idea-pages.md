@@ -67,12 +67,6 @@ The standard spine is:
 ### Manual or fakeable parts
 ### Must be real
 
-## Model And Distribution
-### Sustainability model
-### Pricing or funding hypothesis
-### Channels
-### Partnerships
-
 ## Evolution
 ### Open questions
 ### Contribution prompts
