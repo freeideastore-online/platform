@@ -273,3 +273,54 @@ describe("responses that never carried a tree are passed through (#47)", () => {
     expect(result).toEqual({ ok: true, idea: "cellar-door-cycling", note: "no change" });
   });
 });
+
+/**
+ * #63. Parts are created and re-levelled through the same two tools as
+ * chapters. A schema that advertises `kind` and `part` while the request body
+ * drops them is worse than no field at all, and `regrouped` — the blast radius
+ * of a part edit — must survive the trimming of the section tree.
+ */
+describe("parts", () => {
+  const forwarded = async (tool: string, input: Record<string, unknown>) => {
+    let body: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const result = await call(tool, input);
+    return { body, result };
+  };
+
+  it("forwards kind and part on add_idea_section", async () => {
+    const { body } = await forwarded("add_idea_section", {
+      idea_id: "cellar-door-cycling",
+      title: "Regional evidence",
+      kind: "part",
+    });
+    expect(body).toMatchObject({ title: "Regional evidence", kind: "part" });
+
+    const into = await forwarded("add_idea_section", { idea_id: "cellar-door-cycling", title: "Barossa", part: "regional-evidence" });
+    expect(into.body).toMatchObject({ part: "regional-evidence" });
+  });
+
+  it("forwards kind and part on edit_idea_section and keeps regrouped in the compact result", async () => {
+    payload = {
+      ...STRUCTURAL_RESPONSE,
+      regrouped: [{ chapter_id: "chapter-4", from_part: null, to_part: "chapter-3" }],
+    };
+    const { body, result } = await forwarded("edit_idea_section", {
+      idea_id: "cellar-door-cycling",
+      section: "chapter-3",
+      kind: "part",
+      part: "regional-evidence",
+    });
+    expect(body).toMatchObject({ kind: "part", part: "regional-evidence" });
+    expect(result.regrouped).toEqual([{ chapter_id: "chapter-4", from_part: null, to_part: "chapter-3" }]);
+    expect(result.sections).toBeUndefined();
+  });
+
+  it("only accepts chapter or part as a kind", () => {
+    expect(schemas.add_idea_section!.kind!.safeParse("volume").success).toBe(false);
+    expect(schemas.edit_idea_section!.kind!.safeParse("chapter").success).toBe(true);
+  });
+});

@@ -157,7 +157,8 @@ describe("MCP deployment config", () => {
    */
   it("states the chapter heading contract on every section-write tool", () => {
     // The contract itself, and the escape hatch, stated once and shared.
-    expect(publishingTools).toContain("`#` AND `##` both create sibling chapters");
+    expect(publishingTools).toContain("every `##` splits this content into a separate chapter");
+    expect(publishingTools).toContain("every `#` opens a PART that regroups every chapter after it");
     expect(publishingTools).toContain("`###` and deeper stay inside the chapter");
     expect(publishingTools).toContain("set demote_headings: true");
 

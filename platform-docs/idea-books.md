@@ -81,29 +81,42 @@ This gate exists because splitting on `##` alone produced chapters that were not
 
 An idea crosses the threshold by getting deeper, which usually means promoting research out of contributions and into the canonical document.
 
-## The Chapter Heading Contract
+## The Section Heading Contract
 
-**`#` and `##` both create sibling chapters. `###` does not.**
+**`#` opens a part. `##` is a chapter. `###` is neither.**
 
 `sectionRanges()` in `packages/worker/src/markdown.ts` is the single place this rule lives. Chapter listing, section editing and the idea page's lead-in all build on it, so nothing may re-derive "where a chapter starts" with a regex of its own.
 
-The single exception is a `#` that is the very first thing in the document — before any other heading and before any non-blank content — whose slug equals the slug of the idea's own title. That one is the document title, already rendered as the page's `<h1>`, and it is skipped. **Every other `#` becomes a chapter, a peer of every `##`**, including:
+- **`##` is a chapter** — its own URL, and its own page once the document paginates.
+- **A non-title `#` is a part.** It groups every `##` chapter after it, up to the next `#` or the end of the document. Chapters before the first part belong to no part.
+- **`###` and deeper** stay inside the section above, as in-page anchors rather than URLs.
 
-- a leading `#` whose text differs from the idea's title,
-- a `#` that repeats the title but appears later in the document,
-- a leading `#` in a document with no title to compare against.
-
-Two published documents have exactly the first case, and their first chapter *is* that `#`. Any change that stops a non-title `#` being a chapter is a URL-breaking migration for them, not a no-op.
-
-The heading level is read and then discarded: `headingTag()` renders `#` and `##` identically as `<h2>`, and `ideaChapters()` re-emits every chapter as `## Title` whatever level it was written at. That is why `read_idea_section` on a `#`-headed chapter hands back a `##` heading.
+The single exception is a `#` that is the very first thing in the document — before any other heading and before any non-blank content — whose slug equals the slug of the idea's own title. That one is the document title, already rendered as the page's `<h1>`, and it is skipped. Every other `#` opens a part, including a leading `#` whose text differs from the idea's title, a `#` that repeats the title later in the document, and a leading `#` in a document with no title to compare against.
 
 The line is trimmed before matching, so **leading whitespace does not protect a heading**: `  ## Heading` and a tab-indented heading are both chapters. Nothing here is fence-aware either — a `## Heading` line inside a fenced code block splits the chapter.
 
-Depth below chapter level belongs in `###` and deeper, which render as in-page anchors rather than URLs. All of this is pinned by tests in `packages/worker/src/markdown.test.ts` under `the chapter heading contract`.
+All of this is pinned by tests in `packages/worker/src/markdown.test.ts` under `the section heading contract`, and `packages/worker/src/parts.test.ts`.
+
+### Parts
+
+At the 100-chapter cap a flat chapter list is a hundred peers and a substring filter. A part is the level between the document and the chapter: "Part II — Regional evidence" holding nine chapters, rather than nine more peers of Snapshot (#63).
+
+- **A part is navigation, not a page.** It has no URL, and chapter URLs never include it, so grouping, regrouping or renaming parts never moves a chapter URL. Chapter ids are assigned over chapters only, before parts are named.
+- **Parts do not count toward `FIELD_LIMITS.chapters`.** The cap bounds the reading surface. `documentMetrics()`, the chapter-limit check, `PUBLICATION_POLICY` and `isPaginated()` all count chapters alone; `usage` reports `parts` beside `chapters`. A part never gets a size verdict — a heading with no body would otherwise be flagged as the worst chapter in every document that has one.
+- **Prose between a `#` and its first `##` is the part's intro.** It is rendered under the part on the idea page's chapter summaries and above the part's first chapter. It is never dropped.
+- **Rails are grouped.** The idea page and every chapter page render each part as a collapsible group; only the part holding the current chapter starts open (a document with one part opens it). Chapter numbers run across parts. Chapter pages name their part, show "N of M in this part", and prev/next say when they cross into another part.
+
+Parts are written with the same tools as chapters — see [MCP](mcp.md): `add_idea_section` takes `kind: "part"`; `edit_idea_section` takes `kind` to promote or demote, and `part` to move a chapter into one. `list_idea_sections` reports `kind` and `part` on every row. A structural write that changes which part any chapter sits in lists them in `regrouped`.
+
+### The #63 Migration
+
+Before #63, `#` and `##` were both sibling chapters. Two published documents opened on a non-title `#` that was their first chapter (`requirementsbase-mcp-native-regulatory-gap-analysis-agent` and `tek-to-esg-translator-…`). Under the new rule that `#` is a part over the rest of the document; its intro is kept, and its old chapter URL is retired.
+
+The change was **accepted, not made opt-in**, and the retired URLs are 301'd through the chapter redirect store (#53): a chapter that became a part redirects to the first chapter of that part. `POST /api/admin/backfill-metrics` seeds those redirects for every live idea, by comparing the pre-#63 parse (`legacyFlatChapters()`) with the current one, and recomputes `body_words` and `chapter_count` under the new definition so the catalog's `has_publication` agrees with the page. It must run in the same deploy as the parser change — see [DEPLOY.md](https://github.com/freeideastore-online/platform/blob/main/DEPLOY.md). It is idempotent.
 
 ### Writing A Whole File As One Chapter
 
-Because both `#` and `##` split, feeding a research file straight into `patch_idea_section` shatters it: a migration that intended 15 chapters produced 74, and one 1,351-word file became nine chapters. Demoting only the `##` headings — the workaround four separate agents converged on — is wrong by half, since every `#` still splits.
+Because `##` splits and `#` opens a part, feeding a research file straight into `patch_idea_section` shatters it: a migration that intended 15 chapters produced 74, and one 1,351-word file became nine chapters. Demoting only the `##` headings — the workaround four separate agents converged on — is wrong by half, since every `#` still splits.
 
 The section-write tools (`add_idea_section`, `patch_idea_section`, `append_to_idea_section`) take `demote_headings: true` for this. It shifts every heading in `content` uniformly, by whatever the **shallowest** heading present requires:
 
@@ -141,7 +154,7 @@ Search links straight to `#contribution-<id>`, which may be on a later page. Whe
 
 ## Publishing Model
 
-The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits `#` and `##` headings into chapter URLs (see The Chapter Heading Contract above), and keeps `###` and deeper as sub-sections inside the chapter.
+The store shows a snippet and links into dynamic chapter pages. The FreeIdeaStore Worker reads the canonical Markdown idea document from platform storage, splits `##` headings into chapter URLs, groups them under `#` parts (see The Section Heading Contract above), and keeps `###` and deeper as sub-sections inside the chapter.
 
 FreeIdeaStore does not create per-idea GitHub docs, Zensical projects, generated static publication assets, or fallback static pages for free ideas.
 

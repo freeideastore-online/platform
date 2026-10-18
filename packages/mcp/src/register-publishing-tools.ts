@@ -5,13 +5,20 @@ import { DOCUMENT_CHARS, DOCUMENT_LIMIT_NOTE, SECTION_CHARS, SECTION_LIMIT_NOTE 
 import { STAGES, text, type Env, type McpProps } from "./mcp-types.js";
 
 /**
- * The chapter contract, stated on every tool that writes markdown into a
+ * The section contract, stated on every tool that writes markdown into a
  * section. Callers previously read only "do not repeat the section heading",
  * which warns about ONE heading and says nothing about the rest — a migration
- * that intended 15 chapters produced 74 (#48).
+ * that intended 15 chapters produced 74 (#48). Since #63 a `#` is a part, not a
+ * chapter, which is a second way for pasted content to restructure a document.
  */
 const HEADING_CONTRACT =
-  "Headings: `#` AND `##` both create sibling chapters, so every one of them splits this content into a separate chapter with its own URL. `###` and deeper stay inside the chapter as in-page anchors. Do not repeat the section heading. To write a whole source file as ONE chapter, set demote_headings: true rather than re-levelling by hand.";
+  "Headings: every `##` splits this content into a separate chapter with its own URL, and every `#` opens a PART that regroups every chapter after it up to the next `#`. `###` and deeper stay inside the chapter as in-page anchors. Do not repeat the section heading. To write a whole source file as ONE chapter, set demote_headings: true rather than re-levelling by hand.";
+
+const SECTION_KIND =
+  "`chapter` (default) adds a `##` chapter with its own URL. `part` adds a `#` part: a navigation group with no URL of its own that holds every chapter after it up to the next part, and does not count toward the chapter limit. `content` on a part is its intro, shown where the part opens. The response lists any chapters that changed part in `regrouped`.";
+
+const SECTION_PART =
+  "Part id to place the chapter at the end of. Use this to put a chapter into a part; `after: <part id>` means after the whole part.";
 
 const DEMOTE_HEADINGS =
   "Shift every heading in `content` below chapter level so the whole block lands as ONE chapter instead of splitting into siblings. The shift is uniform and taken from the shallowest heading present: a `#`-topped file moves two levels (`#`→`###`, `##`→`####`, `###`→`#####`), a `##`-topped file one (`##`→`###`). Content already topped at `###` is untouched. Nothing is pushed past `######`. Off by default.";
@@ -20,12 +27,13 @@ const VERBOSE_SECTIONS =
   "Return the document's full section list alongside the result, the way list_idea_sections would. Off by default: the tree is O(document) tokens on a response whose useful content is the write's outcome, so a ten-call consolidation pass would re-read the whole structure ten times.";
 
 /** One row of the section list a structural write returns. */
-type SectionRow = { id: string; title: string; words: number; verdict?: string };
+type SectionRow = { id: string; title: string; words: number; verdict?: string | null; kind?: "part" | "chapter"; part?: string | null };
 
 type ValidationResponse = {
   usage: Record<string, number | undefined>;
   chapters: SectionRow[];
   chapters_created: number;
+  parts_created?: number;
   errors: string[];
 };
 
@@ -92,6 +100,7 @@ function validationSummary(data: ValidationResponse): string {
       ok: data.errors.length === 0,
       usage: data.usage,
       chapters_created: data.chapters_created,
+      parts_created: data.parts_created,
       errors: data.errors,
       chapters: data.chapters,
     },
@@ -229,14 +238,14 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
 
   server.tool(
     "list_idea_sections",
-    "List the sections of an idea document with their ids, word counts and size verdicts, plus `usage`: the document's character and chapter budget and what is left of it. Start here before reading or writing a section — the ids are the same handles the public chapter URLs use, and the headroom is knowable without attempting a write.",
+    "List the sections of an idea document in order, with their ids, word counts and size verdicts, plus `usage`: the document's character and chapter budget and what is left of it. Each row has `kind`: a `chapter` row names the `part` it sits under (null before the first part); a `part` row is a navigation group with no URL and no verdict, and reports how many `chapters` it holds. Start here before reading or writing a section — chapter ids are the same handles the public chapter URLs use, and the headroom is knowable without attempting a write.",
     {
       idea_id: z.string().min(2),
     },
     async (input) => {
       const res = await fisApi<{
         idea: string;
-        sections: Array<{ id: string; title: string; words: number; verdict: string }>;
+        sections: SectionRow[];
         usage: Record<string, number | undefined>;
       }>(
         env,
@@ -263,6 +272,8 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         content: z.string().max(SECTION_CHARS).optional().describe(`Markdown for this operation. ${HEADING_CONTRACT} ${SECTION_LIMIT_NOTE}`),
         after: z.string().optional().describe("For add mode, insert after this section id."),
         before: z.string().optional().describe("For add mode, insert before this section id."),
+        kind: z.enum(["chapter", "part"]).optional().describe(`For add mode. ${SECTION_KIND}`),
+        part: z.string().optional().describe(`For add mode. ${SECTION_PART}`),
         demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
       })).min(1),
     },
@@ -564,13 +575,15 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
 
   server.tool(
     "add_idea_section",
-    "Add a new section to the authenticated owner's idea document. Use this to grow a document's structure — patch_idea_section and append_to_idea_section only edit sections that already exist. The response names the new section's id in `section`, so the next write needs no lookup.",
+    "Add a new chapter or part to the authenticated owner's idea document. Use this to grow a document's structure — patch_idea_section and append_to_idea_section only edit sections that already exist. The response names the new section's id in `section`, so the next write needs no lookup.",
     {
       idea_id: z.string().min(2),
       title: z.string().min(1).max(120),
       content: z.string().max(SECTION_CHARS).optional().describe(`Markdown for the new section's body. ${HEADING_CONTRACT} ${SECTION_LIMIT_NOTE}`),
-      after: z.string().optional().describe("Section id to insert after. Defaults to the end of the document."),
+      after: z.string().optional().describe("Section id to insert after. Defaults to the end of the document. After a part id means after the whole part, every chapter included."),
       before: z.string().optional().describe("Section id to insert before."),
+      kind: z.enum(["chapter", "part"]).optional().describe(SECTION_KIND),
+      part: z.string().optional().describe(SECTION_PART),
       demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
       verbose: z.boolean().optional().describe(VERBOSE_SECTIONS),
     },
@@ -587,6 +600,8 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
             content: input.content,
             after: input.after,
             before: input.before,
+            kind: input.kind,
+            part: input.part,
             demote_headings: input.demote_headings,
           }),
           token: props.token,
@@ -601,13 +616,15 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
 
   server.tool(
     "edit_idea_section",
-    "Rename and/or move a section of the authenticated owner's idea document. Renaming changes the section id, so the old chapter URL stops resolving — the response names the new id in `section`.",
+    "Rename, re-level and/or move a section of the authenticated owner's idea document. Renaming changes the section id, so the old chapter URL stops resolving — the response names the new id in `section`. Changing `kind` promotes a chapter to a part (its body becomes the part intro and every chapter after it, up to the next part, joins it) or demotes a part to a chapter (its chapters fall in with the part before). Moving a part moves every chapter it holds. Any chapter whose part changed is listed in `regrouped` — check it: one promotion can regroup dozens.",
     {
       idea_id: z.string().min(2),
       section: z.string().min(1),
       title: z.string().max(120).optional().describe("New title. Changes the section id."),
-      after: z.string().optional().describe("Move to sit after this section id."),
+      kind: z.enum(["chapter", "part"]).optional().describe("Promote a chapter to a part, or demote a part to a chapter."),
+      after: z.string().optional().describe("Move to sit after this section id. After a part id means after the whole part."),
       before: z.string().optional().describe("Move to sit before this section id."),
+      part: z.string().optional().describe(SECTION_PART),
       verbose: z.boolean().optional().describe(VERBOSE_SECTIONS),
     },
     async (input) => {
@@ -618,7 +635,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         `/api/ideas/${encodeURIComponent(input.idea_id)}/sections/${encodeURIComponent(input.section)}`,
         {
           method: "PATCH",
-          body: JSON.stringify({ title: input.title, after: input.after, before: input.before }),
+          body: JSON.stringify({ title: input.title, kind: input.kind, after: input.after, before: input.before, part: input.part }),
           token: props.token,
         },
       );

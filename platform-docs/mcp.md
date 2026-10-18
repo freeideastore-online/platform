@@ -116,15 +116,25 @@ Structure is editable at the same granularity. `patch_idea_section` and `append_
 
 Structural edits are ordinary canonical writes, so each one is snapshotted as a revision and re-indexes sources and search automatically.
 
-**Write responses do not carry the document tree.** A structural write used to answer with every chapter of the document, so a ten-call consolidation pass re-read the whole structure ten times — the O(document) cost section writes exist to remove, moved from the request to the response. On a 74-chapter document that was 11,209 characters per call; it is now 419. What comes back is the outcome plus `usage` — `chars`, `chars_remaining`, `chapters`, `chapters_remaining`, `below_floor`, `above_ceiling` — so budget and chapter health stay visible without a second call, and `add_idea_section` and a rename still name the section id they produced in `section`. Pass `verbose: true` for the tree, or call `list_idea_sections`, which is the deliberate way to fetch it.
+**Write responses do not carry the document tree.** A structural write used to answer with every chapter of the document, so a ten-call consolidation pass re-read the whole structure ten times — the O(document) cost section writes exist to remove, moved from the request to the response. On a 74-chapter document that was 11,209 characters per call; it is now 419. What comes back is the outcome plus `usage` — `chars`, `chars_remaining`, `chapters`, `chapters_remaining`, `parts`, `below_floor`, `above_ceiling` — so budget and chapter health stay visible without a second call, and `add_idea_section` and a rename still name the section id they produced in `section`. Pass `verbose: true` for the tree, or call `list_idea_sections`, which is the deliberate way to fetch it.
 
 Section ids stay stable under content edits, so published chapter URLs and in-page anchors keep resolving. Writing to an unknown section fails with a 404 naming the section and pointing at the section list, rather than guessing.
 
 ### Headings In Section Content Split The Section
 
-**`#` and `##` both create sibling chapters; `###` and deeper stay inside the chapter.** The `content` you send to `add_idea_section`, `patch_idea_section` or `append_to_idea_section` is parsed by the same rule as the rest of the document, so every `#` and every `##` in it becomes a chapter with its own URL — not only the heading you were told not to repeat. Feeding a research file in unchanged is how a migration that intended 15 chapters produced 74.
+**`##` creates a chapter; `#` opens a part; `###` and deeper stay inside the chapter.** The `content` you send to `add_idea_section`, `patch_idea_section` or `append_to_idea_section` is parsed by the same rule as the rest of the document, so every `##` in it becomes a chapter with its own URL, and every `#` becomes a part that regroups every chapter after it — not only the heading you were told not to repeat. Feeding a research file in unchanged is how a migration that intended 15 chapters produced 74.
 
-To write a whole source file as ONE chapter, pass `demote_headings: true`. It shifts every heading in `content` below chapter level, uniformly, by whatever the shallowest heading present requires — two levels for a `#`-topped file, one for a `##`-topped file, none for content already at `###`. Demoting only the `##` headings by hand does not work: the `#` headings still split. The full contract is in [Publications](idea-books.md#the-chapter-heading-contract).
+To write a whole source file as ONE chapter, pass `demote_headings: true`. It shifts every heading in `content` below chapter level, uniformly, by whatever the shallowest heading present requires — two levels for a `#`-topped file, one for a `##`-topped file, none for content already at `###`. Demoting only the `##` headings by hand does not work: the `#` headings still restructure the document. The full contract is in [Publications](idea-books.md#the-section-heading-contract).
+
+### Parts
+
+A part groups chapters in the navigation without being a page itself: no URL, no size verdict, and not counted toward the chapter limit (#63).
+
+- `add_idea_section` with `kind: "part"` adds a `#` part; `content` is its intro. `part: <part id>` adds a chapter at the end of that part. `after: <part id>` means after the whole part.
+- `edit_idea_section` with `kind: "part"` promotes a chapter (its body becomes the intro, and every chapter after it up to the next part joins it); `kind: "chapter"` demotes a part. `part: <part id>` moves a chapter into a part. Moving a part moves every chapter it holds.
+- `delete_idea_section` on a part removes its heading and intro only; its chapters stay. `merge_idea_sections` merges chapters only.
+- `list_idea_sections` rows carry `kind`; chapter rows name their `part`, part rows report how many `chapters` they hold and `verdict: null`.
+- Any structural write that changes which part a chapter sits in returns `regrouped: [{ chapter_id, from_part, to_part }]`. Check it after a promotion — one promotion can regroup dozens of chapters.
 
 ## Document History Is Kept
 
