@@ -129,7 +129,29 @@ export type IdeaChapter = {
   markdown: string;
   excerpt: string;
   aliases: string[];
+  /** Id of the part this chapter sits under; absent before the first part. */
+  part?: string;
 };
+
+/**
+ * A part: a non-title `#` heading that groups the `##` chapters after it (#63).
+ *
+ * A part is navigation, not a page. It has no URL and is not a chapter, so it
+ * never counts toward `FIELD_LIMITS.chapters` and never gets a size verdict.
+ * Prose written between the `#` and the first `##` under it is the part's
+ * `intro` — rendered where the part opens, never dropped.
+ */
+export type IdeaPart = {
+  id: string;
+  title: string;
+  /** The part's own prose, between its heading and its first chapter. */
+  intro: string;
+  excerpt: string;
+  /** Ids of the chapters the part groups, in document order. */
+  chapterIds: string[];
+};
+
+export type SectionKind = 'part' | 'chapter';
 
 export const UNWRITTEN_CHAPTER_EXCERPT = 'This chapter is not yet written.';
 const LEGACY_CHAPTER_LOADING = '(chapter loading)';
@@ -243,6 +265,9 @@ export function documentMetrics(markdown: string, documentTitle = '') {
   return {
     words: wordCount(markdown),
     chapters: health.length,
+    // Reported beside chapters, never inside them: the chapter cap bounds the
+    // reading surface, and a part is navigation over it (#63).
+    parts: ideaParts(markdown, documentTitle).length,
     belowFloor: health.filter((chapter) => chapter.verdict === 'merge').length,
     aboveCeiling: health.filter((chapter) => chapter.verdict === 'split').length,
   };
@@ -380,12 +405,13 @@ function excerpt(markdown: string) {
 }
 
 type SectionRange = {
+  kind: SectionKind;
   title: string;
   /** Index of the heading line itself. */
   headingLine: number;
   /** First content line, just after the heading. */
   contentStart: number;
-  /** Exclusive end of the content — the next section's heading, or EOF. */
+  /** Exclusive end of the content — the next `#` or `##` heading, or EOF. */
   contentEnd: number;
 };
 
@@ -395,23 +421,29 @@ type SectionRange = {
  * lead-in all build on it, so the three cannot disagree about where a section
  * begins and ends.
  *
- * THE CONTRACT — `#` AND `##` BOTH CREATE SIBLING CHAPTERS. `###` DOES NOT.
+ * THE CONTRACT — `#` OPENS A PART, `##` IS A CHAPTER, `###` IS NEITHER.
  *
- * The level is read and then thrown away: `headingTag()` renders `#` and `##`
- * identically as `<h2>`, and `ideaChapters()` re-emits every chapter as
- * `` `## ${title}` `` whatever level it was written at. So the two are not
- * distinguishable in the output either, which is why `read_idea_section` on a
- * `#`-headed chapter hands back a `##` heading.
+ * - `##` is a chapter: its own URL, its own page once the document paginates.
+ * - A non-title `#` is a PART (#63). It groups every `##` chapter after it, up
+ *   to the next `#` or the end of the document. A part is navigation, not a
+ *   page: it has no URL, does not count toward the chapter cap, and its prose
+ *   (anything between the `#` and the first `##` under it) is its intro.
+ * - `###` and deeper stay inside the section above as in-page anchors.
  *
- * There is exactly ONE case in which a `#` is not a chapter: it is the very
- * first thing in the document — before any other heading and before any
- * non-blank content — and its slug equals the slug of the idea's own title.
- * That one is the document title, already rendered as the page's `<h1>`. Every
- * other `#` becomes a chapter, a peer of every `##`, including:
+ * Before #63, `#` and `##` were BOTH sibling chapters and the level was thrown
+ * away (#48). Two published documents opened on a non-title `#` that was their
+ * first chapter; under this contract that `#` is a part grouping the rest of
+ * the document, and its retired chapter URL is 301'd to the first chapter of
+ * the part by the metrics backfill (`flat: true` reproduces the old parse for
+ * exactly that comparison — nothing else may pass it).
  *
- * - a leading `#` whose text differs from the idea's title. Two published
- *   documents have exactly this and their first chapter IS that `#`, so any
- *   change here is a URL-breaking migration for them, not a no-op (#48).
+ * There is exactly ONE case in which a `#` is neither a part nor a chapter: it
+ * is the very first thing in the document — before any other heading and
+ * before any non-blank content — and its slug equals the slug of the idea's own
+ * title. That one is the document title, already rendered as the page's `<h1>`.
+ * Every other `#` opens a part, including:
+ *
+ * - a leading `#` whose text differs from the idea's title.
  * - a `#` that repeats the title but appears later in the document.
  * - a leading `#` in a document parsed with no `documentTitle`.
  *
@@ -423,12 +455,12 @@ type SectionRange = {
  * Depth below chapter level belongs in `###`, which renders as an in-page
  * anchor rather than a URL. `demoteHeadings()` is how a caller pushes a whole
  * source file below the chapter line so it lands as one chapter instead of
- * shattering into siblings.
+ * shattering into siblings and parts.
  *
- * Content before the first chapter heading is a lead-in, not a section — see
- * `ideaPreamble()`.
+ * Content before the first part or chapter heading is a lead-in, not a
+ * section — see `ideaPreamble()`.
  */
-function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
+function sectionRanges(markdown: string, documentTitle = '', options: { flat?: boolean } = {}): SectionRange[] {
   const lines = markdown.split(/\r?\n/);
   const ranges: SectionRange[] = [];
   let sawHeading = false;
@@ -442,10 +474,9 @@ function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
     }
     const level = (heading[1] || '').length;
     const title = (heading[2] || '').trim();
-    // Only `###` and deeper are absorbed into the section above. `#` falls
-    // through to the title check below and is otherwise a chapter like `##`.
+    // Only `###` and deeper are absorbed into the section above.
     if (level > 2) return;
-    // The one non-chapter `#`: the document's own title, at the very top.
+    // The one `#` that is neither: the document's own title, at the very top.
     if (
       level === 1 &&
       documentTitle &&
@@ -457,7 +488,13 @@ function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
     }
     const previous = ranges[ranges.length - 1];
     if (previous) previous.contentEnd = index;
-    ranges.push({ title, headingLine: index, contentStart: index + 1, contentEnd: lines.length });
+    ranges.push({
+      kind: level === 1 && !options.flat ? 'part' : 'chapter',
+      title,
+      headingLine: index,
+      contentStart: index + 1,
+      contentEnd: lines.length,
+    });
     sawHeading = true;
   });
 
@@ -465,17 +502,17 @@ function sectionRanges(markdown: string, documentTitle = ''): SectionRange[] {
 }
 
 /**
- * The lead-in: everything before the first chapter heading. This is a
+ * The lead-in: everything before the first part or chapter heading. This is a
  * document's framing, and on a paginated idea page it is the only body prose
  * the index renders — the chapters themselves live on their own URLs.
  *
  * It is derived from `sectionRanges()` for the reason stated above that
  * function: a second heading parser is a second opinion, and the two disagreeing
  * is a bug, not a difference in taste. A `body.split(/^## /m)` would treat
- * `# Chapter` before the first `##`, or an indented `  ## Chapter`, as lead-in
- * while `sectionRanges()` treats both as chapters — so such a chapter would be
- * inlined here AND served as its own page, which is exactly the duplication
- * chapter pagination exists to remove.
+ * `# Part` before the first `##`, or an indented `  ## Chapter`, as lead-in
+ * while `sectionRanges()` treats both as sections — so such a section would be
+ * inlined here AND served again by its own part or chapter, which is exactly
+ * the duplication chapter pagination exists to remove.
  */
 export function ideaPreamble(markdown: string, documentTitle = '') {
   const lines = markdown.split(/\r?\n/);
@@ -484,7 +521,7 @@ export function ideaPreamble(markdown: string, documentTitle = '') {
   const preamble = lines.slice(0, first ? first.headingLine : lines.length);
 
   // `sectionRanges()` skips a leading `# Document Title` — it is the page's own
-  // <h1>, not a chapter. It must not come back as lead-in prose either.
+  // <h1>, not a section. It must not come back as lead-in prose either.
   const firstContent = preamble.findIndex((line) => line.trim());
   const repeatedTitle =
     documentTitle && firstContent >= 0
@@ -497,9 +534,26 @@ export function ideaPreamble(markdown: string, documentTitle = '') {
   return preamble.join('\n').trim();
 }
 
-export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
+/** One section — a part or a chapter — with the handle edits address it by. */
+type OutlineEntry = {
+  range: SectionRange;
+  id: string;
+  aliases: string[];
+  chapter?: IdeaChapter;
+  part?: IdeaPart;
+};
+
+/**
+ * Every section of a document with its id, in document order.
+ *
+ * Chapter ids are handed out first and over chapters only, exactly as they
+ * were before parts existed, so adding, removing or renaming a part can never
+ * move a chapter URL. Parts are named afterwards from whatever is left.
+ */
+function documentOutline(markdown: string, documentTitle = '', options: { flat?: boolean } = {}) {
   const lines = markdown.split(/\r?\n/);
-  const ranges = sectionRanges(markdown, documentTitle);
+  const ranges = sectionRanges(markdown, documentTitle, options);
+  const bodyOf = (range: SectionRange) => lines.slice(range.contentStart, range.contentEnd).join('\n').trim();
 
   /**
    * Every id and alias handed out so far.
@@ -510,9 +564,9 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
    * link that opened the first, with no error anywhere.
    */
   const claimed = new Set<string>();
-
-  const chapters = ranges.map((range) => {
-    const body = lines.slice(range.contentStart, range.contentEnd).join('\n').trim();
+  const entries: Array<OutlineEntry | undefined> = ranges.map((range) => {
+    if (range.kind !== 'chapter') return undefined;
+    const body = bodyOf(range);
     const canonical = chapterId(range.title);
     // `slug()` truncates at 64 chars, so long titles can collide here too.
     const rawSlug = slug(range.title) || canonical;
@@ -528,25 +582,99 @@ export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[
       id = `${rawSlug}-${n}`;
     }
     // Only advertise the aliases no earlier chapter already answers to.
-    const aliases = [id, ...preferred.filter((candidate) => candidate !== id && !claimed.has(candidate))];
+    const aliases = Array.from(new Set([id, ...preferred.filter((candidate) => candidate !== id && !claimed.has(candidate))]));
     for (const alias of aliases) claimed.add(alias);
 
     return {
+      range,
       id,
-      title: range.title,
-      markdown: `## ${range.title}\n\n${body}`.trim(),
-      excerpt: isUnwrittenChapterBody(body) ? UNWRITTEN_CHAPTER_EXCERPT : excerpt(body) || 'Open this chapter.',
-      aliases: Array.from(new Set(aliases)),
+      aliases,
+      chapter: {
+        id,
+        title: range.title,
+        markdown: `## ${range.title}\n\n${body}`.trim(),
+        excerpt: isUnwrittenChapterBody(body) ? UNWRITTEN_CHAPTER_EXCERPT : excerpt(body) || 'Open this chapter.',
+        aliases,
+      },
     };
   });
 
-  return chapters.length ? chapters : [{
+  let currentPart: IdeaPart | undefined;
+  const outline = ranges.map((range, index): OutlineEntry => {
+    const chapterEntry = entries[index];
+    if (chapterEntry) {
+      if (currentPart && chapterEntry.chapter) {
+        chapterEntry.chapter.part = currentPart.id;
+        currentPart.chapterIds.push(chapterEntry.id);
+      }
+      return chapterEntry;
+    }
+    const base = slug(range.title) || 'part';
+    let id = base;
+    for (let n = 2; claimed.has(id); n += 1) id = `${base}-${n}`;
+    claimed.add(id);
+    const intro = bodyOf(range);
+    currentPart = { id, title: range.title, intro, excerpt: intro ? excerpt(intro) : '', chapterIds: [] };
+    return { range, id, aliases: [id], part: currentPart };
+  });
+
+  return {
+    lines,
+    entries: outline,
+    chapters: outline.flatMap((entry) => (entry.chapter ? [entry.chapter] : [])),
+    parts: outline.flatMap((entry) => (entry.part ? [entry.part] : [])),
+  };
+}
+
+function fallbackChapters(markdown: string): IdeaChapter[] {
+  return [{
     id: 'snapshot',
     title: 'Snapshot',
     markdown,
     excerpt: excerpt(markdown) || 'Open this idea.',
     aliases: ['snapshot'],
   }];
+}
+
+export function ideaChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
+  const { chapters } = documentOutline(markdown, documentTitle);
+  return chapters.length ? chapters : fallbackChapters(markdown);
+}
+
+/** The parts of a document, in order — see `IdeaPart`. */
+export function ideaParts(markdown: string, documentTitle = ''): IdeaPart[] {
+  return documentOutline(markdown, documentTitle).parts;
+}
+
+/**
+ * The chapters a document had under the pre-#63 rule, where every non-title
+ * `#` was a chapter. Exists for one purpose: the backfill that 301s chapter
+ * URLs the part rule retired. Nothing that renders or writes may call it.
+ */
+export function legacyFlatChapters(markdown: string, documentTitle = ''): IdeaChapter[] {
+  const { chapters } = documentOutline(markdown, documentTitle, { flat: true });
+  return chapters.length ? chapters : fallbackChapters(markdown);
+}
+
+/** Consecutive chapters that share a part — the shape every rail renders. */
+export type ChapterGroup = { part: IdeaPart | null; chapters: IdeaChapter[] };
+
+/**
+ * Chapters grouped under their parts, in document order. Chapters before the
+ * first part form a group with `part: null`. A part with no chapters in the
+ * list (none written yet, or all filtered out) does not appear: a rail heading
+ * with nothing under it is a dead end.
+ */
+export function chapterGroups(chapters: IdeaChapter[], parts: IdeaPart[]): ChapterGroup[] {
+  const partsById = new Map(parts.map((part) => [part.id, part]));
+  const groups: ChapterGroup[] = [];
+  for (const chapter of chapters) {
+    const part = (chapter.part && partsById.get(chapter.part)) || null;
+    const last = groups[groups.length - 1];
+    if (last && last.part === part) last.chapters.push(chapter);
+    else groups.push({ part, chapters: [chapter] });
+  }
+  return groups;
 }
 
 function ideaChapterBody(chapter: IdeaChapter) {
@@ -564,23 +692,36 @@ export function ideaChapterById(chapters: IdeaChapter[], rawChapterId: string) {
 }
 
 /**
- * Locates a section for editing. Section ids are the chapter ids, so the URL a
- * reader sees and the handle an agent writes through are the same string.
- * Returns null for the synthetic single-chapter fallback, which has no heading
- * to splice around.
+ * Locates a section — a part or a chapter — for editing. Chapter section ids
+ * are the chapter ids, so the URL a reader sees and the handle an agent writes
+ * through are the same string. Returns null for the synthetic single-chapter
+ * fallback, which has no heading to splice around.
+ *
+ * `spanEnd` is where the section stops when it is picked up or anchored
+ * against as a whole: a chapter's own content, but a part's every chapter too.
+ * `contentEnd` is only ever the section's own prose — a part's intro.
  */
 function findSection(markdown: string, sectionId: string, documentTitle: string) {
-  const ranges = sectionRanges(markdown, documentTitle);
-  const chapters = ideaChapters(markdown, documentTitle);
-  if (chapters.length !== ranges.length) return null;
-  const index = chapters.findIndex((chapter) => chapter.aliases.includes(sectionId));
-  const range = ranges[index];
-  const chapter = chapters[index];
-  return range && chapter ? { range, chapter } : null;
+  const { lines, entries } = documentOutline(markdown, documentTitle);
+  const index = entries.findIndex((entry) => entry.aliases.includes(sectionId));
+  const entry = entries[index];
+  if (!entry) return null;
+  let spanEnd = entry.range.contentEnd;
+  if (entry.part) {
+    const nextPart = entries.slice(index + 1).find((candidate) => candidate.part);
+    spanEnd = nextPart ? nextPart.range.headingLine : lines.length;
+  }
+  return { ...entry, spanEnd };
 }
 
 /**
  * Section titles, ids and sizing, for callers deciding what to read or write.
+ *
+ * Rows come in document order and carry `kind`. A chapter row says which `part`
+ * it sits under (null before the first part) so an agent can tell what a
+ * structural edit will regroup. A part row has no verdict — it is navigation,
+ * not a page, and its intro is not held to the chapter floor (`verdict: null`) — and reports how
+ * many `chapters` it groups instead.
  *
  * `verdict` is the whole point of listing words at all: `words: 52` only means
  * something next to the floor it misses. Without it an author sees a list of
@@ -594,20 +735,48 @@ function findSection(markdown: string, sectionId: string, documentTitle: string)
  * 64-chapter cellar-door document that inflated the corpus by 584 words, and
  * told authors "505 words" beside "verdict: merge" with no way to reconcile the
  * two (#74). The floor is the authority, and the floor does not count headings.
- * The only caller was the `list_idea_sections` serialiser, which passes the
- * field straight through.
  *
- * It is chapterHealth() rather than a second walk over the same chapters
- * because two copies of "count a chapter" are what let the number and the
- * verdict drift apart in the first place.
+ * Chapter rows are chapterHealth() rather than a second walk over the same
+ * chapters because two copies of "count a chapter" are what let the number and
+ * the verdict drift apart in the first place.
  */
 export function ideaSectionList(markdown: string, documentTitle = '') {
-  return chapterHealth(markdown, documentTitle);
+  const { entries } = documentOutline(markdown, documentTitle);
+  const health = chapterHealth(markdown, documentTitle);
+  const healthById = new Map(health.map((row) => [row.id, row]));
+  type SectionRow =
+    | { id: string; title: string; kind: 'part'; words: number; verdict: null; chapters: number }
+    | (ReturnType<typeof chapterHealth>[number] & { kind: 'chapter'; part: string | null });
+  const chapterRow = (row: ReturnType<typeof chapterHealth>[number], part?: string): SectionRow => ({
+    ...row,
+    kind: 'chapter',
+    part: part ?? null,
+  });
+  const rows = entries.flatMap((entry): SectionRow[] => {
+    if (entry.part) {
+      return [{
+        id: entry.id,
+        title: entry.part.title,
+        kind: 'part',
+        words: wordCount(entry.part.intro),
+        verdict: null,
+        chapters: entry.part.chapterIds.length,
+      }];
+    }
+    const row = healthById.get(entry.id);
+    return row ? [chapterRow(row, entry.chapter?.part)] : [];
+  });
+  // A document with no chapter headings is read as one synthetic chapter.
+  if (!entries.some((entry) => entry.chapter)) rows.push(...health.map((row) => chapterRow(row)));
+  return rows;
 }
 
 /** One section's markdown, heading included. Null when the section is unknown. */
 export function readIdeaSection(markdown: string, sectionId: string, documentTitle = '') {
-  return findSection(markdown, sectionId, documentTitle)?.chapter.markdown ?? null;
+  const found = findSection(markdown, sectionId, documentTitle);
+  if (!found) return null;
+  if (found.part) return `# ${found.part.title}\n\n${found.part.intro}`.trim();
+  return found.chapter?.markdown ?? null;
 }
 
 /**
@@ -615,7 +784,8 @@ export function readIdeaSection(markdown: string, sectionId: string, documentTit
  *
  * This is what makes deep documents workable: rewriting a section previously
  * meant sending the whole document back, which cost O(document) tokens per edit
- * and had to fit in one request. Null when the section is unknown.
+ * and had to fit in one request. Null when the section is unknown. On a part
+ * this replaces the part's intro; the chapters it groups are untouched.
  */
 export function replaceIdeaSection(
   markdown: string,
@@ -668,6 +838,12 @@ export function appendToIdeaSection(
  *
  * Every one returns new markdown, or null when the referenced section does not
  * exist, so callers fail loudly rather than writing a document they did not mean.
+ *
+ * Parts change what the anchors mean. `after: <part>` is after the WHOLE part,
+ * every chapter included; `before: <part>` is before its heading. `part: <id>`
+ * is the end of that part — how a chapter is put into one. Any edit that adds,
+ * removes, moves or re-levels a part heading regroups the chapters after it;
+ * `regroupedChapters()` is how a caller reports that blast radius.
  */
 
 /** Trailing blank lines are normalised so repeated edits do not accumulate them. */
@@ -680,38 +856,51 @@ function joinBlocks(before: string[], block: string[], after: string[]) {
   return out.join('\n');
 }
 
-function sectionBlockLines(title: string, content: string, level = 2) {
+const KIND_LEVEL: Record<SectionKind, number> = { part: 1, chapter: 2 };
+
+function sectionBlockLines(title: string, content: string, kind: SectionKind = 'chapter') {
   const body = content.trim();
-  const heading = `${'#'.repeat(level)} ${title.trim()}`;
+  const heading = `${'#'.repeat(KIND_LEVEL[kind])} ${title.trim()}`;
   return body ? [heading, '', ...body.split(/\r?\n/)] : [heading];
 }
 
+type PlacementOptions = { after?: string; before?: string; part?: string; documentTitle?: string };
+
 /**
- * Inserts a new section. Without `after`/`before` it goes at the end, which is
- * where a document usually grows.
+ * The line a block is inserted at, or null when an anchor is unknown or a
+ * `part` anchor does not name a part. Without any anchor it is the end of the
+ * document — which, once a document has parts, is the end of its last part.
+ */
+function insertionLine(markdown: string, options: PlacementOptions) {
+  const documentTitle = options.documentTitle || '';
+  if (options.part) {
+    const part = findSection(markdown, options.part, documentTitle);
+    return part?.part ? part.spanEnd : null;
+  }
+  if (options.after) return findSection(markdown, options.after, documentTitle)?.spanEnd ?? null;
+  if (options.before) return findSection(markdown, options.before, documentTitle)?.range.headingLine ?? null;
+  return markdown.split(/\r?\n/).length;
+}
+
+/**
+ * Inserts a new section. Without `after`/`before`/`part` it goes at the end,
+ * which is where a document usually grows. `kind: 'part'` writes a `#` heading
+ * that groups every chapter after it up to the next part; a part cannot be
+ * placed inside another (`part` is for chapters only).
  */
 export function addIdeaSection(
   markdown: string,
   title: string,
   content: string,
-  options: { after?: string; before?: string; documentTitle?: string } = {},
+  options: PlacementOptions & { kind?: SectionKind } = {},
 ): string | null {
   if (!title.trim()) return null;
-  const documentTitle = options.documentTitle || '';
+  const kind = options.kind ?? 'chapter';
+  if (kind === 'part' && options.part) return null;
+  const at = insertionLine(markdown, options);
+  if (at === null) return null;
   const lines = markdown.split(/\r?\n/);
-  const block = sectionBlockLines(title, content);
-
-  let at = lines.length;
-  if (options.after) {
-    const anchor = findSection(markdown, options.after, documentTitle);
-    if (!anchor) return null;
-    at = anchor.range.contentEnd;
-  } else if (options.before) {
-    const anchor = findSection(markdown, options.before, documentTitle);
-    if (!anchor) return null;
-    at = anchor.range.headingLine;
-  }
-  return joinBlocks(lines.slice(0, at), block, lines.slice(at));
+  return joinBlocks(lines.slice(0, at), sectionBlockLines(title, content, kind), lines.slice(at));
 }
 
 /**
@@ -731,13 +920,39 @@ export function renameIdeaSection(
   const found = findSection(markdown, sectionId, documentTitle);
   if (!found) return null;
   const lines = markdown.split(/\r?\n/);
-  const current = lines[found.range.headingLine] || '';
-  const level = (current.trim().match(/^(#{1,2})/)?.[1] || '##').length;
-  lines[found.range.headingLine] = `${'#'.repeat(level)} ${newTitle.trim()}`;
+  lines[found.range.headingLine] = `${'#'.repeat(KIND_LEVEL[found.range.kind])} ${newTitle.trim()}`;
   return lines.join('\n');
 }
 
-/** Removes a section and its content. Recoverable through revisions. */
+/**
+ * Promotes a chapter to a part or demotes a part to a chapter, in place.
+ *
+ * Neither moves any text, but both regroup: a promoted chapter's body becomes
+ * the new part's intro and every chapter after it, up to the next part, is now
+ * under it; a demoted part's intro becomes a chapter and its chapters fall in
+ * with the part before it. The caller reports that via `regroupedChapters()`.
+ */
+export function setIdeaSectionKind(
+  markdown: string,
+  sectionId: string,
+  kind: SectionKind,
+  documentTitle = '',
+): string | null {
+  const found = findSection(markdown, sectionId, documentTitle);
+  if (!found) return null;
+  if (found.range.kind === kind) return markdown;
+  const lines = markdown.split(/\r?\n/);
+  lines[found.range.headingLine] = `${'#'.repeat(KIND_LEVEL[kind])} ${found.range.title}`;
+  return lines.join('\n');
+}
+
+/**
+ * Removes a section and its content. Recoverable through revisions.
+ *
+ * Removing a part removes its heading and intro only. Its chapters are kept
+ * and fall in with whatever part precedes them — deleting navigation must not
+ * delete the pages it navigated.
+ */
 export function removeIdeaSection(
   markdown: string,
   sectionId: string,
@@ -751,38 +966,47 @@ export function removeIdeaSection(
     .replace(/\n{3,}/g, '\n\n');
 }
 
-/** Moves a section relative to another, for reordering toward a spine. */
+/**
+ * Moves a section relative to another, for reordering toward a spine. A part
+ * moves with every chapter it groups; a chapter moved with `part` lands at the
+ * end of that part.
+ */
 export function moveIdeaSection(
   markdown: string,
   sectionId: string,
-  options: { after?: string; before?: string; documentTitle?: string } = {},
+  options: PlacementOptions = {},
 ): string | null {
   const documentTitle = options.documentTitle || '';
   const found = findSection(markdown, sectionId, documentTitle);
   if (!found) return null;
-  if (options.after === sectionId || options.before === sectionId) return markdown;
+  if (found.part && options.part) return null;
+  if (options.after === sectionId || options.before === sectionId || options.part === sectionId) return markdown;
 
   const lines = markdown.split(/\r?\n/);
-  const block = lines.slice(found.range.headingLine, found.range.contentEnd);
+  const block = lines.slice(found.range.headingLine, found.spanEnd);
   const withoutBlock = [
     ...lines.slice(0, found.range.headingLine),
-    ...lines.slice(found.range.contentEnd),
+    ...lines.slice(found.spanEnd),
   ].join('\n');
 
   // Resolve the anchor against the document *after* removal, so the insertion
-  // point is not computed from indices the removal has already shifted.
-  const anchorId = options.after || options.before;
-  if (!anchorId) return joinBlocks(withoutBlock.split(/\r?\n/), block, []);
-  const anchor = findSection(withoutBlock, anchorId, documentTitle);
-  if (!anchor) return null;
+  // point is not computed from indices the removal has already shifted. An
+  // anchor inside the moved part is gone by then, so it fails rather than
+  // moving a part into itself.
+  if (!options.after && !options.before && !options.part) {
+    return joinBlocks(withoutBlock.split(/\r?\n/), block, []);
+  }
+  const at = insertionLine(withoutBlock, options);
+  if (at === null) return null;
   const remaining = withoutBlock.split(/\r?\n/);
-  const at = options.after ? anchor.range.contentEnd : anchor.range.headingLine;
   return joinBlocks(remaining.slice(0, at), block, remaining.slice(at));
 }
 
 /**
  * Folds one section's content into another and removes the source. This is how
  * a document with many thin sections becomes one with fewer substantial ones.
+ * Chapters only: folding a part's intro into a chapter, or a chapter into an
+ * intro, would silently change what the reader navigates by.
  */
 export function mergeIdeaSections(
   markdown: string,
@@ -793,7 +1017,7 @@ export function mergeIdeaSections(
   if (fromSectionId === intoSectionId) return null;
   const from = findSection(markdown, fromSectionId, documentTitle);
   const into = findSection(markdown, intoSectionId, documentTitle);
-  if (!from || !into) return null;
+  if (!from?.chapter || !into?.chapter) return null;
 
   const lines = markdown.split(/\r?\n/);
   const fromBody = lines.slice(from.range.contentStart, from.range.contentEnd).join('\n').trim();
@@ -808,6 +1032,22 @@ export function mergeIdeaSections(
   );
   if (merged === null) return null;
   return removeIdeaSection(merged, fromSectionId, documentTitle);
+}
+
+/**
+ * Chapters whose part changed between two versions of a document — the blast
+ * radius of a structural edit. Adding a part, promoting a chapter or moving a
+ * part heading silently re-parents every chapter after it, so a write response
+ * names them instead of leaving the author to diff two section lists.
+ */
+export function regroupedChapters(previous: string, next: string, documentTitle = '') {
+  const before = new Map(documentOutline(previous, documentTitle).chapters.map((chapter) => [chapter.id, chapter.part ?? null]));
+  return documentOutline(next, documentTitle).chapters.flatMap((chapter) => {
+    if (!before.has(chapter.id)) return [];
+    const from = before.get(chapter.id) ?? null;
+    const to = chapter.part ?? null;
+    return from === to ? [] : [{ chapter_id: chapter.id, from_part: from, to_part: to }];
+  });
 }
 
 export function defaultIdeaBody(idea: IdeaRow) {

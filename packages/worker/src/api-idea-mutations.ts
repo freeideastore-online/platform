@@ -12,7 +12,11 @@ import {
   mergeIdeaSections,
   ideaChapters,
   moveIdeaSection,
+  ideaParts,
   ideaSectionList,
+  regroupedChapters,
+  type SectionKind,
+  setIdeaSectionKind,
   removeIdeaSection,
   renameIdeaSection,
   replaceIdeaSection,
@@ -151,13 +155,15 @@ type SubFloorChapterWarning = {
 
 export function documentUsage(
   body: string,
-  metrics: { chapters: number; belowFloor: number; aboveCeiling: number },
+  metrics: { chapters: number; parts: number; belowFloor: number; aboveCeiling: number },
 ) {
   return {
     chars: body.length,
     chars_remaining: Math.max(0, FIELD_LIMITS.body - body.length),
     chapters: metrics.chapters,
     chapters_remaining: Math.max(0, FIELD_LIMITS.chapters - metrics.chapters),
+    // Parts group chapters and are not counted against the chapter cap (#63).
+    parts: metrics.parts,
     below_floor: metrics.belowFloor,
     above_ceiling: metrics.aboveCeiling,
   };
@@ -176,7 +182,32 @@ type PublicationOperation = {
   before?: unknown;
   demote_headings?: unknown;
   demoteHeadings?: unknown;
+  kind?: unknown;
+  part?: unknown;
 };
+
+const SECTION_KINDS = new Set<SectionKind>(['part', 'chapter']);
+
+/**
+ * `kind` on an add or an edit: `'part'` writes a `#` heading that groups the
+ * chapters after it, `'chapter'` a `##` (#63). Named by role rather than by
+ * heading level, because the level is the markdown's business. `undefined`
+ * when absent; `null` when present and not one of the two.
+ */
+function requestedKind(input: Record<string, unknown>): SectionKind | undefined | null {
+  if (input.kind === undefined || input.kind === null || input.kind === '') return undefined;
+  const kind = String(input.kind).trim().toLowerCase() as SectionKind;
+  return SECTION_KINDS.has(kind) ? kind : null;
+}
+
+/** The structural placement fields an add and a move share. */
+function placement(input: Record<string, unknown>) {
+  return {
+    after: String(input.after || '').trim() || undefined,
+    before: String(input.before || '').trim() || undefined,
+    part: String(input.part || '').trim() || undefined,
+  };
+}
 
 function publicationOperations(input: Record<string, unknown>): PublicationOperation[] | null {
   const raw = Array.isArray(input) ? input : input.sections;
@@ -241,9 +272,11 @@ function applyPublicationOperation(
   if (mode !== 'add') return { body, error: 'mode must be one of add, append, replace', incoming: content };
 
   const title = String(input.title || '').trim();
+  const kind = requestedKind(input as Record<string, unknown>);
+  if (kind === null) return { body, error: 'kind must be one of part, chapter', incoming: content };
   const next = addIdeaSection(body, title, content, {
-    after: String(input.after || '') || undefined,
-    before: String(input.before || '') || undefined,
+    ...placement(input as Record<string, unknown>),
+    kind,
     documentTitle: idea.title,
   });
   if (next === null) {
@@ -258,21 +291,14 @@ function applyPublicationOperation(
 
 function publicationValidationResult(idea: IdeaRow, current: string, candidate: string, errors: string[]) {
   const metrics = documentMetrics(candidate, idea.title);
-  const health = chapterHealth(candidate, idea.title);
-  const healthById = new Map(health.map((chapter) => [chapter.id, chapter]));
-  const chapters = ideaChapters(candidate, idea.title).map((chapter) => {
-    const sized = healthById.get(chapter.id);
-    return {
-      id: chapter.id,
-      title: chapter.title,
-      words: sized?.words ?? 0,
-      verdict: sized?.verdict ?? 'ok',
-    };
-  });
+  // The same rows a real write answers with, parts included, so a preflight
+  // shows what a `#` in the content would turn into before it is saved (#63).
+  const chapters = ideaSectionList(candidate, idea.title);
   return {
     usage: documentUsage(candidate, metrics),
     chapters,
-    chapters_created: Math.max(0, chapters.length - ideaChapters(current, idea.title).length),
+    chapters_created: Math.max(0, metrics.chapters - documentMetrics(current, idea.title).chapters),
+    parts_created: Math.max(0, metrics.parts - ideaParts(current, idea.title).length),
     errors,
   };
 }
@@ -1098,6 +1124,7 @@ async function writeStructuralEdit(
   rawIdeaId: string,
   reason: string,
   compute: (body: string, idea: IdeaRow, input: Record<string, unknown>) => string | null,
+  options: { reportsRegrouping?: (input: Record<string, unknown>) => boolean } = {},
 ) {
   const owned = await ownedIdea(request, env, rawIdeaId);
   if (owned instanceof Response) return owned;
@@ -1131,10 +1158,16 @@ async function writeStructuralEdit(
     source: 'section-structure',
     reason,
   });
+  // The blast radius of a part edit: adding, removing, moving or re-levelling a
+  // `#` silently re-parents every chapter after it, so the response names them
+  // (#63). A pure rename is skipped — it changes the part's id, not what it
+  // groups, and would otherwise report every chapter under it.
+  const regrouped = options.reportsRegrouping?.(input) === false ? [] : regroupedChapters(current, next, idea.title);
   return json({
     ok: true,
     idea: idea.id,
     revision: result.revisionId,
+    ...(regrouped.length ? { regrouped } : {}),
     sections: ideaSectionList(next, idea.title),
     usage: result.usage,
     warnings: result.warnings,
@@ -1147,39 +1180,73 @@ export function createIdeaSection(request: Request, env: Env, rawIdeaId: string)
   return writeStructuralEdit(request, env, rawIdeaId, 'add section', (body, idea, input) => {
     const title = String(input.title || '').trim();
     if (!title) return null;
+    const kind = requestedKind(input);
+    if (kind === null) return null;
     const supplied = String(input.content || '');
     return addIdeaSection(body, title, demoteRequested(input) ? demoteHeadings(supplied) : supplied, {
-      after: String(input.after || '') || undefined,
-      before: String(input.before || '') || undefined,
+      ...placement(input),
+      kind,
       documentTitle: idea.title,
     });
   });
 }
 
-/** Rename and/or move in one call, since restructuring usually does both. */
+/**
+ * Rename, re-level and/or move in one call, since restructuring usually does
+ * all three. `kind` promotes a chapter to a part or demotes a part to a
+ * chapter; `part` moves a chapter to the end of a part.
+ */
 export function editIdeaSection(request: Request, env: Env, rawIdeaId: string, rawSectionId: string) {
-  return writeStructuralEdit(request, env, rawIdeaId, `edit section ${rawSectionId}`, (body, idea, input) => {
-    const sectionId = pathId(rawSectionId);
-    if (!sectionId) return null;
-    let next: string | null = body;
-    const title = String(input.title || '').trim();
-    if (title) {
-      next = renameIdeaSection(next, sectionId, title, idea.title);
-      if (next === null) return null;
-    }
-    const after = String(input.after || '').trim();
-    const before = String(input.before || '').trim();
-    if (after || before) {
-      // A rename changes the id, so move the section under its new handle.
-      const movedId = title ? slug(title) || sectionId : sectionId;
-      next = moveIdeaSection(next, movedId, {
-        after: after || undefined,
-        before: before || undefined,
-        documentTitle: idea.title,
-      });
-    }
-    return next;
-  });
+  return writeStructuralEdit(
+    request,
+    env,
+    rawIdeaId,
+    `edit section ${rawSectionId}`,
+    (body, idea, input) => {
+      const sectionId = pathId(rawSectionId);
+      if (!sectionId) return null;
+      const kind = requestedKind(input);
+      if (kind === null) return null;
+      let next: string | null = body;
+      let handle = sectionId;
+      const title = String(input.title || '').trim();
+      if (title) {
+        const renamed = renameIdeaSection(next, sectionId, title, idea.title);
+        if (renamed === null) return null;
+        // A rename changes the id, so later steps address the section by the
+        // id the renamed heading now parses to.
+        handle = changedSectionId(next, renamed, idea.title) || slug(title) || sectionId;
+        next = renamed;
+      }
+      if (kind) {
+        const relevelled = setIdeaSectionKind(next, handle, kind, idea.title);
+        if (relevelled === null) return null;
+        // Parts are named after chapters, so changing kind can change the id.
+        handle = changedSectionId(next, relevelled, idea.title, handle) || handle;
+        next = relevelled;
+      }
+      const where = placement(input);
+      if (where.after || where.before || where.part) {
+        next = moveIdeaSection(next, handle, { ...where, documentTitle: idea.title });
+      }
+      return next;
+    },
+    { reportsRegrouping: (input) => Boolean(input.kind || input.after || input.before || input.part) },
+  );
+}
+
+/**
+ * The id a section answers to after its heading was rewritten: the one id in
+ * `next` that `previous` did not have, read back from the parse rather than
+ * predicted from the title. `keep` wins when it still resolves.
+ */
+function changedSectionId(previous: string, next: string, documentTitle: string, keep?: string) {
+  const ids = (markdown: string) => ideaSectionList(markdown, documentTitle).map((row) => row.id);
+  const nextIds = ids(next);
+  if (keep && nextIds.includes(keep)) return keep;
+  const before = new Set(ids(previous));
+  const fresh = nextIds.filter((id) => !before.has(id));
+  return fresh.length === 1 ? fresh[0] : undefined;
 }
 
 export function deleteIdeaSection(request: Request, env: Env, rawIdeaId: string, rawSectionId: string) {

@@ -90,6 +90,7 @@ describe('read paths carry the document budget (#46)', () => {
       chars_remaining: FIELD_LIMITS.body - BODY.length,
       chapters: 2,
       chapters_remaining: FIELD_LIMITS.chapters - 2,
+      parts: 0,
       below_floor: 0,
       above_ceiling: 0,
     });
@@ -104,6 +105,7 @@ describe('read paths carry the document budget (#46)', () => {
       chars_remaining: FIELD_LIMITS.body - BODY.length,
       chapters: 2,
       chapters_remaining: FIELD_LIMITS.chapters - 2,
+      parts: 0,
       below_floor: 0,
       above_ceiling: 0,
     });

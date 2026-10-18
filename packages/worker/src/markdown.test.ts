@@ -8,6 +8,8 @@ import {
   documentMetrics,
   ideaChapterById,
   ideaChapters,
+  ideaParts,
+  legacyFlatChapters,
   ideaPreamble,
   ideaSectionList,
   isPaginated,
@@ -443,22 +445,25 @@ describe('ideaChapters', () => {
 });
 
 /**
- * THE CHAPTER HEADING CONTRACT, pinned.
+ * THE SECTION HEADING CONTRACT, pinned.
  *
- * `sectionRanges()` is the single place the rule lives, and until #48 the rule
- * was undocumented and untested: no test asserted what a NON-title `#` does,
- * even though two published documents have one as their first chapter. Four
- * separate agents inferred "the store splits on `##`", which is wrong by half,
- * and a migration that intended 15 chapters produced 74.
+ * `sectionRanges()` is the single place the rule lives. Until #48 the rule was
+ * undocumented and untested; #48 pinned "`#` and `##` both create sibling
+ * chapters". #63 changed it deliberately: a non-title `#` now opens a PART that
+ * groups the `##` chapters after it, so there is a level between the document
+ * and the chapter. The chapter URLs that change retired are 301'd by the
+ * metrics backfill — see `legacyFlatChapters()`.
  *
  * These are behaviour assertions, not aspirations. Nothing here may be
  * "corrected" without accepting that it moves live chapter URLs.
  */
-describe('the chapter heading contract', () => {
+describe('the section heading contract', () => {
   const titles = (markdown: string, documentTitle = '') =>
     ideaChapters(markdown, documentTitle).map((chapter) => chapter.title);
+  const partTitles = (markdown: string, documentTitle = '') =>
+    ideaParts(markdown, documentTitle).map((part) => part.title);
 
-  it('makes a chapter of a non-title `#`, as a peer of every `##`', () => {
+  it('makes a part of a non-title `#`, grouping the `##` chapters after it', () => {
     const markdown = [
       '# A Source File Title',
       'Its opening paragraph.',
@@ -467,13 +472,43 @@ describe('the chapter heading contract', () => {
       'The finding.',
     ].join('\n');
 
-    expect(titles(markdown, 'Something Else Entirely')).toEqual([
-      'A Source File Title',
-      'Bottom line',
-    ]);
+    expect(titles(markdown, 'Something Else Entirely')).toEqual(['Bottom line']);
+    expect(ideaParts(markdown, 'Something Else Entirely')).toEqual([{
+      id: 'a-source-file-title',
+      title: 'A Source File Title',
+      intro: 'Its opening paragraph.',
+      excerpt: 'Its opening paragraph.',
+      chapterIds: ['bottom-line'],
+    }]);
+    expect(ideaChapters(markdown, 'Something Else Entirely')[0]?.part).toBe('a-source-file-title');
   });
 
-  it('makes a chapter of a `#` that repeats the title but is not first', () => {
+  it('ends a part at the next `#`, and leaves chapters before the first part ungrouped', () => {
+    const markdown = [
+      '## Snapshot',
+      'Before any part.',
+      '',
+      '# Part One',
+      '## First',
+      'Body.',
+      '## Second',
+      'Body.',
+      '# Part Two',
+      '## Third',
+      'Body.',
+    ].join('\n');
+
+    const chapters = ideaChapters(markdown, 'Doc');
+    expect(chapters.map((chapter) => [chapter.title, chapter.part])).toEqual([
+      ['Snapshot', undefined],
+      ['First', 'part-one'],
+      ['Second', 'part-one'],
+      ['Third', 'part-two'],
+    ]);
+    expect(ideaParts(markdown, 'Doc').map((part) => part.chapterIds)).toEqual([['first', 'second'], ['third']]);
+  });
+
+  it('makes a part of a `#` that repeats the title but is not first', () => {
     const markdown = [
       '## Snapshot',
       'The short version.',
@@ -484,13 +519,15 @@ describe('the chapter heading contract', () => {
 
     // The skip is positional as well as textual: only the FIRST heading can be
     // the document title.
-    expect(titles(markdown, 'Deep Idea')).toEqual(['Snapshot', 'Deep Idea']);
+    expect(titles(markdown, 'Deep Idea')).toEqual(['Snapshot']);
+    expect(partTitles(markdown, 'Deep Idea')).toEqual(['Deep Idea']);
   });
 
-  it('makes a chapter of a leading `#` when non-blank content precedes it', () => {
-    const markdown = ['> Status: scan complete.', '', '# Deep Idea', 'Body.'].join('\n');
+  it('makes a part of a leading `#` when non-blank content precedes it', () => {
+    const markdown = ['> Status: scan complete.', '', '# Deep Idea', 'Body.', '', '## Snapshot', 'Body.'].join('\n');
 
-    expect(titles(markdown, 'Deep Idea')).toEqual(['Deep Idea']);
+    expect(partTitles(markdown, 'Deep Idea')).toEqual(['Deep Idea']);
+    expect(titles(markdown, 'Deep Idea')).toEqual(['Snapshot']);
     // ...and the lead-in above it stays lead-in, so nothing is published twice.
     expect(ideaPreamble(markdown, 'Deep Idea')).toBe('> Status: scan complete.');
   });
@@ -498,12 +535,13 @@ describe('the chapter heading contract', () => {
   it('skips a leading `#` only when its slug is the document title', () => {
     const markdown = ['# Deep Idea', '', '## Snapshot', 'Body.'].join('\n');
 
-    expect(titles(markdown, 'Deep Idea')).toEqual(['Snapshot']);
+    expect(partTitles(markdown, 'Deep Idea')).toEqual([]);
     // Slug equality, not string equality — punctuation and case do not matter.
-    expect(titles(markdown, 'Deep  IDEA!')).toEqual(['Snapshot']);
-    // Any other title, or no title at all, and the same line is a chapter.
-    expect(titles(markdown, 'Another Idea')).toEqual(['Deep Idea', 'Snapshot']);
-    expect(titles(markdown)).toEqual(['Deep Idea', 'Snapshot']);
+    expect(partTitles(markdown, 'Deep  IDEA!')).toEqual([]);
+    // Any other title, or no title at all, and the same line is a part.
+    expect(partTitles(markdown, 'Another Idea')).toEqual(['Deep Idea']);
+    expect(partTitles(markdown)).toEqual(['Deep Idea']);
+    expect(titles(markdown)).toEqual(['Snapshot']);
   });
 
   it('keeps `###` and deeper inside the chapter above', () => {
@@ -523,7 +561,7 @@ describe('the chapter heading contract', () => {
     expect(ideaChapters(markdown)[0]?.markdown).toContain('#### Method');
   });
 
-  it('does not let indentation protect a heading from becoming a chapter', () => {
+  it('does not let indentation protect a heading from becoming a section', () => {
     const markdown = [
       '## Plain',
       'Body.',
@@ -535,16 +573,13 @@ describe('the chapter heading contract', () => {
       'Body.',
       '',
       '   # One hash, indented',
+      '## Under it',
       'Body.',
     ].join('\n');
 
-    // The line is `.trim()`ed before matching, so all four are chapters.
-    expect(titles(markdown, 'Plain')).toEqual([
-      'Plain',
-      'Two spaces',
-      'One tab',
-      'One hash, indented',
-    ]);
+    // The line is `.trim()`ed before matching.
+    expect(titles(markdown, 'Plain')).toEqual(['Plain', 'Two spaces', 'One tab', 'Under it']);
+    expect(partTitles(markdown, 'Plain')).toEqual(['One hash, indented']);
   });
 
   it('splits on a heading inside a fenced code block, because it scans lines', () => {
@@ -556,35 +591,52 @@ describe('the chapter heading contract', () => {
     expect(titles(markdown)).toEqual(['Snapshot', 'Not really a heading']);
   });
 
-  /**
-   * The two published documents whose FIRST CHAPTER is a non-title `#`, read
-   * off `GET /api/ideas/<id>/sections` on 2026-08-14. #48's acceptance
-   * criterion is that their chapter set does not change, so the exact heading
-   * and title pairs are pinned here rather than described in prose.
-   */
-  it('keeps the first chapter of the two live `#`-headed documents', () => {
-    const requirementsBase = ideaChapters(
-      [
-        '# RequirementsBase — Competitive Market Research (GRC / compliance-automation / control-mapping)',
-        'Body.',
-        '',
-        '## The core finding',
-        'Body.',
-      ].join('\n'),
-      'RequirementsBase — MCP-native regulatory gap-analysis agent',
-    );
+  it('names parts after chapters, so a part can never move a chapter URL', () => {
+    // Before #63 the `#` claimed `competitors` first and the `##` fell back to
+    // its own slug. Chapters are now named over chapters only.
+    const markdown = ['# Competitors', 'Intro.', '', '## Competitor table', 'Body.'].join('\n');
 
-    expect(requirementsBase.map((chapter) => chapter.id)).toEqual([
+    expect(ideaChapters(markdown, 'Doc').map((chapter) => chapter.id)).toEqual(['competitors']);
+    expect(ideaParts(markdown, 'Doc').map((part) => part.id)).toEqual(['competitors-2']);
+  });
+
+  /**
+   * The two published documents whose first chapter was a non-title `#`, read
+   * off `GET /api/ideas/<id>/sections` on 2026-08-14. Under #63 that `#` is a
+   * part over the rest of the document; every OTHER chapter id is unchanged,
+   * and the retired one is what `legacyFlatChapters()` still reports so the
+   * backfill can 301 it.
+   */
+  it('turns the leading `#` of the two live documents into a part, keeping every other chapter id', () => {
+    const requirementsBaseBody = [
+      '# RequirementsBase — Competitive Market Research (GRC / compliance-automation / control-mapping)',
+      'Body.',
+      '',
+      '## The core finding',
+      'Body.',
+    ].join('\n');
+    const requirementsBaseTitle = 'RequirementsBase — MCP-native regulatory gap-analysis agent';
+
+    expect(ideaChapters(requirementsBaseBody, requirementsBaseTitle).map((chapter) => chapter.id)).toEqual([
+      'the-core-finding',
+    ]);
+    expect(ideaParts(requirementsBaseBody, requirementsBaseTitle).map((part) => part.id)).toEqual([
+      'requirementsbase-competitive-market-research-grc-compliance-auto',
+    ]);
+    expect(legacyFlatChapters(requirementsBaseBody, requirementsBaseTitle).map((chapter) => chapter.id)).toEqual([
       'requirementsbase-competitive-market-research-grc-compliance-auto',
       'the-core-finding',
     ]);
 
-    const tekToEsg = ideaChapters(
-      ['# TEK-to-ESG Translator', 'Body.', '', '## The problem', 'Body.'].join('\n'),
-      'TEK-to-ESG Translator — Indigenous-Governed Platform for Turning Traditional Knowledge into Corporate Disclosure',
-    );
+    const tekToEsgBody = ['# TEK-to-ESG Translator', 'Body.', '', '## The problem', 'Body.'].join('\n');
+    const tekToEsgTitle =
+      'TEK-to-ESG Translator — Indigenous-Governed Platform for Turning Traditional Knowledge into Corporate Disclosure';
 
-    expect(tekToEsg.map((chapter) => chapter.id)).toEqual(['tek-to-esg-translator', 'the-problem']);
+    expect(ideaChapters(tekToEsgBody, tekToEsgTitle).map((chapter) => chapter.id)).toEqual(['the-problem']);
+    expect(legacyFlatChapters(tekToEsgBody, tekToEsgTitle).map((chapter) => chapter.id)).toEqual([
+      'tek-to-esg-translator',
+      'the-problem',
+    ]);
   });
 });
 
@@ -770,22 +822,22 @@ describe('ideaPreamble', () => {
     expect(ideaChapters(body, 'Some Idea').length).toBeGreaterThan(1);
   });
 
-  it('does not claim a `#`-headed chapter that ideaChapters() also claims', () => {
+  it('does not claim a `#`-headed part that ideaParts() also claims', () => {
     // The bug this catches: a preamble derived from `body.split(/^## /m)` keeps
-    // everything up to the first `##`, so a `#` chapter before it was rendered
-    // inline on the idea page AND served as its own chapter page.
+    // everything up to the first `##`, so a `#` section before it was rendered
+    // inline on the idea page AND again where its part opens.
     const markdown = [
-      '# Opening Chapter',
-      'Single-hash chapters are chapters to sectionRanges().',
+      '# Opening Part',
+      'Single-hash headings are parts to sectionRanges().',
       '',
       '## Second Chapter',
       'And this one is obvious.',
     ].join('\n');
 
-    expect(ideaChapters(markdown, 'Unrelated Title').map((chapter) => chapter.title)).toEqual([
-      'Opening Chapter',
-      'Second Chapter',
+    expect(ideaParts(markdown, 'Unrelated Title').map((part) => part.intro)).toEqual([
+      'Single-hash headings are parts to sectionRanges().',
     ]);
+    expect(ideaChapters(markdown, 'Unrelated Title').map((chapter) => chapter.title)).toEqual(['Second Chapter']);
     expect(ideaPreamble(markdown, 'Unrelated Title')).toBe('');
   });
 
