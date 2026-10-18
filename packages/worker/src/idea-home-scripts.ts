@@ -1,4 +1,5 @@
 import { AUTH_PREFIX } from './auth';
+import { CHAPTER_FILTER_SCRIPT } from './chapter-rail';
 import { readerSettingsScript } from './reader-settings';
 
 export function ideaHomeScripts(ideaId: string): string {
@@ -23,15 +24,8 @@ const commentStatus = document.querySelector('#comment-status');
 const commentAuth = document.querySelector('#comment-auth');
 const reactionStatus = document.querySelector('#reaction-status');
 const reactionButtons = [...document.querySelectorAll('.react-button')];
-const filter = document.querySelector('#book-filter');
-const chapterLinks = [...document.querySelectorAll('#chapter-list .chapter-link')];
+${CHAPTER_FILTER_SCRIPT}
 let signedInCommentUser = null;
-if (filter) filter.oninput = () => {
-  const query = filter.value.trim().toLowerCase();
-  chapterLinks.forEach((link) => {
-    link.hidden = query && !String(link.dataset.title || '').toLowerCase().includes(query);
-  });
-};
 function commentDate(value) {
   const date = new Date(String(value || ''));
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();

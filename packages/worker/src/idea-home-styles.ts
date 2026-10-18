@@ -1,4 +1,5 @@
 import { brandCss } from './brand';
+import { CHAPTER_RAIL_CSS } from './chapter-rail';
 import { MARKDOWN_CSS } from './markdown';
 import { readerSettingsCss } from './reader-settings';
 import { navCss } from './site-nav';
@@ -35,6 +36,7 @@ p{color:var(--body-text);margin:.78rem 0;max-width:760px}ul,ol{display:grid;gap:
 @media(max-width:860px){.top-brand strong{max-width:min(55vw,280px)}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.sources{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:1.1rem 1.15rem;margin-top:1rem;scroll-margin-top:74px}.sources h2{font-size:1.1rem;margin:0 0 .3rem}.sources-intro{color:var(--muted);font-size:.85rem;margin:0 0 .8rem}.source-list{display:grid;gap:.4rem;margin:0;padding:0;list-style:none;max-width:none}.source-row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:baseline;border-left:3px solid var(--line);padding-left:.6rem;font-size:.84rem}.source-url{color:var(--accent-strong);font-weight:900;overflow-wrap:anywhere}.source-where{color:var(--muted);font-size:.78rem}.source-where a{color:var(--accent-strong)}.source-citations{color:var(--muted);font-size:.72rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em}.source-dead{border:1px solid var(--bad);border-radius:999px;color:var(--bad);font-size:.62rem;font-weight:900;padding:.08rem .4rem;text-transform:uppercase}
 .chapter-body,.comments,.research{padding:.9rem}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
 ${navCss(860)}
+${CHAPTER_RAIL_CSS}
 ${MARKDOWN_CSS}
 /* Typed research entries: provenance and confidence must be visible at a glance,
    because an inferred claim must not read like a confirmed one. */
@@ -64,6 +66,7 @@ ${MARKDOWN_CSS}
 .chapter-summaries{list-style:none;margin:0;padding:0;gap:.6rem}
 .chapter-summaries li{border-left:3px solid var(--line);padding-left:.7rem;color:var(--body-text);font-size:.9rem;line-height:1.55}
 .chapter-summaries a{color:var(--accent-strong);font-weight:900}
+.part-summary{margin:1.1rem 0 .5rem}.part-summary h2{margin:0 0 .3rem}.part-summary p{margin:.2rem 0 .6rem}
 /* Short ideas render without the chapter sidebar — close the column it left. */
 .book-shell.single-page{grid-template-columns:minmax(0,1fr) 300px}
 @media(max-width:1180px){.book-shell.single-page{grid-template-columns:minmax(0,1fr)}}

@@ -9,7 +9,8 @@ import { ideaHomeStyles } from './idea-home-styles';
 import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
 import { openRefinementCount } from './refinements';
 import { listIdeaSources } from './sources';
-import { ideaPreamble, isPaginated, markdownHeadings, markdownToHtml, visibleIdeaChapters } from './markdown';
+import { chapterGroups, ideaParts, ideaPreamble, isPaginated, markdownHeadings, markdownToHtml, visibleIdeaChapters } from './markdown';
+import { chapterRail } from './chapter-rail';
 import { readerSettingsBootScript } from './reader-settings';
 import { NAV_SCRIPT, NAV_TOGGLE } from './site-nav';
 import type { Env } from './types';
@@ -61,6 +62,9 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   const sources = await listIdeaSources(env, idea.id);
   const headings = markdownHeadings(body);
   const chapters = visibleIdeaChapters(body, idea.title);
+  const parts = ideaParts(body, idea.title);
+  const groups = chapterGroups(chapters, parts);
+  const partCount = groups.filter((group) => group.part).length;
   // Short documents read as one page: the body is rendered inline below, so
   // chapter pages would only re-present content the reader can already scroll.
   const paginated = isPaginated(body, idea.title);
@@ -85,14 +89,26 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
   // one sentence of the document itself: nothing to read, and nothing for a
   // crawler or a reader deciding whether to open a chapter. The chapter
   // excerpts are that prose, and they are already computed for the sidebar.
+  //
+  // Grouped by part (#63), and a part's intro is rendered in full under its
+  // heading: a part has no page of its own, so this and the opening chapter of
+  // the part are the only places its prose is read.
+  const summaryList = (items: typeof chapters) =>
+    `<ul class="chapter-summaries">${items
+      .map(
+        (chapter) =>
+          `<li><a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/">${escapeHtml(chapter.title)}</a> &mdash; ${escapeHtml(chapter.excerpt)}</li>`,
+      )
+      .join('')}</ul>`;
   const chapterSummaries = paginated && !inlineBody
-    ? `<p class="chapter-summary-lead">This idea is published as ${chapters.length} ${chapters.length === 1 ? 'chapter' : 'chapters'}.</p>
-      <ul class="chapter-summaries">${chapters
-        .map(
-          (chapter) =>
-            `<li><a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/">${escapeHtml(chapter.title)}</a> &mdash; ${escapeHtml(chapter.excerpt)}</li>`,
+    ? `<p class="chapter-summary-lead">This idea is published as ${chapters.length} ${chapters.length === 1 ? 'chapter' : 'chapters'}${partCount ? ` in ${partCount} ${partCount === 1 ? 'part' : 'parts'}` : ''}.</p>
+      ${groups
+        .map((group) =>
+          group.part
+            ? `<section class="part-summary"><h2 id="${escapeHtml(group.part.id)}">${escapeHtml(group.part.title)}</h2>${group.part.intro ? markdownToHtml(group.part.intro) : ''}${summaryList(group.chapters)}</section>`
+            : summaryList(group.chapters),
         )
-        .join('')}</ul>`
+        .join('')}`
     : '';
   const articleBody = chapterSummaries || markdownToHtml(inlineBody);
   // The Sections rail links in-page anchors, which only exist for the markdown
@@ -104,7 +120,7 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
         .map((chapter) => `<a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/">${escapeHtml(chapter.title)}</a>`)
         .join('')
     : headings.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('');
-  const chapterLinks = chapters.map((chapter, index) => `<a class="chapter-link" data-title="${escapeHtml(chapter.title)} ${escapeHtml(chapter.excerpt)}" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(chapter.id)}/"><b>${index + 1}</b><span>${escapeHtml(chapter.title)}</span></a>`).join('');
+  const chapterLinks = chapterRail(idea.id, chapters, parts, { filterable: true });
   const page = `<!DOCTYPE html>
 <html lang="en">
 <head>

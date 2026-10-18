@@ -1060,12 +1060,11 @@ describe('FreeIdeaStore worker', () => {
     expect(html).not.toContain('<h2 id="design-sketch">Design Sketch</h2>');
   });
 
-  it('does not inline a `#`-headed chapter that also has its own chapter page', async () => {
+  it('does not inline a `#`-headed part as lead-in prose', async () => {
     // A lead-in derived from `body.split(/^## /m)` keeps everything before the
-    // first `##`, but sectionRanges() — which decides what gets a chapter URL —
-    // treats a `#` heading as a chapter. So this chapter was rendered inline on
-    // the index AND served at its own URL: the exact duplication chapter
-    // pagination exists to remove. The lead-in comes from the same parser now.
+    // first `##`, but sectionRanges() treats a `#` heading as a section — a part
+    // since #63. So its prose would be rendered inline as lead-in AND again
+    // where the part opens. The lead-in comes from the same parser now.
     const testEnv = env();
     const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
@@ -1073,7 +1072,10 @@ describe('FreeIdeaStore worker', () => {
         headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           body: [
-            '# Opening Chapter',
+            '# Opening Part',
+            'The part intro.',
+            '',
+            '## First Chapter',
             filler(55),
             '',
             '## Second Chapter',
@@ -1091,12 +1093,16 @@ describe('FreeIdeaStore worker', () => {
 
     expect(update.status).toBe(200);
     expect(page.status).toBe(200);
-    // It is a chapter: linked, with a page of its own.
-    expect(html).toContain('href="/ideas/serge-idea-lab/opening-chapter/"');
-    // And therefore NOT also inlined here.
-    expect(html).not.toContain('<h2 id="opening-chapter">Opening Chapter</h2>');
-    // With no lead-in left over, the index falls back to chapter summaries.
-    expect(html).toContain('This idea is published as 3 chapters.');
+    // It is a part: navigation, not a page.
+    expect(html).not.toContain('href="/ideas/serge-idea-lab/opening-part/"');
+    // And NOT inlined as lead-in: its heading appears once, where the part opens
+    // in the chapter summaries.
+    expect(html.split('<h2 id="opening-part">Opening Part</h2>')).toHaveLength(2);
+    expect(html).toContain('<section class="part-summary"><h2 id="opening-part">Opening Part</h2>');
+    // With no lead-in left over, the index falls back to chapter summaries,
+    // grouped under the part with its intro.
+    expect(html).toContain('This idea is published as 3 chapters in 1 part.');
+    expect(html).toContain('The part intro.');
   });
 
   it('renders non-comment contributions as a server-side research section', async () => {
@@ -1827,6 +1833,87 @@ describe('FreeIdeaStore worker', () => {
     expect(apiData.markdown).toContain('## New Name');
   });
 
+  it('creates, regroups and renders parts through the section API (#63)', async () => {
+    const testEnv = env();
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          body: ['## Snapshot', filler(55), '', '## Barossa', filler(55), '', '## McLaren Vale', filler(55)].join('\n'),
+        }),
+      }),
+      testEnv,
+    );
+
+    const add = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'Regional evidence', content: 'Two regions, one question.', kind: 'part', before: 'barossa' }),
+      }),
+      testEnv,
+    );
+    const added = (await add.json()) as {
+      regrouped: Array<{ chapter_id: string; from_part: string | null; to_part: string | null }>;
+      sections: Array<{ id: string; kind: string; part?: string | null }>;
+      usage: { chapters: number; parts: number };
+    };
+
+    expect(add.status).toBe(200);
+    expect(added.regrouped.map((row) => row.chapter_id)).toEqual(['barossa', 'mclaren-vale']);
+    expect(added.sections.map((row) => [row.id, row.kind])).toEqual([
+      ['snapshot', 'chapter'],
+      ['regional-evidence', 'part'],
+      ['barossa', 'chapter'],
+      ['mclaren-vale', 'chapter'],
+    ]);
+    expect(added.usage).toMatchObject({ chapters: 3, parts: 1 });
+
+    const badKind = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'Volume', kind: 'volume' }),
+      }),
+      testEnv,
+    );
+    expect(badKind.status).toBe(404);
+
+    const page = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/barossa/'), testEnv);
+    const html = await page.text();
+    expect(page.status).toBe(200);
+    expect(html).toContain('<div class="part-eyebrow">Regional evidence</div>');
+    expect(html).toContain('<section class="part-intro"><p>Two regions, one question.</p>');
+    expect(html).toContain('<details class="part-group" open><summary class="part-title"><span>Regional evidence</span><small>2</small>');
+    expect(html).toContain('1 of 2 in this part');
+    // Stepping back out of the part says so; stepping within it does not.
+    expect(html).toContain('<small>Previous</small>Snapshot');
+    const next = await (await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/mclaren-vale/'), testEnv)).text();
+    expect(next).not.toContain('<section class="part-intro">');
+
+    // Demoting the part regroups both chapters back out of it, and the old
+    // chapter URL of a promoted chapter lands on its part's first chapter.
+    const promote = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/sections/snapshot', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ kind: 'part' }),
+      }),
+      testEnv,
+    );
+    const promoted = (await promote.json()) as { sections: Array<{ id: string; kind: string }> };
+    expect(promote.status).toBe(200);
+    expect(promoted.sections.filter((row) => row.kind === 'part').map((row) => row.id)).toEqual([
+      'snapshot',
+      'regional-evidence',
+    ]);
+    expect(testEnv.DB.chapterRedirects).toContainEqual(
+      expect.objectContaining({ idea_id: 'serge-idea-lab', old_id: 'snapshot', chapter_id: 'barossa' }),
+    );
+  });
+
   it('re-points stale chapter redirects when the same chapter is renamed again', async () => {
     const testEnv = env();
     const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
@@ -1989,7 +2076,8 @@ describe('FreeIdeaStore worker', () => {
     it('matches the subsequent real write for usage, chapters, chapters_created and errors', async () => {
       const testEnv = env();
       const before = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/sections'), testEnv);
-      const beforeData = (await before.json()) as { sections: Array<{ id: string }> };
+      const beforeData = (await before.json()) as { sections: Array<{ id: string; kind: string }> };
+      const chapterRows = (rows: Array<{ kind: string }>) => rows.filter((row) => row.kind === 'chapter').length;
       const validate = await worker.fetch(
         new Request('https://fis.test/api/ideas/serge-idea-lab/validate', {
           method: 'POST',
@@ -2010,7 +2098,7 @@ describe('FreeIdeaStore worker', () => {
       );
       const written = (await write.json()) as {
         usage: Record<string, number>;
-        sections: Array<{ id: string; title: string; words: number; verdict: string }>;
+        sections: Array<{ id: string; title: string; words: number; verdict: string | null; kind: string }>;
       };
 
       expect(validate.status).toBe(200);
@@ -2018,7 +2106,8 @@ describe('FreeIdeaStore worker', () => {
       expect(preflight.errors).toEqual([]);
       expect(preflight.usage).toEqual(written.usage);
       expect(preflight.chapters).toEqual(written.sections);
-      expect(preflight.chapters_created).toBe(written.sections.length - beforeData.sections.length);
+      // Parts are rows in the list but not chapters, so they do not count here.
+      expect(preflight.chapters_created).toBe(chapterRows(written.sections) - chapterRows(beforeData.sections));
     });
 
     it('does not persist the candidate document', async () => {
@@ -3416,6 +3505,7 @@ describe('FreeIdeaStore worker', () => {
         chars_remaining: FIELD_LIMITS.body - 83,
         chapters: 2,
         chapters_remaining: FIELD_LIMITS.chapters - 2,
+        parts: 0,
         below_floor: 2,
         above_ceiling: 0,
       },

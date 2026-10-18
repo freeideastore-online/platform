@@ -1,9 +1,11 @@
 import { brandHead, brandLockup, brandCss } from './brand';
 import { chapterRedirectTarget } from './chapter-redirects';
+import { CHAPTER_FILTER_SCRIPT, CHAPTER_RAIL_CSS, chapterRail } from './chapter-rail';
 import { derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
 import {
   ideaChapterById,
+  ideaParts,
   isPaginated,
   MARKDOWN_CSS,
   markdownHeadings,
@@ -107,6 +109,23 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
   const index = chapters.indexOf(chapter);
   const previous = chapters[index - 1];
   const next = chapters[index + 1];
+  // The part this chapter sits under (#63). A part has no page, so its intro is
+  // read where the part opens: on its first chapter, above the chapter itself.
+  const parts = ideaParts(body, idea.title);
+  const partById = (id?: string) => (id ? parts.find((candidate) => candidate.id === id) : undefined);
+  const part = partById(chapter.part);
+  const partChapters = part ? chapters.filter((item) => item.part === part.id) : [];
+  const opensPart = Boolean(part && partChapters[0]?.id === chapter.id);
+  const partIntro = opensPart && part?.intro ? `<section class="part-intro">${markdownToHtml(part.intro)}</section>` : '';
+  // Prev/next say when they cross into another part, so stepping off the end of
+  // one is not mistaken for the next chapter of the same argument.
+  const crossing = (neighbour: typeof chapter | undefined, direction: 'Previous' | 'Next') => {
+    if (!neighbour) return direction;
+    const neighbourPart = partById(neighbour.part);
+    return neighbour.part !== chapter.part && neighbourPart
+      ? `${direction} &middot; ${escapeHtml(neighbourPart.title)}`
+      : direction;
+  };
   const canonical = `${new URL(request.url).origin}/ideas/${idea.id}/${chapter.id}/`;
   const chapterBody = chapter.markdown.replace(/^##[^\n]*(?:\n\n?)?/, '');
   const chapterToc = markdownHeadings(chapterBody);
@@ -138,6 +157,8 @@ ${brandCss()}
 .nav-title{display:flex;justify-content:space-between;gap:.75rem;color:var(--title-text);font-size:.68rem;text-transform:uppercase;font-weight:900;letter-spacing:.12em;margin:.7rem 0 .42rem}.nav-title span:last-child{letter-spacing:0;text-transform:none}
 .progress{height:6px;border-radius:999px;background:var(--progress-track);margin:.4rem 0 .8rem;overflow:hidden}.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#f59e0b);width:${progress}%}
 .chapter-list{display:grid;gap:.28rem}.chapter-link{display:grid;grid-template-columns:28px minmax(0,1fr);gap:.55rem;align-items:center;border:1px solid transparent;border-radius:8px;padding:.54rem .56rem;color:var(--strong-text)}.chapter-link:hover,.chapter-link.active{background:var(--mark);border-color:var(--hover-line)}.chapter-link b{display:grid;width:26px;height:26px;place-items:center;border-radius:999px;background:var(--chapter-badge);color:var(--accent-strong);font-size:.7rem}.chapter-link.active b{background:var(--accent);color:#fff}.chapter-link span{display:block;font-size:.82rem;font-weight:900;line-height:1.25}
+.part-eyebrow{color:var(--accent-strong);font-size:.73rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;margin-bottom:.5rem}
+.part-intro{border:1px dashed var(--line);border-radius:8px;background:var(--panel-alt);padding:.9rem 1.05rem;margin-bottom:1rem}.part-intro>*:first-child{margin-top:0}.part-intro>*:last-child{margin-bottom:0}
 .related-docs{display:grid;gap:.4rem;border-top:1px solid var(--line);margin-top:1rem;padding-top:.4rem}.related-group{display:grid;gap:.2rem}.related-link{display:block;border:1px solid transparent;border-radius:8px;padding:.42rem .56rem;color:var(--strong-text);font-size:.8rem;font-weight:800;line-height:1.3}.related-link:hover,.related-link.active{background:var(--mark);border-color:var(--hover-line)}.related-link.parent{color:var(--accent-strong)}.related-group small{color:var(--muted);font-size:.7rem;padding:0 .56rem}
 .mobile-book-nav{display:none;border-bottom:1px solid var(--line);background:var(--panel);padding:.75rem 1rem}.mobile-book-nav summary{cursor:pointer;color:var(--accent-strong);font-weight:900}.mobile-book-nav .chapter-list{margin-top:.65rem;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
 .mobile-page-toc{display:none;border-bottom:1px solid var(--line);background:var(--panel-alt);padding:.7rem 1rem}.mobile-page-toc strong{display:block;color:var(--title-text);font-size:.68rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.45rem}.mobile-page-toc nav{display:flex;gap:.45rem;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:.15rem}.mobile-page-toc a{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--accent-strong);font-size:.75rem;font-weight:900;line-height:1.15;padding:.42rem .62rem;white-space:nowrap}.mobile-page-toc a:hover{border-color:var(--hover-line);background:var(--mark)}
@@ -154,6 +175,7 @@ footer{max-width:920px;margin:1.8rem auto 0;border-top:1px solid var(--line);pad
 @media(max-width:1180px){.book-shell{grid-template-columns:280px minmax(0,1fr)}.toc-rail{display:none}.mobile-page-toc{display:block}}
 @media(max-width:860px){.top-brand strong{max-width:min(55vw,280px)}.book-shell{display:block;min-height:0}.book-sidebar{display:none}.mobile-book-nav{display:block}.content-wrap{padding:1.3rem 1rem 3rem}.chapter-body{padding:.9rem}.chapter-nav{grid-template-columns:1fr}.chapter-nav .next{text-align:left}h1{font-size:clamp(1.4rem,5vw,2.2rem)}}
 ${navCss(860)}
+${CHAPTER_RAIL_CSS}
 ${MARKDOWN_CSS}
 ${readerSettingsCss()}
 </style>
@@ -167,7 +189,7 @@ ${readerSettingsCss()}
 </header>
 <details class="mobile-book-nav">
   <summary>Chapters</summary>
-  <nav class="chapter-list">${chapters.map((item, chapterIndex) => `<a class="chapter-link${item.id === chapter.id ? ' active' : ''}" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(item.id)}/"><b>${chapterIndex + 1}</b><span>${escapeHtml(item.title)}</span></a>`).join('')}</nav>
+  <nav class="chapter-list">${chapterRail(idea.id, chapters, parts, { activeId: chapter.id })}</nav>
   ${relatedNav}
 </details>
 ${chapterTocLinks ? `<section class="mobile-page-toc" aria-label="On this page"><strong>On this page</strong><nav>${chapterTocLinks}</nav></section>` : ''}
@@ -176,19 +198,21 @@ ${chapterTocLinks ? `<section class="mobile-page-toc" aria-label="On this page">
     <div class="book-search"><input id="book-filter" type="search" placeholder="Filter chapters" aria-label="Filter chapters"></div>
     <div class="nav-title"><span>Chapters</span><span>${index + 1}/${chapters.length}</span></div>
     <div class="progress" aria-hidden="true"><i></i></div>
-    <nav class="chapter-list" id="chapter-list">${chapters.map((item, chapterIndex) => `<a class="chapter-link${item.id === chapter.id ? ' active' : ''}" data-title="${escapeHtml(item.title)} ${escapeHtml(item.excerpt)}" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(item.id)}/"><b>${chapterIndex + 1}</b><span>${escapeHtml(item.title)}</span></a>`).join('')}</nav>
+    <nav class="chapter-list" id="chapter-list">${chapterRail(idea.id, chapters, parts, { activeId: chapter.id, filterable: true })}</nav>
     ${relatedNav}
   </aside>
   <main class="content-wrap">
     <article class="article">
       ${parent ? `<div class="crumb"><a href="/ideas/${escapeHtml(parent.id)}/">${escapeHtml(parent.title)}</a><span>/</span><a href="/ideas/${escapeHtml(idea.id)}/">${escapeHtml(idea.title)}</a></div>` : ''}
+      ${part ? `<div class="part-eyebrow">${escapeHtml(part.title)}</div>` : ''}
       <h1>${escapeHtml(chapter.title)}</h1>
       <div class="summary">${escapeHtml(chapter.excerpt || idea.summary)}</div>
-      <div class="meta"><span class="pill">${escapeHtml(idea.title)}</span><span class="pill">${escapeHtml(idea.stage)}</span><span class="pill">Chapter ${index + 1} of ${chapters.length}</span></div>
+      <div class="meta"><span class="pill">${escapeHtml(idea.title)}</span><span class="pill">${escapeHtml(idea.stage)}</span><span class="pill">Chapter ${index + 1} of ${chapters.length}</span>${part ? `<span class="pill">${partChapters.indexOf(chapter) + 1} of ${partChapters.length} in this part</span>` : ''}</div>
+      ${partIntro}
       <div class="chapter-body">${renderedChapterBody}</div>
       <nav class="chapter-nav">
-        ${previous ? `<a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(previous.id)}/"><small>Previous</small>${escapeHtml(previous.title)}</a>` : '<span></span>'}
-        ${next ? `<a class="next" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(next.id)}/"><small>Next</small>${escapeHtml(next.title)}</a>` : '<span></span>'}
+        ${previous ? `<a href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(previous.id)}/"><small>${crossing(previous, 'Previous')}</small>${escapeHtml(previous.title)}</a>` : '<span></span>'}
+        ${next ? `<a class="next" href="/ideas/${escapeHtml(idea.id)}/${escapeHtml(next.id)}/"><small>${crossing(next, 'Next')}</small>${escapeHtml(next.title)}</a>` : '<span></span>'}
       </nav>
     </article>
   </main>
@@ -197,16 +221,7 @@ ${chapterTocLinks ? `<section class="mobile-page-toc" aria-label="On this page">
     <nav class="toc-box">${chapterTocLinks || '<p class="toc-empty">This chapter has no deeper sections yet.</p>'}</nav>
   </aside>
 </div>
-<script>
-const filter = document.querySelector('#book-filter');
-const chapterLinks = [...document.querySelectorAll('#chapter-list .chapter-link')];
-if (filter) filter.oninput = () => {
-  const query = filter.value.trim().toLowerCase();
-  chapterLinks.forEach((link) => {
-    link.hidden = query && !String(link.dataset.title || '').toLowerCase().includes(query);
-  });
-};
-</script>
+<script>${CHAPTER_FILTER_SCRIPT}</script>
 ${readerSettingsScript()}
 ${NAV_SCRIPT}
 </body>
