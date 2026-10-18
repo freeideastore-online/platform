@@ -117,6 +117,16 @@ Canonical idea bodies are written there so a document is not limited to what fit
 
 Because bodies are no longer readable from SQL, `has_publication` is evaluated from the `body_words` and `chapter_count` columns added in migration `0010`, maintained on every canonical write. Deploying a worker that reads those columns requires the migration to be applied first.
 
+**Any deploy that changes what counts as a chapter must run the metrics backfill right after it.** The columns are only refreshed on a canonical write, but the page decides pagination live from the body, so until the backfill runs the catalog and the page disagree for every row the change touched. The #63 deploy (a non-title `#` became a part) is one: the backfill also 301s the chapter URLs that rule retired.
+
+```bash
+curl -X POST https://freeideastore.online/api/admin/backfill-metrics \
+  -H "Authorization: Bearer $FIS_TOKEN"
+# => { "updated": N, "skipped": N, "redirects": N, "errors": [] }
+```
+
+It is idempotent, so re-running it is safe.
+
 The note that previously lived here — that the Cloudflare token lacked R2 permissions — is obsolete; the token can create and write buckets.
 
 ## Cost Model

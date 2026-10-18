@@ -17,7 +17,7 @@ import {
   updateIdeaSection,
   validatePublication,
 } from './api-idea-mutations';
-import { chapterRedirectTarget } from './chapter-redirects';
+import { chapterRedirectTarget, syncPartMigrationRedirects } from './chapter-redirects';
 import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, DERIVED_CHILDREN_LIMIT, derivedIdeas, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
 import { chapterHealth, documentMetrics, ideaPreamble, ideaSectionList, readIdeaSection } from './markdown';
@@ -31,6 +31,7 @@ import type { Env } from './types';
 type BackfillMetricsRow = {
   id: string;
   body_key?: string | null;
+  body_md?: string | null;
   title: string;
 };
 
@@ -81,37 +82,51 @@ async function handleListIdeas(env: Env, url: URL) {
   });
 }
 
+/**
+ * Recomputes `body_words` and `chapter_count` for every live idea from its
+ * body, and 301s the chapter URLs the #63 part rule retired.
+ *
+ * Run in the same deploy as any change to what counts as a chapter. The
+ * columns are otherwise refreshed only on a canonical write, while the page
+ * decides pagination live from the body — so until this runs, the catalog's
+ * `has_publication` and the page disagree for every row the change touched.
+ * Idempotent: a second run rewrites the same numbers and the same redirects.
+ */
 async function handleBackfillMetrics(request: Request, env: Env) {
   const registered = await registeredProfileFor(request, env);
   if (!registered) return json({ error: 'authentication required' }, { status: 401 });
 
   const rows = await env.DB.prepare(
-    `SELECT id, body_key, title
+    `SELECT id, body_key, body_md, title
      FROM ideas
      WHERE status != 'removed'`,
   ).all<BackfillMetricsRow>();
 
   let updated = 0;
   let skipped = 0;
+  let redirects = 0;
   const errors: string[] = [];
 
   for (const row of rows.results || []) {
-    if (!row.body_key) {
+    if (!row.body_key && !row.body_md) {
       skipped += 1;
       continue;
     }
-    if (!env.IDEA_BUCKET) {
+    if (row.body_key && !env.IDEA_BUCKET) {
       errors.push(`${row.id}: IDEA_BUCKET is not bound`);
       continue;
     }
     try {
-      const object = await env.IDEA_BUCKET.get(row.body_key);
-      if (!object) {
-        skipped += 1;
-        errors.push(`${row.id}: missing R2 object ${row.body_key}`);
-        continue;
+      let body = row.body_md || '';
+      if (row.body_key && env.IDEA_BUCKET) {
+        const object = await env.IDEA_BUCKET.get(row.body_key);
+        if (!object) {
+          skipped += 1;
+          errors.push(`${row.id}: missing R2 object ${row.body_key}`);
+          continue;
+        }
+        body = await object.text();
       }
-      const body = await object.text();
       const metrics = documentMetrics(body, row.title);
       await env.DB.prepare(
         `UPDATE ideas
@@ -120,13 +135,14 @@ async function handleBackfillMetrics(request: Request, env: Env) {
       )
         .bind(metrics.words, metrics.chapters, row.id)
         .run();
+      redirects += await syncPartMigrationRedirects(env, row.id, body, row.title);
       updated += 1;
     } catch (error) {
       errors.push(`${row.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  return json({ updated, skipped, errors });
+  return json({ updated, skipped, redirects, errors });
 }
 
 async function handleBackfillContributionSources(request: Request, env: Env) {

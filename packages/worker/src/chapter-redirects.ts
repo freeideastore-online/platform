@@ -1,5 +1,5 @@
 import { pathId } from './http';
-import { ideaChapters, type IdeaChapter } from './markdown';
+import { ideaChapters, ideaParts, legacyFlatChapters, type IdeaChapter, type IdeaPart } from './markdown';
 import type { Env } from './types';
 
 export const CHAPTER_REDIRECT_LIMIT_PER_IDEA = 256;
@@ -23,13 +23,22 @@ function aliases(chapter: IdeaChapter) {
   return Array.from(new Set([chapter.id, ...chapter.aliases])).filter((alias) => pathId(alias));
 }
 
-function targetForRetiredChapter(previous: IdeaChapter, nextChapters: IdeaChapter[]) {
+function targetForRetiredChapter(previous: IdeaChapter, nextChapters: IdeaChapter[], nextParts: IdeaPart[]) {
   const previousBody = chapterBody(previous);
   const exact = nextChapters.find((chapter) => chapterBody(chapter) === previousBody);
   if (exact) return exact;
 
   const sameTitle = nextChapters.find((chapter) => chapter.title === previous.title);
   if (sameTitle) return sameTitle;
+
+  // A chapter that became a part — promoted, or a `#` the #63 rule re-read —
+  // has no page any more; its prose is the part's intro, which opens on the
+  // part's first chapter. That is where its old URL lands.
+  const becamePart = nextParts.find((part) => part.title === previous.title && part.chapterIds.length);
+  if (becamePart) {
+    const first = nextChapters.find((chapter) => chapter.id === becamePart.chapterIds[0]);
+    if (first) return first;
+  }
 
   if (!previousBody) return null;
   return nextChapters.find((chapter) => chapterBody(chapter).includes(previousBody)) ?? null;
@@ -40,16 +49,20 @@ export function chapterRedirectPlan(
   nextBody: string,
   previousTitle: string,
   nextTitle = previousTitle,
+  options: { legacyPrevious?: boolean } = {},
 ): RedirectPlan {
-  const previousChapters = ideaChapters(previousBody, previousTitle);
+  const previousChapters = options.legacyPrevious
+    ? legacyFlatChapters(previousBody, previousTitle)
+    : ideaChapters(previousBody, previousTitle);
   const nextChapters = ideaChapters(nextBody, nextTitle);
+  const nextParts = ideaParts(nextBody, nextTitle);
   const liveAliases = Array.from(new Set(nextChapters.flatMap(aliases)));
   const liveAliasSet = new Set(liveAliases);
   const upserts: RedirectPlan['upserts'] = [];
   const repoints: RedirectPlan['repoints'] = [];
 
   for (const previous of previousChapters) {
-    const target = targetForRetiredChapter(previous, nextChapters);
+    const target = targetForRetiredChapter(previous, nextChapters, nextParts);
     const previousAliases = aliases(previous);
     if (!target) continue;
 
@@ -68,6 +81,18 @@ export function chapterRedirectPlan(
   };
 }
 
+/**
+ * The chapter URLs the #63 part rule retired from an unchanged body: every
+ * non-title `#` that used to be a chapter and is now a part. Run once per idea
+ * by the metrics backfill, in the same deploy as the parser change, so the two
+ * live documents whose first chapter was a `#` keep a working URL.
+ */
+export async function syncPartMigrationRedirects(env: Env, ideaId: string, body: string, title: string) {
+  const plan = chapterRedirectPlan(body, body, title, title, { legacyPrevious: true });
+  await applyRedirectPlan(env, ideaId, plan);
+  return plan.upserts.length;
+}
+
 export async function syncChapterRedirects(
   env: Env,
   ideaId: string,
@@ -77,7 +102,10 @@ export async function syncChapterRedirects(
   nextTitle = previousTitle,
 ) {
   if (previousBody === nextBody && previousTitle === nextTitle) return;
-  const plan = chapterRedirectPlan(previousBody, nextBody, previousTitle, nextTitle);
+  await applyRedirectPlan(env, ideaId, chapterRedirectPlan(previousBody, nextBody, previousTitle, nextTitle));
+}
+
+async function applyRedirectPlan(env: Env, ideaId: string, plan: RedirectPlan) {
 
   for (const repoint of plan.repoints) {
     if (!repoint.fromIds.length) continue;
