@@ -684,3 +684,134 @@ describe("pairing codes survive the hibernation that made them necessary", () =>
     expect(await new SessionAuth(storage).pendingPairing()).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// #107: a pairing renews an identity; it can never hand one to another session.
+// ---------------------------------------------------------------------------
+
+describe("pairing cannot move one person's identity onto another's session (#107)", () => {
+  const ATTACKER = "identity-attacker";
+  const VICTIM = "identity-victim";
+  const asAccount = (userId: string): McpProps => ({
+    userId,
+    token: `${userId}-bearer`,
+    expiresAt: Math.floor(Date.now() / 1000) + 3600,
+  });
+
+  /** A person opening `/reauthorize[?code=…]` and signing in as `uid`. */
+  async function signInThroughBrowser(store: OAuthStore, uid: string, code?: string) {
+    const page = (await handleOAuthRoute(
+      new Request(`${ISSUER}/reauthorize${code ? `?code=${code}` : ""}`),
+      config(store),
+    ))!;
+    const html = await page.text();
+    const link = html.match(/href="([^"]*authorize\/continue[^"]*)"/)?.[1];
+    if (!link) return { page, html, callback: null };
+    const nonce = new URL(link).searchParams.get("nonce")!;
+    const handoff = await mintSession(uid, SIGNING_KEY, { ttlSeconds: 300 });
+    const callback = (await handleOAuthRoute(
+      new Request(`${ISSUER}/oauth/callback?nonce=${nonce}&fis_session=${handoff}`, {
+        headers: { Cookie: `fis_mcp_oauth_inflight=${nonce}` },
+      }),
+      config(store),
+    ))!;
+    return { page, html, callback, callbackHtml: await callback.text() };
+  }
+
+  it("refuses a victim's sign-in through a link the attacker's session started", async () => {
+    // The attack: start authenticate, send the authorization_url to someone
+    // else, and redeem whatever identity they sign in with.
+    const attacker = harness(asAccount(ATTACKER));
+    await attacker.ready;
+    const started = await attacker.call("authenticate", { force: true });
+    const code = String(started.pairing_code);
+
+    const victim = await signInThroughBrowser(attacker.store, VICTIM, code);
+
+    expect(victim.callback?.status).toBe(400);
+    expect(victim.callbackHtml).toContain("different account");
+    // Nothing was attached to the code, so there is nothing to redeem.
+    expect((await readPairing(attacker.store, code))?.status).toBe("pending");
+    const out = await attacker.call("complete_authentication");
+    expect(out.authenticated).toBe(false);
+    expect(attacker.auth.current().userId).toBe(ATTACKER);
+    expect(attacker.auth.current().token).toBe(`${ATTACKER}-bearer`);
+  });
+
+  it("refuses a code a victim minted on the no-code page and read back to the attacker", async () => {
+    // The same attack without a link: talk the victim into opening the bare
+    // reauthorize page and reading out the code it shows.
+    const attacker = harness(asAccount(ATTACKER));
+    await attacker.ready;
+    await signInThroughBrowser(attacker.store, VICTIM);
+    const code = [...attacker.store.data.keys()].find((key) => key.startsWith("pair:"))!.slice("pair:".length);
+    expect((await readPairing(attacker.store, code))?.uid).toBe(VICTIM);
+
+    const out = await attacker.call("complete_authentication", { pairing_code: code });
+
+    expect(String(out.error)).toContain("different account");
+    expect(attacker.auth.current().userId).toBe(ATTACKER);
+    expect(attacker.auth.current().token).toBe(`${ATTACKER}-bearer`);
+    // Burned: the victim's credential does not wait around for another try.
+    expect(await readPairing(attacker.store, code)).toBeNull();
+  });
+
+  it("still renews the session's own account end to end", async () => {
+    const h = harness(asAccount(UID));
+    await h.ready;
+    const started = await h.call("authenticate", { force: true });
+
+    const browser = await signInThroughBrowser(h.store, UID, String(started.pairing_code));
+    const out = await h.call("complete_authentication");
+
+    expect(browser.callback?.status).toBe(200);
+    expect(out.authenticated).toBe(true);
+    expect(out.user_id).toBe(UID);
+    expect(h.auth.current().token).not.toBe(`${UID}-bearer`);
+    expect(await verifySession(String(h.auth.current().token), SIGNING_KEY)).toMatchObject({ uid: UID });
+  });
+
+  it("records the asking session's identity on the pairing", async () => {
+    const h = harness(asAccount(UID));
+    await h.ready;
+
+    const started = await h.call("authenticate", { force: true });
+
+    expect((await readPairing(h.store, String(started.pairing_code)))?.expectedUid).toBe(UID);
+  });
+
+  it("will not take a second sign-in for a link that has already been used", async () => {
+    const store = makeStore();
+    const code = await startPairing(store, UID);
+    await signInThroughBrowser(store, UID, code);
+
+    const second = await signInThroughBrowser(store, VICTIM, code);
+
+    expect(second.page.status).toBe(400);
+    expect(second.html).toContain("already been used");
+    expect((await readPairing(store, code))?.uid).toBe(UID);
+  });
+
+  it("tells the person the truth when their sign-in was discarded", async () => {
+    // Two callbacks raced for one code. The second used to see "You are signed
+    // back in" although its sign-in had been thrown away.
+    const store = makeStore();
+    const code = await startPairing(store);
+    expect(
+      await completePairing(store, code, { session: "first", uid: UID, expiresAt: Math.floor(Date.now() / 1000) + 60 }),
+    ).toBeNull();
+
+    expect(
+      await completePairing(store, code, { session: "second", uid: VICTIM, expiresAt: Math.floor(Date.now() / 1000) + 60 }),
+    ).toBe("used");
+    expect(await completePairing(store, "FIS-GONE-GONE-GONE", { session: "x", uid: UID, expiresAt: 0 })).toBe("expired");
+  });
+
+  it("no longer offers account switching through a pairing", async () => {
+    const h = harness();
+    const force = h.schemas.authenticate!.force!;
+
+    expect(force.description).toContain("same account");
+    expect(force.description).not.toContain("switch to a different account");
+  });
+});

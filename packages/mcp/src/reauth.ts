@@ -27,6 +27,15 @@
  * The code is the credential between steps 2 and 3, so it is generated from
  * `crypto.getRandomValues` (60 bits), single-use, and expires in fifteen
  * minutes whether or not anybody redeems it.
+ *
+ * A pairing RENEWS an identity; it never changes one (#107). A device-style
+ * code is phishable by construction: an attacker can start `authenticate`,
+ * send the `/reauthorize?code=…` link to someone else, and redeem whatever
+ * identity that person signs in with. So a pairing records the identity of the
+ * session that asked for it, the callback refuses a sign-in by any other
+ * account, and `complete_authentication` refuses to bind an identity that is
+ * not the session's own. Switching accounts is a reconnect through the MCP
+ * client's own OAuth flow, which is bound to the client by PKCE.
  */
 
 import type { OAuthStore } from "./oauth-provider.js";
@@ -55,6 +64,11 @@ const CODE_GROUP_LENGTH = 4;
 export interface PairingRecord {
   /** `pending` until a browser signs in against it, `ready` once one has. */
   status: "pending" | "ready";
+  /**
+   * Identity of the MCP session that started the pairing, when it had one.
+   * Only a sign-in by this same identity may complete it (#107).
+   */
+  expectedUid?: string;
   /** The FIS session minted for the identity that signed in. Only when ready. */
   session?: string;
   /** Stable identity id of whoever signed in. Only when ready. */
@@ -101,14 +115,31 @@ export function normalizePairingCode(raw: string | undefined | null): string | u
   return value.toUpperCase();
 }
 
-/** Open a pairing nobody has signed in against yet. Returns the code. */
-export async function startPairing(store: OAuthStore): Promise<string> {
+/**
+ * Open a pairing nobody has signed in against yet. Returns the code.
+ *
+ * `expectedUid` is the identity of the session asking — pass it whenever there
+ * is one. The no-code `/reauthorize` page has no session to ask on behalf of,
+ * so its pairings carry none, and the identity check happens at redemption.
+ */
+export async function startPairing(store: OAuthStore, expectedUid?: string): Promise<string> {
   const code = newPairingCode();
-  await store.put(pairingKey(code), JSON.stringify({ status: "pending" } satisfies PairingRecord), {
+  const record: PairingRecord = expectedUid ? { status: "pending", expectedUid } : { status: "pending" };
+  await store.put(pairingKey(code), JSON.stringify(record), {
     expirationTtl: PAIRING_TTL_SECONDS,
   });
   return code;
 }
+
+/**
+ * Why a sign-in could not be attached to a pairing.
+ *
+ * - `used` — another sign-in already completed it (first writer wins).
+ * - `wrong_account` — the person signed in as someone other than the
+ *   session that asked. This is the phishing case in #107.
+ * - `expired` — the code is unknown or has aged out.
+ */
+export type PairingRefusal = "used" | "wrong_account" | "expired";
 
 export async function readPairing(store: OAuthStore, code: string): Promise<PairingRecord | null> {
   const raw = await store.get(pairingKey(code));
@@ -121,16 +152,23 @@ export async function readPairing(store: OAuthStore, code: string): Promise<Pair
   }
 }
 
-/** Attach a signed-in identity to a pairing. Called from the OAuth callback. */
+/**
+ * Attach a signed-in identity to a pairing. Called from the OAuth callback.
+ *
+ * Returns null when the identity was attached, or why it was not — so the page
+ * the person sees tells the truth. It used to say "you are signed back in"
+ * even when this sign-in had been discarded.
+ */
 export async function completePairing(
   store: OAuthStore,
   code: string,
   identity: { session: string; uid: string; expiresAt: number },
-): Promise<void> {
-  // First-writer-wins: if a pairing is already ready, don't let a second
-  // OAuth callback overwrite the first one. The first completion wins.
+): Promise<PairingRefusal | null> {
   const existing = await readPairing(store, code);
-  if (existing?.status === "ready") return;
+  if (!existing) return "expired";
+  // First-writer-wins: a second OAuth callback never overwrites the first.
+  if (existing.status === "ready") return "used";
+  if (existing.expectedUid && existing.expectedUid !== identity.uid) return "wrong_account";
 
   await store.put(
     pairingKey(code),
@@ -139,9 +177,11 @@ export async function completePairing(
       session: identity.session,
       uid: identity.uid,
       expiresAt: identity.expiresAt,
+      ...(existing.expectedUid ? { expectedUid: existing.expectedUid } : {}),
     } satisfies PairingRecord),
     { expirationTtl: PAIRING_TTL_SECONDS },
   );
+  return null;
 }
 
 /**

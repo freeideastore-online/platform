@@ -107,7 +107,7 @@ export function registerAuthTools(
         .boolean()
         .optional()
         .describe(
-          "Start a fresh sign-in even if this session is already authorized — use it to renew a credential that is about to expire, or to switch to a different account.",
+          "Start a fresh sign-in even if this session is already authorized — use it to renew a credential that is about to expire. The user must sign in with the same account; to switch accounts, reconnect the server from the MCP client.",
         ),
     },
     async (input) => {
@@ -127,7 +127,9 @@ export function registerAuthTools(
         });
       }
 
-      const code = await startPairing(controls.store);
+      // Bound to who this session already is: a pairing renews an identity and
+      // never swaps it, or the link becomes a phishing kit (#107).
+      const code = await startPairing(controls.store, props.userId);
       await controls.beginPairing(code);
       return result({
         authenticated: false,
@@ -196,6 +198,20 @@ export function registerAuthTools(
         return result({
           error: `Pairing code ${code} could not be redeemed. It may have been used already.`,
           next_step: "Call authenticate to start a new sign-in.",
+        });
+      }
+
+      // The code is burned either way: a pairing someone else signed into is
+      // not one to leave lying around for a second attempt.
+      const current = controls.current().userId;
+      if (current && current !== identity.uid) {
+        await controls.clearPairing();
+        console.warn("mcp auth: refused a pairing completed by a different account than this session's (#107)");
+        return result({
+          error:
+            "That sign-in belongs to a different account than this session. Re-authorization can only renew the account this session is already using.",
+          next_step:
+            "To use a different account, reconnect this MCP server from your MCP client. To renew this one, call authenticate and have the user sign in with the same account.",
         });
       }
 

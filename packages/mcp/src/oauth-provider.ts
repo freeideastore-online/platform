@@ -23,7 +23,7 @@ import {
   authProvider,
   authStartRedirect,
 } from "./oauth-pages.js";
-import { completePairing, readPairing, reauthGuidance, startPairing } from "./reauth.js";
+import { completePairing, readPairing, reauthGuidance, startPairing, type PairingRefusal } from "./reauth.js";
 
 export interface OAuthConfig {
   issuer: string;
@@ -272,6 +272,14 @@ async function reauthorize(request: Request, config: OAuthConfig): Promise<Respo
         "Re-authorization links are only valid for fifteen minutes. Ask your agent to call the authenticate tool again, or open this page without the code on the end.",
       );
     }
+    // A completed pairing has nothing left to sign into. Taking a second
+    // sign-in for it would only collect a credential nobody can use.
+    if (existing.status !== "pending") {
+      return authErrorPage(
+        "This sign-in link has already been used",
+        "Somebody has already signed in with this link. If that was not you, do not sign in again — ask your agent to call the authenticate tool for a fresh link.",
+      );
+    }
     pairingCode = supplied;
   } else {
     pairingCode = await startPairing(config.store);
@@ -283,6 +291,26 @@ async function reauthorize(request: Request, config: OAuthConfig): Promise<Respo
   });
   return authConfirmPage(config, nonce, null, "reauthorize");
 }
+
+/**
+ * What the person who just signed in is told when their sign-in was not
+ * attached to the pairing (#107). Each one is the truth about where their
+ * credential went — nowhere.
+ */
+const PAIRING_REFUSAL_PAGE: Record<PairingRefusal, { title: string; body: string }> = {
+  wrong_account: {
+    title: "This link is for a different account",
+    body: "The agent session that made this link is signed in as another FreeIdeaStore account, and re-authorizing can only renew that same account. Your sign-in was not passed on. If you did not ask an agent of your own to sign in, someone may have sent you this link to get access to your account.",
+  },
+  used: {
+    title: "This sign-in link has already been used",
+    body: "Somebody already signed in with this link, so your sign-in was not passed on. Ask your agent to call the authenticate tool for a fresh link.",
+  },
+  expired: {
+    title: "This sign-in link has expired",
+    body: "Re-authorization links are only valid for fifteen minutes, so your sign-in was not passed on. Ask your agent to call the authenticate tool again.",
+  },
+};
 
 /** What to tell the user for each way a handed-back session can fail to verify. */
 const SESSION_FAILURE_ADVICE: Record<SessionFailure, string> = {
@@ -371,11 +399,15 @@ async function oauthCallback(request: Request, config: OAuthConfig): Promise<Res
     const session = await mintSession(check.payload.uid, config.sessionSigningKey, {
       ttlSeconds: MCP_SESSION_TTL_SECONDS,
     });
-    await completePairing(config.store, authReq.pairing, {
+    const refused = await completePairing(config.store, authReq.pairing, {
       session,
       uid: check.payload.uid,
       expiresAt: Math.floor(Date.now() / 1000) + MCP_SESSION_TTL_SECONDS,
     });
+    if (refused) {
+      console.warn(`mcp reauthorize: pairing refused (${refused})`);
+      return authErrorPage(PAIRING_REFUSAL_PAGE[refused].title, PAIRING_REFUSAL_PAGE[refused].body);
+    }
     return authPairedPage(authReq.pairing);
   }
 
