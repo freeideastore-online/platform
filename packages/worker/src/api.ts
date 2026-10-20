@@ -17,6 +17,7 @@ import {
   updateIdeaSection,
   validatePublication,
 } from './api-idea-mutations';
+import { adminRefusal } from './admin';
 import { chapterRedirectTarget, syncPartMigrationRedirects } from './chapter-redirects';
 import { contributionCount, contributorByHandle, contributionsByIdea, contributionsByProfile, DERIVED_CHILDREN_LIMIT, derivedIdeas, ideaBody, ideaById, ideaByIdIncludeRemoved, ideasByProfile, listContributors, listIdeas } from './data';
 import { bad, readJsonBody, clampInt, FIELD_LIMITS, id, json, JSON_HEADERS, pathId, SECURITY_HEADERS, tooLong } from './http';
@@ -93,8 +94,8 @@ async function handleListIdeas(env: Env, url: URL) {
  * Idempotent: a second run rewrites the same numbers and the same redirects.
  */
 async function handleBackfillMetrics(request: Request, env: Env) {
-  const registered = await registeredProfileFor(request, env);
-  if (!registered) return json({ error: 'authentication required' }, { status: 401 });
+  const refused = await adminRefusal(request, env);
+  if (refused) return refused;
 
   const rows = await env.DB.prepare(
     `SELECT id, body_key, body_md, title
@@ -146,8 +147,8 @@ async function handleBackfillMetrics(request: Request, env: Env) {
 }
 
 async function handleBackfillContributionSources(request: Request, env: Env) {
-  const registered = await registeredProfileFor(request, env);
-  if (!registered) return json({ error: 'authentication required' }, { status: 401 });
+  const refused = await adminRefusal(request, env);
+  if (refused) return refused;
 
   const rows = await env.DB.prepare(
     'SELECT id, idea_id, source_url, body FROM contributions',

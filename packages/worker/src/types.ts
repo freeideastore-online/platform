@@ -16,6 +16,11 @@ export interface Env {
   /** Worker secrets, placed via `ops put fis <KEY>`. */
   GH_OAUTH_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /**
+   * Identity ids allowed to call `/api/admin/*`, comma- or whitespace-separated
+   * (#105). A Worker secret. Unset means no admins: the routes answer 403.
+   */
+  ADMIN_IDENTITY_IDS?: string;
 }
 
 export type IdeaRow = {

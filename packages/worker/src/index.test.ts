@@ -2694,7 +2694,8 @@ describe('FreeIdeaStore worker', () => {
   });
 
   it('backfills contribution source links without breaking the live create path', async () => {
-    const testEnv = env();
+    // The backfill is an admin route (#105).
+    const testEnv = { ...env(), ADMIN_IDENTITY_IDS: 'identity-serge' };
     const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
     const createIdeaResponse = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
@@ -4474,5 +4475,77 @@ describe('creating ideas with the same title at the same time (#106)', () => {
       }),
     );
     expect(bodies.sort()).toEqual(['## Snapshot\nThe first twin.', '## Snapshot\nThe second twin.']);
+  });
+});
+
+/**
+ * #105. The /api/admin/* backfills re-read every idea body or contribution and
+ * rewrite store-wide state. They only checked for a signed-in user, so anyone
+ * who signed in with GitHub could run them in a loop on the store's quota.
+ */
+describe('admin routes require an admin (#105)', () => {
+  const ROUTES = ['/api/admin/backfill-metrics', '/api/admin/backfill-contribution-sources'];
+
+  async function strangerBearer(db: FakeD1) {
+    db.identities.set('identity-stranger', {
+      id: 'identity-stranger',
+      provider: 'github',
+      provider_user_id: '777',
+      handle: 'stranger',
+      display_name: 'Stranger',
+      avatar_url: null,
+      created_at: '2026-06-11 03:00:00',
+      updated_at: '2026-06-11 03:00:00',
+    });
+    return `Bearer ${await mintSession('identity-stranger', TEST_SIGNING_KEY)}`;
+  }
+
+  const post = (testEnv: ReturnType<typeof env>, path: string, authorization?: string) =>
+    worker.fetch(
+      new Request(`https://fis.test${path}`, {
+        method: 'POST',
+        headers: authorization ? { Authorization: authorization } : {},
+      }),
+      testEnv,
+    );
+
+  it.each(ROUTES)('refuses a signed-in user who is not an admin: %s', async (path) => {
+    const db = new FakeD1();
+    const testEnv = { ...env(db), ADMIN_IDENTITY_IDS: 'identity-serge' };
+
+    const response = await post(testEnv, path, await strangerBearer(db));
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: string }).error).toBe('admin only');
+  });
+
+  it.each(ROUTES)('refuses everyone when no admin is configured: %s', async (path) => {
+    const response = await post(env(), path, SERGE_BEARER);
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: string }).error).toContain('ADMIN_IDENTITY_IDS is not configured');
+  });
+
+  it.each(ROUTES)('still asks an anonymous caller to sign in: %s', async (path) => {
+    const response = await post({ ...env(), ADMIN_IDENTITY_IDS: 'identity-serge' }, path);
+
+    expect(response.status).toBe(401);
+  });
+
+  it.each(ROUTES)('lets a listed admin through: %s', async (path) => {
+    const testEnv = { ...env(), ADMIN_IDENTITY_IDS: 'identity-other, identity-serge' };
+
+    const response = await post(testEnv, path, SERGE_BEARER);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('matches on identity id, never on a handle', async () => {
+    // A handle is a display name; listing one must not make its holder an admin.
+    const testEnv = { ...env(), ADMIN_IDENTITY_IDS: 'serge-the-dev' };
+
+    const response = await post(testEnv, ROUTES[0]!, SERGE_BEARER);
+
+    expect(response.status).toBe(403);
   });
 });

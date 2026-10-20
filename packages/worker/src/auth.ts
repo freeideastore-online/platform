@@ -206,6 +206,22 @@ export async function authUserFor(request: Request, env?: Env) {
   return identity ? authUserFromIdentity(identity) : null;
 }
 
+/**
+ * The identity id a request's session proves, when that identity still exists.
+ *
+ * `authUserFor()` answers with a handle and display name — what a page shows.
+ * Authorization decisions that must not hinge on a display name (#105) take
+ * the id the session was signed for instead.
+ */
+export async function authIdentityIdFor(request: Request, env?: Env) {
+  const token = authTokenFor(request);
+  if (!token || !env?.SESSION_SIGNING_KEY) return null;
+  const payload = await verifySession(token, env.SESSION_SIGNING_KEY);
+  if (!payload) return null;
+  const identity = await identityById(env, payload.uid);
+  return identity ? identity.id : null;
+}
+
 export function hasBearerAuth(request: Request) {
   return (request.headers.get('Authorization') || '').toLowerCase().startsWith('bearer ');
 }
