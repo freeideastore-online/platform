@@ -795,8 +795,6 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
   // summary corrected again (#33), which is the same trap section writes were
   // added to escape — the body scaled and the fields describing it did not.
   const bodyProvided = typeof bodyInput === 'string';
-  const previousBody = await ideaBody(env, idea);
-  const body = bodyProvided ? bodyInput.trim() : previousBody;
   const title = String(input.title || idea.title).trim();
   const summary = String(input.summary || idea.summary).trim();
   const preview = String(input.preview ?? idea.preview ?? '');
@@ -824,6 +822,28 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     ['risk', risk, FIELD_LIMITS.risk],
   ]);
   if (overflow) return bad(overflow);
+  // An optional precondition for the agent-level read-modify-write: read the
+  // document (and its body_version), edit it, publish it back. Without it a
+  // publish replaces whatever is there now — including a write that landed
+  // while the caller was editing (#106).
+  const baseVersion = input.base_version ?? input.baseVersion;
+  if (baseVersion !== undefined && !Number.isInteger(baseVersion)) {
+    return bad('base_version must be the integer body_version the document was read at');
+  }
+  const staleBase = (row: IdeaRow) =>
+    baseVersion !== undefined && baseVersion !== (row.body_version ?? 0)
+      ? json(
+          {
+            error: `the document has changed since base_version ${String(baseVersion)} — it is now at ${row.body_version ?? 0}; read it again and reapply your edit`,
+            conflict: true,
+            body_version: row.body_version ?? 0,
+          },
+          { status: 409 },
+        )
+      : null;
+
+  let previousBody = await ideaBody(env, idea);
+  const body = bodyProvided ? bodyInput.trim() : previousBody;
   // Only check the document budget when the document is actually being
   // written. When `body` is omitted this call is a metadata-only update and
   // `body` is just the stored document read back — measuring THAT against the
@@ -836,65 +856,56 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     const budget = documentOverflow(body, title);
     if (budget) return bad(budget);
   }
-  const metrics = documentMetrics(body, title);
-  // publish_idea_update replaces the whole document; keep what it replaced.
-  let revisionId: string | null = null;
-  if (bodyProvided && body !== previousBody) {
-    revisionId = await recordRevision(env, idea, previousBody, {
-      authorProfileId: profile.id,
-      source: 'update',
-      reason: String(input.reason || ''),
-    });
-  }
-  const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
-  let storedInR2 = false;
-  // A metadata-only update does not touch object storage at all. Rewriting the
-  // document with a copy of itself would be a no-op at best, and at worst — when
-  // the R2 object is missing and `ideaBody` has fallen back to a placeholder —
-  // would overwrite a document with that placeholder for the sake of editing a
-  // one-line summary.
-  if (bodyProvided && env.IDEA_BUCKET) {
-    try {
-      await env.IDEA_BUCKET.put(bodyKey, body, {
-        httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
-      });
-      storedInR2 = true;
-    } catch {
-      // Fall back to storing body inline in D1 if R2 write fails.
-    }
-  }
-  // Where the body lives, and how big it is, are the document's business. On a
-  // metadata-only update they carry over untouched rather than being recomputed.
-  const bodyColumns = bodyProvided
-    ? {
-        bodyMd: storedInR2 ? '' : body,
-        bodyKey: storedInR2 ? bodyKey : '',
-        words: metrics.words,
-        chapters: metrics.chapters,
-      }
-    : {
-        bodyMd: idea.body_md ?? '',
-        bodyKey: idea.body_key ?? '',
-        words: idea.body_words ?? metrics.words,
-        chapters: idea.chapter_count ?? metrics.chapters,
-      };
 
+  let revisionId: string | null = null;
+  let reindexed = true;
+  let version = idea.body_version ?? 0;
+  if (bodyProvided) {
+    // A publish replaces the whole document, so a lost race is re-run rather
+    // than refused: the write it raced is then superseded — and recorded as a
+    // revision — instead of overwritten unseen. With base_version it is refused.
+    let committed = false;
+    const outcome = await withFreshRetries(env, idea, async (latest) => {
+      const stale = staleBase(latest);
+      if (stale) return stale;
+      const current = await ideaBody(env, latest);
+      const result = await writeCanonicalBody(env, latest, body, title, {
+        previousBody: current,
+        authorProfileId: profile.id,
+        source: 'update',
+        reason: String(input.reason || ''),
+      });
+      if (!result) return null;
+      committed = true;
+      previousBody = current;
+      revisionId = result.revisionId;
+      reindexed = result.reindexed;
+      version = result.version;
+      return json({ ok: true });
+    });
+    if (!committed) return outcome;
+  } else {
+    const stale = staleBase(idea);
+    if (stale) return stale;
+  }
+  const metrics = documentMetrics(body, title);
+
+  // Metadata only. The body columns are the body write's business: this
+  // statement used to write back the body_md / body_key it read, so a
+  // metadata-only update could silently revert a body write that landed
+  // between its read and this UPDATE (#106).
   await env.DB.prepare(
     `UPDATE ideas
      SET title = ?,
          summary = ?,
          preview = ?,
          signal = ?,
-         body_md = ?,
-         body_key = ?,
          source_url = ?,
          visibility = ?,
          stage = ?,
          category = ?,
          next_step = ?,
          risk = ?,
-         body_words = ?,
-         chapter_count = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
   )
@@ -903,31 +914,32 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
       summary,
       preview,
       signal,
-      bodyColumns.bodyMd,
-      bodyColumns.bodyKey,
       sourceUrl,
       enumValue(input.visibility ?? idea.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage ?? idea.stage, IDEA_STAGES, idea.stage || 'raw'),
       category,
       nextStep,
       risk,
-      bodyColumns.words,
-      bodyColumns.chapters,
       idea.id,
     )
     .run();
-  if (bodyProvided || title !== idea.title) {
-    await syncChapterRedirects(env, idea.id, previousBody, body, idea.title, title);
+  // A body write already synced redirects and re-indexed under the new title.
+  // A metadata-only rename still has to.
+  if (!bodyProvided) {
+    if (title !== idea.title) {
+      await syncChapterRedirects(env, idea.id, previousBody, body, idea.title, title);
+    }
+    // `idea` is the row as read before the UPDATE: re-indexing with it stamped
+    // every search row with the old title, and parsed the body against the old
+    // title (the title-skip rule), until the next write happened to fix it.
+    reindexed = await reindexAfterWrite(env, { ...idea, title, summary }, body);
   }
 
-  // `idea` is the row as read before the UPDATE: re-indexing with it stamped
-  // every search row with the old title, and parsed the body against the old
-  // title (the title-skip rule), until the next write happened to fix it.
-  const reindexed = await reindexAfterWrite(env, { ...idea, title, summary }, body);
   return json({
     ok: true,
     idea: idea.id,
     revision: revisionId,
+    body_version: version,
     usage: documentUsage(body, metrics),
     url: `/ideas/${idea.id}/`,
     ...indexWarning(reindexed),

@@ -65,6 +65,8 @@ class FakeD1 {
    * test can land a competing write between a write's read and its commit.
    */
   beforeBodyCommit: ((ideaId: string) => void) | null = null;
+  /** The same, for the metadata UPDATE of a PATCH. */
+  beforeMetadataUpdate: ((ideaId: string) => void) | null = null;
   /** Body commits that won their version check. */
   bodyCommits = 0;
   /** Lets a test stand in for another writer, bypassing the API. */
@@ -734,23 +736,11 @@ class FakeD1 {
     if (sql.includes('UPDATE ideas') && sql.includes('SET title = ?')) {
       return new FakeStatement({
         run: (binds) => {
-          const [
-            title,
-            summary,
-            preview,
-            signal,
-            body_md,
-            body_key,
-            source_url,
-            visibility,
-            stage,
-            category,
-            next_step,
-            risk,
-            body_words,
-            chapter_count,
-            id,
-          ] = binds;
+          // Metadata only since #106: the body columns belong to commitBody.
+          const [title, summary, preview, signal, source_url, visibility, stage, category, next_step, risk, id] = binds;
+          const competing = this.beforeMetadataUpdate;
+          this.beforeMetadataUpdate = null;
+          competing?.(String(id));
           const idea = this.ideas.get(String(id));
           if (!idea) return;
           Object.assign(idea, {
@@ -758,16 +748,12 @@ class FakeD1 {
             summary,
             preview,
             signal,
-            body_md,
-            body_key,
             source_url,
             visibility,
             stage,
             category,
             next_step,
             risk,
-            body_words,
-            chapter_count,
             updated_at: '2026-06-11 01:00:00',
           });
         },
@@ -1397,7 +1383,11 @@ describe('FreeIdeaStore worker', () => {
         }),
         testEnv,
       );
-      return { bucket, testEnv };
+      // Each version of a body has an object of its own since #106, so the
+      // object to inspect is whichever one the row points at.
+      const seededRow = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+      const key = String(((await seededRow.json()) as { idea: { body_key: string } }).idea.body_key);
+      return { bucket, testEnv, key };
     }
 
     async function readIdea(testEnv: ReturnType<typeof env>) {
@@ -1409,7 +1399,7 @@ describe('FreeIdeaStore worker', () => {
     }
 
     it('leaves the document byte-identical when body is omitted', async () => {
-      const { bucket, testEnv } = await seeded();
+      const { bucket, testEnv, key } = await seeded();
       const revisionsBefore = testEnv.DB.revisions.length;
       const bucketDeletesBefore = bucket.deleted.length;
 
@@ -1435,8 +1425,8 @@ describe('FreeIdeaStore worker', () => {
       // And the document is untouched — not re-uploaded, not re-derived, not
       // re-measured, and not worth a revision of its own.
       expect(after.body).toBe(DOCUMENT);
-      expect(bucket.objects.get('ideas/serge-idea-lab/body.md')).toBe(DOCUMENT);
-      expect(after.idea.body_key).toBe('ideas/serge-idea-lab/body.md');
+      expect(bucket.objects.get(key)).toBe(DOCUMENT);
+      expect(after.idea.body_key).toBe(key);
       expect(testEnv.DB.revisions).toHaveLength(revisionsBefore);
       // Object storage is not touched at all — the body is not re-uploaded and
       // the rendered cache behind it is not invalidated for a metadata edit.
@@ -1460,7 +1450,7 @@ describe('FreeIdeaStore worker', () => {
 
       expect(response.status).toBe(200);
       expect(after.body).toBe(rewritten);
-      expect(bucket.objects.get('ideas/serge-idea-lab/body.md')).toBe(rewritten);
+      expect(bucket.objects.get(String(after.idea.body_key))).toBe(rewritten);
       expect(after.idea.summary).toBe('Rewritten in one call.');
       // The replaced document is still recoverable.
       expect(testEnv.DB.revisions.length).toBe(revisionsBefore + 1);
@@ -1470,7 +1460,7 @@ describe('FreeIdeaStore worker', () => {
       // `ideaBody` falls back to a generated stub when the R2 object cannot be
       // read. Writing that stub back because somebody edited a summary would
       // turn a retrievable outage into a destroyed document.
-      const { bucket, testEnv } = await seeded();
+      const { bucket, testEnv, key } = await seeded();
       bucket.objects.clear();
 
       const response = await worker.fetch(
@@ -1488,7 +1478,7 @@ describe('FreeIdeaStore worker', () => {
       expect(bucket.objects.size).toBe(0);
       // The pointer to the real document survives, so restoring the object
       // restores the idea.
-      expect(after.idea.body_key).toBe('ideas/serge-idea-lab/body.md');
+      expect(after.idea.body_key).toBe(key);
       expect(after.idea.body_md).toBe('');
     });
 
@@ -1496,7 +1486,7 @@ describe('FreeIdeaStore worker', () => {
       // A document already past the cap must still be describable. Otherwise the
       // cap, whose job is to stop oversized writes, silently doubles as a
       // permanent ban on correcting the sentence that describes the document.
-      const { bucket, testEnv } = await seeded();
+      const { bucket, testEnv, key } = await seeded();
       // Derived from the cap, never a literal. Pinned to 200_000 this fixture
       // stops being oversized the moment FIELD_LIMITS.body is raised — the
       // tiered-limits branch takes it to 1,000,000 — and the test would then
@@ -1504,7 +1494,7 @@ describe('FreeIdeaStore worker', () => {
       const chunk = 'over the cap ';
       const oversized = `${DOCUMENT}\n\n${chunk.repeat(Math.ceil(FIELD_LIMITS.body / chunk.length) + 1)}`;
       expect(oversized.length).toBeGreaterThan(FIELD_LIMITS.body);
-      bucket.objects.set('ideas/serge-idea-lab/body.md', oversized);
+      bucket.objects.set(key, oversized);
 
       const response = await worker.fetch(
         new Request('https://fis.test/api/ideas/serge-idea-lab', {
@@ -3621,6 +3611,7 @@ describe('FreeIdeaStore worker', () => {
       ok: true,
       idea: 'serge-idea-lab',
       revision: expect.any(String),
+      body_version: expect.any(Number),
       url: '/ideas/serge-idea-lab/',
       usage: {
         chars: 83,
@@ -3667,7 +3658,9 @@ describe('FreeIdeaStore worker', () => {
       { length: FIELD_LIMITS.chapters + 1 },
       (_, i) => `## Chapter ${i}\nSome prose.`,
     ).join('\n\n');
-    bucket.objects.set('ideas/serge-idea-lab/body.md', overCap);
+    const storedRow = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const storedKey = String(((await storedRow.json()) as { idea: { body_key: string } }).idea.body_key);
+    bucket.objects.set(storedKey, overCap);
 
     const update = await worker.fetch(
       new Request('https://fis.test/api/ideas/serge-idea-lab', {
@@ -4274,5 +4267,89 @@ describe('concurrent writes to one idea (#106)', () => {
     expect(String(latest.body_key)).toMatch(/^ideas\/serge-idea-lab\/body\//);
     // One new body object, and no revision copy beside it.
     expect([...bucket.objects.keys()].length).toBe(before + 1);
+  });
+});
+
+describe('whole-document publishes and concurrent writes (#106)', () => {
+  const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+  const BASE = ['## Snapshot', 'Base snapshot.', '', '## Risk', 'Base risk.'].join('\n');
+
+  const patch = (testEnv: ReturnType<typeof env>, payload: Record<string, unknown>) =>
+    worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', { method: 'PATCH', headers, body: JSON.stringify(payload) }),
+      testEnv,
+    );
+
+  async function read(testEnv: ReturnType<typeof env>) {
+    const response = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    return (await response.json()) as { idea: { body_version: number; summary: string }; body: string };
+  }
+
+  it('does not revert a body write that lands during a metadata-only update', async () => {
+    // The metadata UPDATE used to write back the body_md / body_key it read,
+    // so a summary edit could silently undo a section write made meanwhile.
+    const testEnv = env();
+    await patch(testEnv, { body: BASE });
+    const landed = `${BASE}\n\nWritten while the summary was being edited.`;
+    testEnv.DB.beforeMetadataUpdate = (ideaId) => testEnv.DB.competingWrite(ideaId, landed);
+
+    const response = await patch(testEnv, { summary: 'A corrected one-line summary.' });
+    const after = await read(testEnv);
+
+    expect(response.status).toBe(200);
+    expect(after.idea.summary).toBe('A corrected one-line summary.');
+    expect(after.body).toBe(landed);
+  });
+
+  it('reports the body_version a document was read at', async () => {
+    const testEnv = env();
+    await patch(testEnv, { body: BASE });
+    const first = await read(testEnv);
+
+    const response = await patch(testEnv, { body: `${BASE}\n\nOne more line.`, base_version: first.idea.body_version });
+    const data = (await response.json()) as { body_version: number };
+
+    expect(response.status).toBe(200);
+    expect(data.body_version).toBe(first.idea.body_version + 1);
+    expect((await read(testEnv)).idea.body_version).toBe(first.idea.body_version + 1);
+  });
+
+  it('refuses a publish made against a stale base_version instead of overwriting', async () => {
+    const testEnv = env();
+    await patch(testEnv, { body: BASE });
+    const readAt = (await read(testEnv)).idea.body_version;
+    // Somebody else writes while the caller is editing its copy.
+    const theirs = `${BASE}\n\nTheir section write.`;
+    testEnv.DB.competingWrite('serge-idea-lab', theirs);
+
+    const response = await patch(testEnv, { body: `${BASE}\n\nMy rewrite.`, base_version: readAt });
+    const data = (await response.json()) as { conflict: boolean; body_version: number };
+
+    expect(response.status).toBe(409);
+    expect(data.conflict).toBe(true);
+    expect(data.body_version).toBe(readAt + 1);
+    expect((await read(testEnv)).body).toBe(theirs);
+  });
+
+  it('rejects a base_version that is not an integer', async () => {
+    const testEnv = env();
+    const response = await patch(testEnv, { body: BASE, base_version: '3' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('records the version a publish superseded when it lost the race', async () => {
+    // Without base_version a publish still replaces the document — but the
+    // write it raced is superseded and kept as a revision, never lost unseen.
+    const testEnv = env();
+    await patch(testEnv, { body: BASE });
+    const theirs = `${BASE}\n\nTheir write, landed mid-publish.`;
+    testEnv.DB.beforeBodyCommit = (ideaId) => testEnv.DB.competingWrite(ideaId, theirs);
+
+    const response = await patch(testEnv, { body: `${BASE}\n\nMy full rewrite.` });
+
+    expect(response.status).toBe(200);
+    expect((await read(testEnv)).body).toContain('My full rewrite.');
+    expect(testEnv.DB.revisions[0]?.body_md).toBe(theirs); // newest first
   });
 });
