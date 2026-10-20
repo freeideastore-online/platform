@@ -131,3 +131,67 @@ describe("hasIdentity", () => {
     expect(hasIdentity(CALLER)).toBe(true);
   });
 });
+
+/**
+ * #107. The worker hands every request's bearer identity to the session with
+ * setAuth(). That used to be a plain set(), so the credential
+ * complete_authentication had just renewed was replaced by the bearer's older
+ * one on the very next request.
+ */
+describe("acceptBearer", () => {
+  const now = () => Math.floor(Date.now() / 1000);
+  const bearer = (userId: string, ttl: number): McpProps => ({ userId, token: `${userId}-bearer`, expiresAt: now() + ttl });
+  const renewed: McpProps = { userId: "identity-1", token: "renewed-session-token", expiresAt: now() + 86_400 };
+
+  it("keeps a renewed credential for the same identity over the bearer's older one", async () => {
+    const auth = new SessionAuth(new FakeStorage());
+    await auth.set(renewed);
+
+    await auth.acceptBearer(bearer("identity-1", 600));
+
+    expect(auth.current()).toEqual(renewed);
+  });
+
+  it("keeps it across hibernation, when the bearer arrives before init()", async () => {
+    const storage = new FakeStorage();
+    await new SessionAuth(storage).set(renewed);
+
+    const woken = new SessionAuth(storage);
+    await woken.acceptBearer(bearer("identity-1", 600));
+
+    expect(woken.current()).toEqual(renewed);
+  });
+
+  it("lets the bearer decide who the session is: another identity always replaces it", async () => {
+    // A pairing can only renew the session's own identity, so a held identity
+    // that differs from the bearer's is never one the client asked for.
+    const auth = new SessionAuth(new FakeStorage());
+    await auth.set(renewed);
+    const other = bearer("identity-2", 600);
+
+    await auth.acceptBearer(other);
+
+    expect(auth.current()).toEqual(other);
+  });
+
+  it("takes a bearer that outlives the held credential", async () => {
+    const auth = new SessionAuth(new FakeStorage());
+    await auth.set(bearer("identity-1", 600));
+    const fresher = bearer("identity-1", 172_800);
+
+    await auth.acceptBearer(fresher);
+
+    expect(auth.current()).toEqual(fresher);
+  });
+
+  it("binds the bearer to a session that holds nothing yet", async () => {
+    const storage = new FakeStorage();
+    const auth = new SessionAuth(storage);
+    const first = bearer("identity-1", 600);
+
+    await auth.acceptBearer(first);
+
+    expect(auth.current()).toEqual(first);
+    expect(storage.data.get(AUTH_PROPS_KEY)).toEqual(first);
+  });
+});

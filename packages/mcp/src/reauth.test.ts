@@ -815,3 +815,23 @@ describe("pairing cannot move one person's identity onto another's session (#107
     expect(force.description).not.toContain("switch to a different account");
   });
 });
+
+describe("a renewal survives the next request's bearer (#107)", () => {
+  it("still writes with the renewed credential after the worker hands over the old bearer", async () => {
+    const stale: McpProps = { userId: UID, token: "old-bearer-session", expiresAt: Math.floor(Date.now() / 1000) + 300 };
+    const h = harness(stale);
+    await h.ready;
+    const started = await h.call("authenticate", { force: true });
+    await completePairing(h.store, String(started.pairing_code), {
+      session: "renewed-session",
+      uid: UID,
+      expiresAt: Math.floor(Date.now() / 1000) + MCP_SESSION_TTL_SECONDS,
+    });
+    await h.call("complete_authentication");
+
+    // What index.ts does on every subsequent request.
+    await h.auth.acceptBearer(stale);
+
+    expect(h.auth.current().token).toBe("renewed-session");
+  });
+});

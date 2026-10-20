@@ -102,6 +102,31 @@ export class SessionAuth {
   }
 
   /**
+   * Take the identity carried by the request's bearer token.
+   *
+   * The worker calls this on every request. It used to be a plain `set()`,
+   * which undid `complete_authentication` one request later: the renewed
+   * credential the pairing had just bound was replaced by the bearer's older
+   * one, so the session reported a fresh expiry and then wrote with the stale
+   * token (#107).
+   *
+   * The bearer decides WHO this session is — it is the client's own
+   * credential, and a pairing can only ever renew that same identity (see
+   * reauth.ts). So a bearer for any other identity always replaces what is
+   * held. What the bearer does not get to do is shorten the life of a credential
+   * held for its own identity: a same-identity credential that outlives the
+   * bearer's is kept.
+   */
+  async acceptBearer(bearer: McpProps): Promise<boolean> {
+    // On a wake this runs before init(), so read the stored copy first.
+    await this.rehydrate();
+    const held = this.props;
+    const sameIdentity = hasIdentity(held) && Boolean(held.userId) && held.userId === bearer.userId;
+    if (sameIdentity && (held.expiresAt ?? 0) > (bearer.expiresAt ?? 0)) return true;
+    return this.set(bearer);
+  }
+
+  /**
    * Restore identity after the Durable Object was reconstructed.
    *
    * A live in-memory identity always wins: on a wake the worker calls `setAuth`

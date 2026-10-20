@@ -58,9 +58,10 @@ export class FisMcp extends McpAgent<Env, unknown, McpProps> {
     return this.auth;
   }
 
+  /** Called by the worker with the identity on every request's bearer token. */
   async setAuth(props: McpProps): Promise<void> {
-    this.props = props;
-    await this.sessionAuth().set(props);
+    await this.sessionAuth().acceptBearer(props);
+    this.props = this.sessionAuth().current();
   }
 
   async oauthGet(key: string): Promise<string | null> {
