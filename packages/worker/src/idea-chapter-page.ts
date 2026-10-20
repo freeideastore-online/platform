@@ -1,5 +1,5 @@
 import { brandHead, brandLockup, brandCss } from './brand';
-import { chapterRedirectTarget } from './chapter-redirects';
+import { chapterRedirectTarget, partRuleRedirectTarget } from './chapter-redirects';
 import { CHAPTER_FILTER_SCRIPT, CHAPTER_RAIL_CSS, chapterRail } from './chapter-rail';
 import { derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
 import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
@@ -79,7 +79,9 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
   const chapters = visibleIdeaChapters(body, idea.title);
   let chapter = ideaChapterById(chapters, requestedChapterId);
   if (!chapter) {
-    const redirected = await chapterRedirectTarget(env, idea.id, requestedChapterId);
+    const redirected =
+      (await chapterRedirectTarget(env, idea.id, requestedChapterId)) ??
+      partRuleRedirectTarget(body, idea.title, requestedChapterId);
     if (redirected) {
       chapter = ideaChapterById(chapters, redirected);
       if (chapter) {

@@ -169,6 +169,20 @@ async function applyRedirectPlan(env: Env, ideaId: string, plan: RedirectPlan) {
     .run();
 }
 
+/**
+ * Where a chapter id the #63 part rule retired now lives, computed from the
+ * body rather than the redirect store.
+ *
+ * The store is only seeded by `POST /api/admin/backfill-metrics`, a manual
+ * step — and until someone runs it, the retired first-chapter URLs of the live
+ * documents 404 (#104). Deriving the answer from the unchanged body makes the
+ * redirect hold whether or not the backfill has run.
+ */
+export function partRuleRedirectTarget(body: string, title: string, requestedChapterId: string) {
+  const plan = chapterRedirectPlan(body, body, title, title, { legacyPrevious: true });
+  return plan.upserts.find((redirect) => redirect.oldId === requestedChapterId)?.chapterId ?? null;
+}
+
 export async function chapterRedirectTarget(env: Env, ideaId: string, requestedChapterId: string) {
   const row = await env.DB.prepare(
     `SELECT chapter_id

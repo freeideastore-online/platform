@@ -1914,6 +1914,27 @@ describe('FreeIdeaStore worker', () => {
     );
   });
 
+  it('301s a chapter URL the part rule retired even before the backfill runs (#104)', async () => {
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          body: ['# Market Research', 'Framing.', '', '## The core finding', filler(55), '', '## Tiers', filler(55), '', '## Verdict', filler(55)].join('\n'),
+        }),
+      }),
+      testEnv,
+    );
+    // Nothing in the redirect store: the write had no previous chapter of that id.
+    testEnv.DB.chapterRedirects.length = 0;
+
+    const page = await worker.fetch(new Request('https://fis.test/ideas/serge-idea-lab/market-research/'), testEnv);
+
+    expect(page.status).toBe(301);
+    expect(page.headers.get('location')).toBe('https://fis.test/ideas/serge-idea-lab/the-core-finding/');
+  });
+
   it('re-points stale chapter redirects when the same chapter is renamed again', async () => {
     const testEnv = env();
     const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
