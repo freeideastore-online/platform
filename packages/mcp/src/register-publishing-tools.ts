@@ -237,6 +237,9 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
     },
     async (input) => {
       const props = getProps();
+      // Every other write tool says this before calling the Worker; this one
+      // went through anonymously and came back as a bare 401/403 (#111).
+      if (!props.token) return text("Error promoting idea: authentication required. Connect through MCP OAuth first.");
       const res = await fisApi<Record<string, unknown>>(env, `/api/ideas/${encodeURIComponent(input.idea_id)}/promote`, {
         method: "POST",
         body: JSON.stringify({}),

@@ -117,7 +117,9 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         url: `${publicBase}${res.data.url}`,
         derived_from: res.data.parent,
         parent_url: `${publicBase}${res.data.parentUrl}`,
-        owner: input.contributor_handle || "fis-mcp",
+        // The Worker files the fork under the signed-in identity, whatever
+        // contributor_handle says; report that identity, not the input (#111).
+        owner_user_id: props.userId ?? null,
         note: "New idea forked from the parent. You own this derived idea — iterate on it with publish_idea_update. The parent page now links to it.",
       }, null, 2));
     },
@@ -193,7 +195,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         ok: true,
         idea: input.idea_id,
         kind: input.kind || "comment",
-        attribution: input.contributor_handle || "fis-mcp",
+        attributed_to_user_id: props.userId ?? null,
         note: "Contribution added. This records refinement history; it does not rewrite the canonical idea body.",
       }, null, 2));
     },
@@ -234,7 +236,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         ok: true,
         idea: input.idea_id,
         section: input.section,
-        attribution: input.contributor_handle || "fis-mcp",
+        attributed_to_user_id: props.userId ?? null,
         note: "Refinement proposal recorded as a contribution. A later admin/editor flow can merge it into the canonical body.",
       }, null, 2));
     },
@@ -266,7 +268,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         ok: true,
         idea: input.idea_id,
         type: input.type,
-        attribution: input.contributor_handle || "fis-mcp",
+        attributed_to_user_id: props.userId ?? null,
       }, null, 2));
     },
   );
