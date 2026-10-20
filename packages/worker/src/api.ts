@@ -74,6 +74,15 @@ async function handleMeActivity(request: Request, env: Env, url: URL) {
   });
 }
 
+/**
+ * The largest offset a paged list accepts. Offsets used to be clamped to
+ * 100000, so asking past it silently returned page 100000 again — a pager
+ * walking forward never saw the end, it saw a repeat (#111). Anything past the
+ * last row now simply returns an empty page, as SQL OFFSET does; the bound only
+ * keeps the value an ordinary integer.
+ */
+const MAX_PAGE_OFFSET = 1_000_000_000;
+
 async function handleListIdeas(env: Env, url: URL) {
   return json({
     ideas: await listIdeas(env, {
@@ -233,7 +242,7 @@ async function handleGetContributions(env: Env, ideaParam: string, url: URL) {
     return json({ contributions: await contributionsByIdea(env, ideaId) });
   }
   const limit = clampInt(limitParam, 20, 1, 200);
-  const offset = clampInt(url.searchParams.get('offset'), 0, 0, 100000);
+  const offset = clampInt(url.searchParams.get('offset'), 0, 0, MAX_PAGE_OFFSET);
   return json({
     contributions: await contributionsByIdea(env, ideaId, limit, offset),
     total: await contributionCount(env, ideaId),
@@ -257,7 +266,7 @@ async function handleGetDerived(env: Env, ideaParam: string, url: URL) {
   const idea = await ideaById(env, ideaId);
   if (!idea) return bad('idea not found', 404);
   const limit = clampInt(url.searchParams.get('limit'), DERIVED_CHILDREN_LIMIT, 1, 200);
-  const offset = clampInt(url.searchParams.get('offset'), 0, 0, 100000);
+  const offset = clampInt(url.searchParams.get('offset'), 0, 0, MAX_PAGE_OFFSET);
   const { children, total } = await derivedIdeas(env, idea.id, limit, offset);
   return json({
     idea: idea.id,

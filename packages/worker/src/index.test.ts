@@ -4688,3 +4688,22 @@ describe('removing an idea keeps its latest body (#110)', () => {
     expect(bucket.objects.get(key)).toBe(latest);
   });
 });
+
+describe('paged lists past their end (#111)', () => {
+  it('reports an offset beyond 100000 as asked, instead of clamping it to a repeat page', async () => {
+    const testEnv = env();
+    const contributions = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions?limit=10&offset=250000'),
+      testEnv,
+    );
+    const derived = await worker.fetch(new Request('https://fis.test/api/ideas/asx-filings-analyst/derived?offset=250000'), testEnv);
+    const c = (await contributions.json()) as { contributions: unknown[]; offset: number };
+    const d = (await derived.json()) as { children: unknown[]; offset: number };
+
+    expect([contributions.status, derived.status]).toEqual([200, 200]);
+    expect(c.offset).toBe(250000);
+    expect(c.contributions).toEqual([]);
+    expect(d.offset).toBe(250000);
+    expect(d.children).toEqual([]);
+  });
+});
