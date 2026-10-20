@@ -3,7 +3,7 @@ import { pathId } from './http';
 import { ideaChapterBody, ideaChapters, ideaParts, legacyFlatChapters, type IdeaChapter, type IdeaPart } from './markdown';
 import type { Env } from './types';
 
-export const CHAPTER_REDIRECT_LIMIT_PER_IDEA = 256;
+const CHAPTER_REDIRECT_LIMIT_PER_IDEA = 256;
 
 type RedirectRow = {
   chapter_id: string;

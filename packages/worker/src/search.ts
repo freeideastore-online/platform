@@ -2,7 +2,7 @@ import { runInBatches, type SizedStatement } from './d1';
 import { visibleIdeaChapters } from './markdown';
 import type { Env, IdeaRow } from './types';
 
-export type SearchHit = {
+type SearchHit = {
   idea_id: string;
   idea_title?: string;
   kind: string;

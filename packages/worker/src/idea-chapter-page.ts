@@ -36,7 +36,7 @@ type LinkedIdea = { id: string; title: string };
  * Both lists are capped by `derivedIdeas()`, so each states "N of M" rather
  * than dropping the tail in silence (#80).
  */
-export function relatedDocumentsNav(
+function relatedDocumentsNav(
   ideaId: string,
   parent: LinkedIdea | null,
   siblings: { children: LinkedIdea[]; total: number },

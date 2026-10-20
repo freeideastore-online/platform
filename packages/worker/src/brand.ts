@@ -9,7 +9,7 @@
  * Everything visual that says "this is FreeIdeaStore" belongs here.
  */
 
-export const BRAND = {
+const BRAND = {
   name: 'FreeIdeaStore',
   /** Used in <title> suffixes and anywhere the full name is too long. */
   short: 'FIS',

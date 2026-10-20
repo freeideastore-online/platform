@@ -56,7 +56,7 @@ export function normaliseKind(value: unknown) {
   return String(value || '').trim().toLowerCase() || COMMENT_KIND;
 }
 
-export function isResearchKind(value: unknown) {
+function isResearchKind(value: unknown) {
   return normaliseKind(value) !== COMMENT_KIND;
 }
 

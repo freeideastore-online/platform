@@ -2,7 +2,7 @@ import { id } from './http';
 import { documentMetrics } from './markdown';
 import type { Env, IdeaRow } from './types';
 
-export type RevisionRow = {
+type RevisionRow = {
   id: string;
   idea_id: string;
   body_md?: string;
@@ -107,14 +107,14 @@ export async function revisionBody(env: Env, revision: RevisionRow) {
   return revision.body_md || '';
 }
 
-export type DiffLine = { type: 'context' | 'added' | 'removed'; text: string };
+type DiffLine = { type: 'context' | 'added' | 'removed'; text: string };
 
 /**
  * Line diff over an LCS table, so unchanged lines are recognised as unchanged
  * rather than reported as a delete plus an insert. Documents here are thousands
  * of lines at most, which the quadratic table handles comfortably.
  */
-export function diffLines(before: string, after: string): DiffLine[] {
+function diffLines(before: string, after: string): DiffLine[] {
   const a = before.split(/\r?\n/);
   const b = after.split(/\r?\n/);
   // lengths[i][j] = LCS length of a[i..] and b[j..]

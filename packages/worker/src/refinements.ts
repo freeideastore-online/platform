@@ -5,7 +5,7 @@ export const REFINEMENT_KIND = 'refinement';
 /** Terminal states for a proposal. An empty status means still open. */
 export const RESOLUTION_VALUES = new Set(['applied', 'rejected', 'superseded']);
 
-export type RefinementRow = IdeaContributionRow & {
+type RefinementRow = IdeaContributionRow & {
   section: string;
   status: string;
   resolution: string;
@@ -26,7 +26,7 @@ export function proposalText(body: string) {
 }
 
 /** Target section from the column, falling back to the prose prefix. */
-export function proposalSection(row: { section?: string; body?: string }) {
+function proposalSection(row: { section?: string; body?: string }) {
   if (row.section) return row.section;
   const match = String(row.body || '').match(/^\s*Section:\s*(\S+)/m);
   return (match?.[1] ?? '').trim();

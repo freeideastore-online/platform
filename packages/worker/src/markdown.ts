@@ -153,10 +153,10 @@ export type IdeaPart = {
 
 export type SectionKind = 'part' | 'chapter';
 
-export const UNWRITTEN_CHAPTER_EXCERPT = 'This chapter is not yet written.';
+const UNWRITTEN_CHAPTER_EXCERPT = 'This chapter is not yet written.';
 const LEGACY_CHAPTER_LOADING = '(chapter loading)';
 
-export function isUnwrittenChapterBody(markdown: string) {
+function isUnwrittenChapterBody(markdown: string) {
   const trimmed = markdown.trim();
   if (!trimmed) return true;
   const unstyled = trimmed.replace(/^[*_]+|[*_]+$/g, '').trim().toLowerCase();
@@ -213,7 +213,7 @@ export const CHAPTER_SIZE = {
   ceilingWords: 4000,
 } as const;
 
-export type ChapterVerdict = 'merge' | 'thin' | 'ok' | 'split';
+type ChapterVerdict = 'merge' | 'thin' | 'ok' | 'split';
 
 /**
  * Per-chapter sizing, so the shape of a document is a fact rather than an
@@ -657,7 +657,7 @@ export function legacyFlatChapters(markdown: string, documentTitle = ''): IdeaCh
 }
 
 /** Consecutive chapters that share a part — the shape every rail renders. */
-export type ChapterGroup = { part: IdeaPart | null; chapters: IdeaChapter[] };
+type ChapterGroup = { part: IdeaPart | null; chapters: IdeaChapter[] };
 
 /**
  * Chapters grouped under their parts, in document order. Chapters before the

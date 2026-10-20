@@ -200,7 +200,7 @@ export const MAX_REQUEST_CHARS = FIELD_LIMITS.body * 2;
  */
 export const MAX_REQUEST_BYTES = MAX_REQUEST_CHARS * 4;
 
-export type JsonBodyResult =
+type JsonBodyResult =
   | { ok: true; data: Record<string, unknown> }
   | { ok: false; response: Response };
 
