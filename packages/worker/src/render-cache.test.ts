@@ -275,8 +275,8 @@ describe('render_key is gone from the write paths (#70)', () => {
     expect(update.binds).toHaveLength((update.sql.match(/= \?/g) || []).length);
   });
 
-  it('deleting an idea removes the body object and nothing else', async () => {
-    const { IDEA_BUCKET, env } = fakeEnv();
+  it('deleting an idea keeps the body and records it as a revision (#110)', async () => {
+    const { DB, IDEA_BUCKET, env } = fakeEnv();
     const headers = await signedIn();
     const response = await deleteIdea(
       post('https://fis.test/api/ideas/asx-filings-analyst/delete', { confirmTitle: IDEA.title }, headers),
@@ -285,7 +285,11 @@ describe('render_key is gone from the write paths (#70)', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(IDEA_BUCKET.deleted).toEqual(['ideas/asx-filings-analyst/body.md']);
+    // Removal is a soft delete: nothing is hard-deleted any more.
+    expect(IDEA_BUCKET.deleted).toEqual([]);
+    const revision = DB.only('INSERT INTO idea_revisions');
+    expect(revision.binds).toContain('remove');
+    expect(IDEA_BUCKET.written.some((key) => key.startsWith('ideas/asx-filings-analyst/revisions/'))).toBe(true);
   });
 
   it('no statement or object any write path touches names a render key', async () => {
@@ -332,7 +336,7 @@ describe('render_key is gone from the write paths (#70)', () => {
     // Revision snapshots are also R2 objects, so this is "nothing rendered",
     // not "nothing but the body".
     const keys = [...IDEA_BUCKET.written, ...IDEA_BUCKET.deleted];
-    expect(keys).toContain('ideas/asx-filings-analyst/body.md');
+    expect(keys.some((key) => key.startsWith('ideas/asx-filings-analyst/body/'))).toBe(true);
     expect(keys.filter((key) => key.includes('render') || key.endsWith('.html'))).toEqual([]);
   });
 });

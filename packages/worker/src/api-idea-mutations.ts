@@ -542,6 +542,20 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
     return bad('confirmation does not match idea title or id — send confirmTitle or confirm_title', 400);
   }
 
+  // Removal is a soft delete, and it now keeps the document too (#110). It used
+  // to hard-delete the current body object; revisions only ever hold states
+  // BEFORE a write, so the latest state then existed nowhere, and an idea
+  // restored from 'removed' came back as the placeholder body. The body is
+  // recorded as a 'remove' revision — pointing at its own immutable object
+  // where it has one (#106) — and the object is left in place, so restoring the
+  // status restores the exact document.
+  const current = await ideaBody(env, idea);
+  const revisionId = await recordRevision(env, idea, current, {
+    authorProfileId: profile.id,
+    source: 'remove',
+    reason: 'idea removed',
+    storedKey: isImmutableBodyKey(idea.id, idea.body_key) ? idea.body_key : undefined,
+  });
   await env.DB.prepare(
     `UPDATE ideas
      SET status = 'removed',
@@ -550,12 +564,8 @@ export async function deleteIdea(request: Request, env: Env, rawIdeaId: string) 
   )
     .bind(idea.id)
     .run();
-  if (env.IDEA_BUCKET) {
-    const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
-    await env.IDEA_BUCKET.delete(bodyKey).catch(() => undefined);
-  }
   await removeIdeaFromIndex(env, idea.id);
-  return json({ ok: true, idea: idea.id, status: 'removed' });
+  return json({ ok: true, idea: idea.id, status: 'removed', revision: revisionId });
 }
 
 /**

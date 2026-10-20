@@ -22,7 +22,9 @@ export type RevisionSource =
   | 'section-replace'
   | 'section-append'
   | 'section-structure'
-  | 'revert';
+  | 'revert'
+  /** The body an idea had when it was removed (#110). */
+  | 'remove';
 
 /**
  * Records the document being replaced, before it is overwritten.

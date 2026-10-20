@@ -3956,7 +3956,13 @@ describe('FreeIdeaStore worker', () => {
     const listData = (await list.json()) as { ideas: Array<{ id: string }> };
 
     expect(deleted.status).toBe(200);
-    await expect(deleted.json()).resolves.toEqual({ ok: true, idea: 'serge-idea-lab', status: 'removed' });
+    await expect(deleted.json()).resolves.toEqual({
+      ok: true,
+      idea: 'serge-idea-lab',
+      status: 'removed',
+      // The body it had is kept as a revision (#110).
+      revision: expect.any(String),
+    });
     expect(testEnv.DB.removed).toEqual(['serge-idea-lab']);
     expect(read.status).toBe(410);
     expect(listData.ideas.map((idea) => idea.id)).not.toContain('serge-idea-lab');
@@ -4641,5 +4647,44 @@ describe('creating and deriving ideas need a signed-in identity (#109)', () => {
     expect(overCreate.status).toBe(429);
     expect(overDerive.status).toBe(429);
     expect(((await overCreate.json()) as { error: string }).error).toContain(`at most ${IDEA_CREATE_LIMIT_PER_HOUR} an hour`);
+  });
+});
+
+/**
+ * #110. Deleting an idea hard-deleted its current body object without
+ * recording it, and revisions only hold states BEFORE a write — so the latest
+ * edits existed nowhere, and restoring the status brought back the placeholder.
+ */
+describe('removing an idea keeps its latest body (#110)', () => {
+  it('records the body as a revision and leaves its object in place', async () => {
+    const bucket = new FakeR2();
+    const testEnv = env(new FakeD1(), undefined, bucket);
+    const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+    const latest = '## Snapshot\nThe last thing written before removal.';
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', { method: 'PATCH', headers, body: JSON.stringify({ body: latest }) }),
+      testEnv,
+    );
+    const before = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const key = String(((await before.json()) as { idea: { body_key: string } }).idea.body_key);
+
+    const removed = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ confirm_title: 'Serge Idea Lab' }),
+      }),
+      testEnv,
+    );
+    const { revision } = (await removed.json()) as { revision: string };
+    const recorded = testEnv.DB.revisions.find((row) => row.id === revision);
+
+    expect(removed.status).toBe(200);
+    expect(recorded?.source).toBe('remove');
+    // The revision points at the body's own immutable object (#106)…
+    expect(recorded?.body_key).toBe(key);
+    // …which is no longer deleted, so the document survives removal intact.
+    expect(bucket.deleted).not.toContain(key);
+    expect(bucket.objects.get(key)).toBe(latest);
   });
 });
