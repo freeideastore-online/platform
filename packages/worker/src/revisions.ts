@@ -38,15 +38,26 @@ export async function recordRevision(
   env: Env,
   idea: IdeaRow,
   previousBody: string,
-  options: { authorProfileId?: string; source: RevisionSource; section?: string; reason?: string },
+  options: {
+    authorProfileId?: string;
+    source: RevisionSource;
+    section?: string;
+    reason?: string;
+    /**
+     * An immutable object that already holds exactly `previousBody` — the
+     * superseded version's own body object (see body-store.ts). The revision
+     * points at it instead of storing a second copy.
+     */
+    storedKey?: string;
+  },
 ): Promise<string | null> {
   if (!previousBody.trim()) return null;
   const revisionId = id('revision');
   const metrics = documentMetrics(previousBody, idea.title);
-  const bodyKey = `ideas/${idea.id}/revisions/${revisionId}.md`;
-  let storedInR2 = false;
+  const bodyKey = options.storedKey || `ideas/${idea.id}/revisions/${revisionId}.md`;
+  let storedInR2 = Boolean(options.storedKey);
   try {
-    if (env.IDEA_BUCKET) {
+    if (!storedInR2 && env.IDEA_BUCKET) {
       await env.IDEA_BUCKET.put(bodyKey, previousBody, {
         httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
       });

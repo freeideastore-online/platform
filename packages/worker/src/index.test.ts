@@ -60,6 +60,19 @@ class FakeD1 {
    * test can stand in for the D1 error or subrequest ceiling that #71 is about.
    */
   failOn: string | null = null;
+  /**
+   * Runs once, inside the next body commit, before its version check — so a
+   * test can land a competing write between a write's read and its commit.
+   */
+  beforeBodyCommit: ((ideaId: string) => void) | null = null;
+  /** Body commits that won their version check. */
+  bodyCommits = 0;
+  /** Lets a test stand in for another writer, bypassing the API. */
+  competingWrite(ideaId: string, bodyMd: string) {
+    const idea = this.ideas.get(ideaId);
+    if (!idea) throw new Error(`no idea ${ideaId}`);
+    Object.assign(idea, { body_md: bodyMd, body_key: '', body_version: Number(idea.body_version ?? 0) + 1 });
+  }
   /** Round trips spent on batched writes. */
   batches = 0;
   private readonly ideas = new Map<string, Record<string, unknown>>();
@@ -694,19 +707,27 @@ class FakeD1 {
         },
       });
     }
-    // Section writes update only the body columns (writeCanonicalBody).
-    if (sql.includes('UPDATE ideas') && sql.includes('SET body_md = ?')) {
+    // Body writes commit only against the version they read (commitBody, #106).
+    if (sql.includes('UPDATE ideas') && sql.includes('SET body_md = ?') && sql.includes('body_version = ?')) {
       return new FakeStatement({
-        run: ([body_md, body_key, body_words, chapter_count, id]) => {
+        run: ([body_md, body_key, body_words, chapter_count, id, expectedVersion]) => {
+          // A test can land a competing write in the gap between this write's
+          // read and its commit — the race #106 is about.
+          const competing = this.beforeBodyCommit;
+          this.beforeBodyCommit = null;
+          competing?.(String(id));
           const idea = this.ideas.get(String(id));
-          if (!idea) return;
+          if (!idea || Number(idea.body_version ?? 0) !== Number(expectedVersion)) return { meta: { changes: 0 } };
           Object.assign(idea, {
             body_md,
             body_key,
             body_words,
             chapter_count,
+            body_version: Number(expectedVersion) + 1,
             updated_at: '2026-06-11 02:00:00',
           });
+          this.bodyCommits += 1;
+          return { meta: { changes: 1 } };
         },
       });
     }
@@ -4130,5 +4151,128 @@ describe('branding', () => {
     const shapes = (svg: string) => (svg.match(/d="[^"]+"|cx="\d+"/g) || []).sort();
     // Same paths in both, so the tab icon and the header can never drift apart.
     expect(shapes(faviconSvg())).toEqual(shapes(brandMark()));
+  });
+});
+
+/**
+ * #106. Every canonical write is read-modify-write. With no version check, two
+ * writes that read the same body both committed and the second overwrote the
+ * first — and since each recorded the body it READ as its revision, the first
+ * write's content was in neither the document nor its history.
+ */
+describe('concurrent writes to one idea (#106)', () => {
+  const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+  const BASE = ['## Snapshot', 'Base snapshot.', '', '## Risk', 'Base risk.'].join('\n');
+
+  async function seeded(bucket?: FakeR2) {
+    const testEnv = env(new FakeD1(), undefined, bucket);
+    const seed = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', { method: 'PATCH', headers, body: JSON.stringify({ body: BASE }) }),
+      testEnv,
+    );
+    expect(seed.status).toBe(200);
+    return testEnv;
+  }
+
+  const append = (testEnv: ReturnType<typeof env>, section: string, content: string) =>
+    worker.fetch(
+      new Request(`https://fis.test/api/ideas/serge-idea-lab/sections/${section}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ content }),
+      }),
+      testEnv,
+    );
+
+  async function body(testEnv: ReturnType<typeof env>) {
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    return ((await read.json()) as { body: string }).body;
+  }
+
+  it('re-applies a write that lost the race instead of overwriting the winner', async () => {
+    const testEnv = await seeded();
+    const winner = BASE.replace('Base risk.', 'Base risk.\n\nThe competing write.');
+    testEnv.DB.beforeBodyCommit = (ideaId) => testEnv.DB.competingWrite(ideaId, winner);
+
+    const response = await append(testEnv, 'snapshot', 'The append that lost.');
+    const final = await body(testEnv);
+
+    expect(response.status).toBe(200);
+    expect(final).toContain('The competing write.');
+    expect(final).toContain('The append that lost.');
+  });
+
+  it('keeps both of two concurrent appends, and every superseded version in history', async () => {
+    const testEnv = await seeded();
+    const revisionsBefore = testEnv.DB.revisions.length;
+
+    const [first, second] = await Promise.all([
+      append(testEnv, 'snapshot', 'First parallel note.'),
+      append(testEnv, 'risk', 'Second parallel note.'),
+    ]);
+    const final = await body(testEnv);
+
+    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(final).toContain('First parallel note.');
+    expect(final).toContain('Second parallel note.');
+    // Two commits, two superseded versions: the base, and the base plus
+    // whichever note landed first. Before #106 both revisions were the base.
+    // The mock keeps revisions newest-first.
+    const recorded = testEnv.DB.revisions
+      .slice(0, testEnv.DB.revisions.length - revisionsBefore)
+      .map((row) => String(row.body_md));
+    expect(recorded).toHaveLength(2);
+    expect(new Set(recorded).size).toBe(2);
+    expect(recorded).toContain(BASE);
+  });
+
+  it('answers 409 rather than overwriting a document that keeps changing', async () => {
+    const testEnv = await seeded();
+    let competing = 0;
+    const rearm = () => {
+      testEnv.DB.beforeBodyCommit = (ideaId) => {
+        competing += 1;
+        testEnv.DB.competingWrite(ideaId, `${BASE}\n\nCompeting write ${competing}.`);
+        rearm();
+      };
+    };
+    rearm();
+
+    const response = await append(testEnv, 'snapshot', 'Never lands.');
+    testEnv.DB.beforeBodyCommit = null;
+    const final = await body(testEnv);
+
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { conflict: boolean }).conflict).toBe(true);
+    expect(final).not.toContain('Never lands.');
+    expect(final).toContain(`Competing write ${competing}.`);
+  });
+
+  it('gives each version its own object, and discards the loser’s', async () => {
+    const bucket = new FakeR2();
+    const testEnv = await seeded(bucket);
+    testEnv.DB.beforeBodyCommit = (ideaId) => testEnv.DB.competingWrite(ideaId, `${BASE}\n\nCompeting.`);
+
+    await append(testEnv, 'snapshot', 'Retried append.');
+
+    const bodyObjects = [...bucket.objects.keys()].filter((key) => key.startsWith('ideas/serge-idea-lab/body/'));
+    const discarded = bucket.deleted.filter((key) => key.startsWith('ideas/serge-idea-lab/body/'));
+    expect(discarded).toHaveLength(1);
+    expect(bodyObjects).not.toContain(discarded[0]);
+    expect(await body(testEnv)).toContain('Retried append.');
+  });
+
+  it('points a revision at the superseded version’s own object instead of copying it', async () => {
+    const bucket = new FakeR2();
+    const testEnv = await seeded(bucket);
+    await append(testEnv, 'snapshot', 'One.');
+    const before = [...bucket.objects.keys()].length;
+
+    await append(testEnv, 'snapshot', 'Two.');
+
+    const latest = testEnv.DB.revisions[0]!; // newest first
+    expect(String(latest.body_key)).toMatch(/^ideas\/serge-idea-lab\/body\//);
+    // One new body object, and no revision copy beside it.
+    expect([...bucket.objects.keys()].length).toBe(before + 1);
   });
 });

@@ -120,6 +120,9 @@ class RecordingD1 {
       handler.first = () => ({ ...PROFILE });
     } else if (sql.includes('SELECT * FROM identities WHERE id = ?')) {
       handler.first = () => ({ ...IDENTITY });
+    } else if (sql.includes('body_version = ?')) {
+      // The idea never moves under these tests, so every versioned commit wins.
+      handler.run = () => ({ meta: { changes: 1 } });
     }
     return new Statement(this, sql, handler);
   }
@@ -241,7 +244,8 @@ describe('render_key is gone from the write paths (#70)', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(IDEA_BUCKET.written).toContain('ideas/asx-filings-analyst/body.md');
+    // Each version gets an object of its own (#106), so nothing is overwritten.
+    expect(IDEA_BUCKET.written.some((key) => key.startsWith('ideas/asx-filings-analyst/body/'))).toBe(true);
     // The whole point of #70: three write paths used to spend an R2 delete here.
     expect(IDEA_BUCKET.deleted).toEqual([]);
     const update = DB.only('SET body_md = ?');

@@ -26,6 +26,8 @@ export type IdeaRow = {
   signal?: string;
   body_md?: string;
   body_key?: string;
+  /** Bumped by every body write; a write commits only against the version it read (#106). */
+  body_version?: number;
   source_url?: string;
   visibility?: string;
   stage: string;

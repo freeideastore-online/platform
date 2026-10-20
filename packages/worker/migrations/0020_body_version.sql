@@ -1,0 +1,14 @@
+-- Optimistic concurrency for idea bodies (#106).
+--
+-- Every canonical write is read-modify-write: read the body, edit it, write it
+-- back. With nothing to say which version the edit was made against, two
+-- concurrent writes both read version N and the second silently overwrote the
+-- first — and since each recorded the body it READ as the revision it
+-- replaced, the first write's content was in neither the document nor its
+-- history.
+--
+-- A write now swings the row to its new body only if body_version is still
+-- the version it read (UPDATE … WHERE body_version = ?), and bumps it. A write
+-- that loses the race is re-applied to the fresh body or refused, never
+-- written over the winner.
+ALTER TABLE ideas ADD COLUMN body_version INTEGER NOT NULL DEFAULT 0;

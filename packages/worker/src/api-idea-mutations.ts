@@ -1,4 +1,5 @@
 import { authUserFor, profileFor } from './auth';
+import { BODY_WRITE_ATTEMPTS, commitBody, discardStoredBody, isImmutableBodyKey, storeBody } from './body-store';
 import { syncChapterRedirects } from './chapter-redirects';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
 import { bad, enumValue, FIELD_LIMITS, json, pathId, readJsonBody, slug, tooLong } from './http';
@@ -616,8 +617,12 @@ function indexWarning(reindexed: boolean) {
 }
 
 /**
- * Persists a canonical body: R2 when bound, inline otherwise, and refreshes the
- * stored metrics the catalog reads.
+ * Persists a canonical body and refreshes the stored metrics the catalog reads
+ * — but only if `idea` is still the version the body was computed from.
+ *
+ * `idea` must be the row `revision.previousBody` was read from. Returns null,
+ * having changed nothing, when another write committed in between (#106); see
+ * `withFreshRetries()` for what callers do then.
  */
 async function writeCanonicalBody(
   env: Env,
@@ -626,8 +631,18 @@ async function writeCanonicalBody(
   title: string,
   revision: { previousBody: string; authorProfileId?: string; source: RevisionSource; section?: string; reason?: string },
 ) {
-  // Snapshot what is about to be replaced, before replacing it. An unchanged
-  // body is not a revision.
+  const metrics = documentMetrics(body, title);
+  const stored = await storeBody(env, idea.id, body);
+  const version = await commitBody(env, idea.id, idea.body_version ?? 0, stored, metrics);
+  if (version === null) {
+    await discardStoredBody(env, stored);
+    return null;
+  }
+  // Snapshot what was replaced only once it has been replaced. Before #106 the
+  // snapshot came first and recorded the body this write READ, so when two
+  // writes raced, both recorded the same version and the one in between —
+  // the losing write's content — was in neither the document nor its history.
+  // Now exactly the version this commit superseded is recorded, once.
   let revisionId: string | null = null;
   if (revision.previousBody !== body) {
     revisionId = await recordRevision(env, idea, revision.previousBody, {
@@ -635,35 +650,9 @@ async function writeCanonicalBody(
       source: revision.source,
       section: revision.section,
       reason: revision.reason,
+      storedKey: isImmutableBodyKey(idea.id, idea.body_key) ? idea.body_key : undefined,
     });
   }
-  const metrics = documentMetrics(body, title);
-  const bodyKey = idea.body_key || `ideas/${idea.id}/body.md`;
-  let storedInR2 = false;
-  if (env.IDEA_BUCKET) {
-    try {
-      await env.IDEA_BUCKET.put(bodyKey, body, {
-        httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
-      });
-      storedInR2 = true;
-    } catch {
-      // Fall back to storing the body inline in D1 if the R2 write fails.
-    }
-  }
-  await env.DB.prepare(
-    `UPDATE ideas
-     SET body_md = ?, body_key = ?, body_words = ?, chapter_count = ?,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-  )
-    .bind(
-      storedInR2 ? '' : body,
-      storedInR2 ? bodyKey : '',
-      metrics.words,
-      metrics.chapters,
-      idea.id,
-    )
-    .run();
   await syncChapterRedirects(env, idea.id, revision.previousBody, body, idea.title, title);
   // Re-index after the write so the registry and search reflect what is
   // published — but never at the cost of the write itself. See reindexAfterWrite.
@@ -676,7 +665,42 @@ async function writeCanonicalBody(
     warnings: subFloorChapterWarnings(revision.previousBody, body, title),
     revisionId,
     reindexed,
+    version,
   };
+}
+
+/**
+ * Runs a read-modify-write of an idea's body until it commits against the
+ * version it read (#106).
+ *
+ * `attempt` reads the body from the row it is handed and returns a Response
+ * once it is finished — written or refused — or null when its commit lost a
+ * race. It is then re-run against a fresh read, so the caller's intent (append
+ * this, replace that section, apply this proposal) is re-applied to the
+ * document as it now stands instead of being written over the write that won.
+ * A document that keeps changing under the write gets a 409, never a silent
+ * overwrite.
+ */
+async function withFreshRetries(
+  env: Env,
+  idea: IdeaRow,
+  attempt: (idea: IdeaRow) => Promise<Response | null>,
+): Promise<Response> {
+  let current = idea;
+  for (let tries = 0; tries < BODY_WRITE_ATTEMPTS; tries += 1) {
+    const response = await attempt(current);
+    if (response) return response;
+    const fresh = await ideaById(env, current.id);
+    if (!fresh) return bad('idea not found', 404);
+    current = fresh;
+  }
+  return json(
+    {
+      error: `the document changed ${BODY_WRITE_ATTEMPTS} times while this write was being applied — read it again and retry`,
+      conflict: true,
+    },
+    { status: 409 },
+  );
 }
 
 /**
@@ -698,7 +722,6 @@ export async function updateIdeaSection(
   if (!sectionId) return bad('invalid section id', 400);
   const owned = await ownedIdea(request, env, rawIdeaId);
   if (owned instanceof Response) return owned;
-  const idea = owned;
 
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
@@ -709,42 +732,45 @@ export async function updateIdeaSection(
   // has to weigh what is actually written, and the demotion adds characters.
   const content = demoteRequested(input) ? demoteHeadings(supplied) : supplied;
 
-  const current = await ideaBody(env, idea);
-  const next =
-    mode === 'append'
-      ? appendToIdeaSection(current, sectionId, content, idea.title)
-      : replaceIdeaSection(current, sectionId, content, idea.title);
-  if (next === null) {
-    return bad(
-      `unknown section "${sectionId}" — read /api/ideas/${idea.id}/sections for the current list`,
-      404,
-    );
-  }
+  return withFreshRetries(env, owned, async (idea) => {
+    const current = await ideaBody(env, idea);
+    const next =
+      mode === 'append'
+        ? appendToIdeaSection(current, sectionId, content, idea.title)
+        : replaceIdeaSection(current, sectionId, content, idea.title);
+    if (next === null) {
+      return bad(
+        `unknown section "${sectionId}" — read /api/ideas/${idea.id}/sections for the current list`,
+        404,
+      );
+    }
 
-  // `content` is what this write contributes; a replace also frees the section
-  // it overwrites, and passing both is what lets the error account for it.
-  const budget = documentOverflow(next, idea.title, { current, incoming: content });
-  if (budget) return bad(budget);
+    // `content` is what this write contributes; a replace also frees the section
+    // it overwrites, and passing both is what lets the error account for it.
+    const budget = documentOverflow(next, idea.title, { current, incoming: content });
+    if (budget) return bad(budget);
 
-  const result = await writeCanonicalBody(env, idea, next, idea.title, {
-    previousBody: current,
-    authorProfileId: idea.created_by,
-    source: mode === 'append' ? 'section-append' : 'section-replace',
-    section: sectionId,
-    reason: String(input.reason || ''),
-  });
-  return json({
-    ok: true,
-    idea: idea.id,
-    section: sectionId,
-    mode,
-    revision: result.revisionId,
-    words: result.words,
-    chapters: result.chapters,
-    usage: result.usage,
-    warnings: result.warnings,
-    url: `/ideas/${idea.id}/`,
-    ...indexWarning(result.reindexed),
+    const result = await writeCanonicalBody(env, idea, next, idea.title, {
+      previousBody: current,
+      authorProfileId: idea.created_by,
+      source: mode === 'append' ? 'section-append' : 'section-replace',
+      section: sectionId,
+      reason: String(input.reason || ''),
+    });
+    if (!result) return null;
+    return json({
+      ok: true,
+      idea: idea.id,
+      section: sectionId,
+      mode,
+      revision: result.revisionId,
+      words: result.words,
+      chapters: result.chapters,
+      usage: result.usage,
+      warnings: result.warnings,
+      url: `/ideas/${idea.id}/`,
+      ...indexWarning(result.reindexed),
+    });
   });
 }
 
@@ -961,31 +987,37 @@ export async function revertIdeaToRevision(
   const body = await revisionBody(env, revision);
   if (!body.trim()) return bad('revision has no stored body', 409);
 
-  const current = await ideaBody(env, idea);
-  if (current === body) {
-    return json({ ok: true, idea: idea.id, revision: revision.id, note: 'already at this revision' });
-  }
-  // A revision was valid under the rules of its day, not necessarily today's.
-  // Restoring it is a write like any other and owes the same budget answer.
-  const budget = documentOverflow(body, idea.title, { current });
-  if (budget) return bad(budget);
+  // Re-run on a lost race too: a revert sets the document to the revision
+  // whatever it holds now, but the write it raced has to be superseded — and
+  // so recorded as a revision — rather than overwritten unseen (#106).
+  return withFreshRetries(env, idea, async (latest) => {
+    const current = await ideaBody(env, latest);
+    if (current === body) {
+      return json({ ok: true, idea: latest.id, revision: revision.id, note: 'already at this revision' });
+    }
+    // A revision was valid under the rules of its day, not necessarily today's.
+    // Restoring it is a write like any other and owes the same budget answer.
+    const budget = documentOverflow(body, latest.title, { current });
+    if (budget) return bad(budget);
 
-  const metrics = await writeCanonicalBody(env, idea, body, idea.title, {
-    previousBody: current,
-    authorProfileId: idea.created_by,
-    source: 'revert',
-    reason: `revert to ${revision.id}`,
-  });
-  return json({
-    ok: true,
-    idea: idea.id,
-    revision: revision.id,
-    new_revision: metrics.revisionId,
-    words: metrics.words,
-    chapters: metrics.chapters,
-    warnings: metrics.warnings,
-    url: `/ideas/${idea.id}/`,
-    ...indexWarning(metrics.reindexed),
+    const metrics = await writeCanonicalBody(env, latest, body, latest.title, {
+      previousBody: current,
+      authorProfileId: latest.created_by,
+      source: 'revert',
+      reason: `revert to ${revision.id}`,
+    });
+    if (!metrics) return null;
+    return json({
+      ok: true,
+      idea: latest.id,
+      revision: revision.id,
+      new_revision: metrics.revisionId,
+      words: metrics.words,
+      chapters: metrics.chapters,
+      warnings: metrics.warnings,
+      url: `/ideas/${latest.id}/`,
+      ...indexWarning(metrics.reindexed),
+    });
   });
 }
 
@@ -1025,48 +1057,51 @@ export async function applyRefinement(
   const content = String(input.content || proposalText(String(refinement.body || ''))).trim();
   if (!content) return bad('nothing to apply: the proposal is empty');
 
-  const current = await ideaBody(env, idea);
-  const next =
-    mode === 'replace'
-      ? replaceIdeaSection(current, section, content, idea.title)
-      : appendToIdeaSection(current, section, content, idea.title);
-  if (next === null) {
-    return bad(
-      `unknown section "${section}" — read /api/ideas/${idea.id}/sections for the current list`,
-      404,
+  return withFreshRetries(env, idea, async (latest) => {
+    const current = await ideaBody(env, latest);
+    const next =
+      mode === 'replace'
+        ? replaceIdeaSection(current, section, content, latest.title)
+        : appendToIdeaSection(current, section, content, latest.title);
+    if (next === null) {
+      return bad(
+        `unknown section "${section}" — read /api/ideas/${latest.id}/sections for the current list`,
+        404,
+      );
+    }
+
+    const budget = documentOverflow(next, latest.title, { current, incoming: content });
+    if (budget) return bad(budget);
+
+    const result = await writeCanonicalBody(env, latest, next, latest.title, {
+      previousBody: current,
+      authorProfileId: latest.created_by,
+      source: mode === 'replace' ? 'section-replace' : 'section-append',
+      section,
+      reason: `applied refinement ${refinement.id}`,
+    });
+    if (!result) return null;
+    await markRefinementResolved(
+      env,
+      refinement.id,
+      'applied',
+      String(input.note || ''),
+      result.revisionId || '',
     );
-  }
 
-  const budget = documentOverflow(next, idea.title, { current, incoming: content });
-  if (budget) return bad(budget);
-
-  const result = await writeCanonicalBody(env, idea, next, idea.title, {
-    previousBody: current,
-    authorProfileId: idea.created_by,
-    source: mode === 'replace' ? 'section-replace' : 'section-append',
-    section,
-    reason: `applied refinement ${refinement.id}`,
-  });
-  await markRefinementResolved(
-    env,
-    refinement.id,
-    'applied',
-    String(input.note || ''),
-    result.revisionId || '',
-  );
-
-  return json({
-    ok: true,
-    idea: idea.id,
-    refinement: refinement.id,
-    section,
-    mode,
-    revision: result.revisionId,
-    words: result.words,
-    usage: result.usage,
-    warnings: result.warnings,
-    url: `/ideas/${idea.id}/`,
-    ...indexWarning(result.reindexed),
+    return json({
+      ok: true,
+      idea: latest.id,
+      refinement: refinement.id,
+      section,
+      mode,
+      revision: result.revisionId,
+      words: result.words,
+      usage: result.usage,
+      warnings: result.warnings,
+      url: `/ideas/${latest.id}/`,
+      ...indexWarning(result.reindexed),
+    });
   });
 }
 
@@ -1139,6 +1174,17 @@ async function writeStructuralEdit(
   if (!parsedBody.ok) return parsedBody.response;
   const input = parsedBody.data;
 
+  return withFreshRetries(env, idea, (latest) => applyStructuralEdit(env, latest, input, reason, compute, options));
+}
+
+async function applyStructuralEdit(
+  env: Env,
+  idea: IdeaRow,
+  input: Record<string, unknown>,
+  reason: string,
+  compute: (body: string, idea: IdeaRow, input: Record<string, unknown>) => string | null,
+  options: { reportsRegrouping?: (input: Record<string, unknown>) => boolean },
+): Promise<Response | null> {
   const current = await ideaBody(env, idea);
   const next = compute(current, idea, input);
   if (next === null) {
@@ -1163,6 +1209,7 @@ async function writeStructuralEdit(
     source: 'section-structure',
     reason,
   });
+  if (!result) return null;
   // The blast radius of a part edit: adding, removing, moving or re-levelling a
   // `#` silently re-parents every chapter after it, so the response names them
   // (#63). A pure rename is skipped — it changes the part's id, not what it
