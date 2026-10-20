@@ -3152,6 +3152,41 @@ describe('FreeIdeaStore worker', () => {
     expect(data.revisions).toHaveLength(0);
   });
 
+  it('refuses a revert that would put the document over its budget (#104)', async () => {
+    // Every other write path checks documentOverflow(); a revert skipped it, so
+    // a revision written under an older, looser rule could be restored past the
+    // chapter cap that no other write could reach.
+    const testEnv = env();
+    await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '## Snapshot\nA second version.' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/revisions'), testEnv);
+    const { revisions } = (await list.json()) as { revisions: Array<{ id: string }> };
+    const stored = testEnv.DB.revisions.find((row) => row.id === revisions[0]?.id);
+    if (!stored) throw new Error('revision not recorded');
+    stored.body_key = '';
+    stored.body_md = Array.from({ length: FIELD_LIMITS.chapters + 1 }, (_, i) => `## Chapter ${i + 1}\nBody.`).join('\n\n');
+
+    const revert = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/serge-idea-lab/revisions/${revisions[0]?.id}/revert`, {
+        method: 'POST',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      testEnv,
+    );
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+
+    expect(revert.status).toBe(400);
+    expect(((await revert.json()) as { error: string }).error).toContain(`the free limit is ${FIELD_LIMITS.chapters}`);
+    expect(((await read.json()) as { body: string }).body).toBe('## Snapshot\nA second version.');
+  });
+
   it('reverts to a revision, and the revert is itself undoable', async () => {
     const testEnv = env();
     const original = '## Snapshot\nOwned by the signed-in account.';

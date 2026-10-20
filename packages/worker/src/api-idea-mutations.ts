@@ -967,6 +967,10 @@ export async function revertIdeaToRevision(
   if (current === body) {
     return json({ ok: true, idea: idea.id, revision: revision.id, note: 'already at this revision' });
   }
+  // A revision was valid under the rules of its day, not necessarily today's.
+  // Restoring it is a write like any other and owes the same budget answer.
+  const budget = documentOverflow(body, idea.title, { current });
+  if (budget) return bad(budget);
 
   const metrics = await writeCanonicalBody(env, idea, body, idea.title, {
     previousBody: current,
