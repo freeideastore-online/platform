@@ -44,10 +44,17 @@ export class FisMcp extends McpAgent<Env, unknown, McpProps> {
    */
   private auth?: SessionAuth;
 
+  /**
+   * This Durable Object's storage. `McpAgent`'s type does not declare the
+   * `ctx` it is constructed with, so this is the one cast to reach it — the
+   * session identity and the OAuth records below all go through here.
+   */
+  private get storage(): AuthStorage & { delete(key: string): Promise<unknown> } {
+    return (this as unknown as { ctx: { storage: AuthStorage & { delete(key: string): Promise<unknown> } } }).ctx.storage;
+  }
+
   private sessionAuth(): SessionAuth {
-    this.auth ??= new SessionAuth(
-      (this as unknown as { ctx: { storage: AuthStorage } }).ctx.storage,
-    );
+    this.auth ??= new SessionAuth(this.storage);
     return this.auth;
   }
 
@@ -57,10 +64,10 @@ export class FisMcp extends McpAgent<Env, unknown, McpProps> {
   }
 
   async oauthGet(key: string): Promise<string | null> {
-    const stored = await (this as unknown as { ctx: { storage: { get<T>(k: string): Promise<T | undefined>; delete(k: string): Promise<void> } } }).ctx.storage.get<{ value: string; expiresAt?: number }>(`oauth:${key}`);
+    const stored = await this.storage.get<{ value: string; expiresAt?: number }>(`oauth:${key}`);
     if (!stored) return null;
     if (stored.expiresAt && stored.expiresAt <= Date.now()) {
-      await (this as unknown as { ctx: { storage: { delete(k: string): Promise<void> } } }).ctx.storage.delete(`oauth:${key}`);
+      await this.storage.delete(`oauth:${key}`);
       return null;
     }
     return stored.value;
@@ -68,11 +75,11 @@ export class FisMcp extends McpAgent<Env, unknown, McpProps> {
 
   async oauthPut(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> {
     const expiresAt = options?.expirationTtl ? Date.now() + options.expirationTtl * 1000 : undefined;
-    await (this as unknown as { ctx: { storage: { put(k: string, v: unknown): Promise<void> } } }).ctx.storage.put(`oauth:${key}`, { value, expiresAt });
+    await this.storage.put(`oauth:${key}`, { value, expiresAt });
   }
 
   async oauthDelete(key: string): Promise<void> {
-    await (this as unknown as { ctx: { storage: { delete(k: string): Promise<void> } } }).ctx.storage.delete(`oauth:${key}`);
+    await this.storage.delete(`oauth:${key}`);
   }
 
   async init() {
