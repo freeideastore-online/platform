@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fisApi } from "./fis-api.js";
+import { apiErrorMessage, fisApi } from "./fis-api.js";
 import { DOCUMENT_CHARS, DOCUMENT_LIMIT_NOTE } from "./limits.js";
 import { CONTRIBUTION_KINDS, REACTION_TYPES, STAGES, text, type Env, type McpProps } from "./mcp-types.js";
 
@@ -60,7 +60,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         token: props.token,
       });
       if (!res.ok || "error" in res.data) {
-        return text(`Error creating free idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("creating free idea", res));
       }
       return text(JSON.stringify({
         idea: res.data.idea,
@@ -107,7 +107,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error deriving idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("deriving idea", res));
       }
       return text(JSON.stringify({
         ok: true,
@@ -142,7 +142,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error listing derived ideas (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("listing derived ideas", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -185,7 +185,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         token: props.token,
       });
       if (!res.ok || "error" in res.data) {
-        return text(`Error adding contribution (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("adding contribution", res));
       }
       return text(JSON.stringify({
         ok: true,
@@ -226,7 +226,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         token: props.token,
       });
       if (!res.ok || "error" in res.data) {
-        return text(`Error proposing refinement (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("proposing refinement", res));
       }
       return text(JSON.stringify({
         ok: true,
@@ -258,7 +258,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
         token: props.token,
       });
       if (!res.ok || "error" in res.data) {
-        return text(`Error reacting to idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("reacting to idea", res));
       }
       return text(JSON.stringify({
         ok: true,

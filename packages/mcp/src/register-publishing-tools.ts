@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fisApi } from "./fis-api.js";
+import { apiErrorMessage, fisApi } from "./fis-api.js";
 import { DOCUMENT_CHARS, DOCUMENT_LIMIT_NOTE, SECTION_CHARS, SECTION_LIMIT_NOTE } from "./limits.js";
 import { STAGES, text, type Env, type McpProps } from "./mcp-types.js";
 
@@ -169,7 +169,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error publishing idea update (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("publishing idea update", res));
       }
       return text(JSON.stringify({
         ok: true,
@@ -204,7 +204,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error deleting idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("deleting idea", res));
       }
       return text(JSON.stringify({
         ok: true,
@@ -231,7 +231,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         token: props.token,
       });
       if (!res.ok || "error" in res.data) {
-        return text(`Error promoting idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("promoting idea", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -254,7 +254,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error listing sections (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("listing sections", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -293,7 +293,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error validating publication (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("validating publication", res));
       }
       return text(validationSummary(res.data));
     },
@@ -315,7 +315,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error reading chapter health (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("reading chapter health", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -335,7 +335,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error reading section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("reading section", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -365,7 +365,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error patching section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("patching section", res));
       }
       return text(sectionWriteResult(res.data));
     },
@@ -395,7 +395,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error appending to section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("appending to section", res));
       }
       return text(sectionWriteResult(res.data));
     },
@@ -416,7 +416,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error listing revisions (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("listing revisions", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -436,7 +436,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error reading revision (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("reading revision", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -456,7 +456,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error diffing revision (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("diffing revision", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -480,7 +480,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { method: "POST", body: JSON.stringify({}), token: props.token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error reverting idea (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("reverting idea", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -501,7 +501,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error listing refinements (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("listing refinements", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -538,7 +538,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error applying refinement (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("applying refinement", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -568,7 +568,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error resolving refinement (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("resolving refinement", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -609,7 +609,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error adding section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("adding section", res));
       }
       return text(sectionWriteResult(res.data, { verbose: input.verbose, newTitle: input.title }));
     },
@@ -641,7 +641,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error editing section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("editing section", res));
       }
       return text(sectionWriteResult(res.data, { verbose: input.verbose, newTitle: input.title }));
     },
@@ -665,7 +665,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { method: "POST", body: JSON.stringify({ into: input.into_section }), token: props.token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error merging sections (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("merging sections", res));
       }
       return text(sectionWriteResult(res.data, { verbose: input.verbose }));
     },
@@ -688,7 +688,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         { method: "DELETE", body: JSON.stringify({}), token: props.token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error deleting section (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("deleting section", res));
       }
       return text(sectionWriteResult(res.data, { verbose: input.verbose }));
     },

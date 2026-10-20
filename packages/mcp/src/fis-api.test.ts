@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fisApi } from "./fis-api.js";
+import { apiErrorMessage, fisApi } from "./fis-api.js";
 import type { Env } from "./mcp-types.js";
 
 const env = { FIS_API_BASE: "https://fis.test" } as unknown as Env;
@@ -33,5 +33,14 @@ describe("fisApi", () => {
   it("passes an object body through untouched", async () => {
     answer('{"ok":true}');
     await expect(fisApi<{ ok: boolean }>(env, "/api/x")).resolves.toEqual({ ok: true, status: 200, data: { ok: true } });
+  });
+});
+
+describe("apiErrorMessage", () => {
+  it("keeps the tools' error format", () => {
+    expect(apiErrorMessage("adding section", { status: 404, data: { error: 'unknown section "x"' } })).toBe(
+      'Error adding section (404): unknown section "x"',
+    );
+    expect(apiErrorMessage("listing sections", { status: 500, data: {} })).toBe("Error listing sections (500): unknown error");
   });
 });

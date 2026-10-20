@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fisApi } from "./fis-api.js";
+import { apiErrorMessage, fisApi } from "./fis-api.js";
 import { text, type Env, type McpProps } from "./mcp-types.js";
 
 /**
@@ -62,7 +62,7 @@ export function registerAccountTools(server: McpServer, env: Env, getProps: () =
         { token: props.token },
       );
       if (!ideaRes.ok || "error" in ideaRes.data) {
-        return text(`Error reading idea (${ideaRes.status}): ${"error" in ideaRes.data ? ideaRes.data.error : "unknown error"}`);
+        return text(apiErrorMessage("reading idea", ideaRes));
       }
 
       let contributions: unknown[] = [];
@@ -79,7 +79,7 @@ export function registerAccountTools(server: McpServer, env: Env, getProps: () =
           { token: props.token },
         );
         if (!contributionRes.ok || "error" in contributionRes.data) {
-          return text(`Error reading contributions (${contributionRes.status}): ${"error" in contributionRes.data ? contributionRes.data.error : "unknown error"}`);
+          return text(apiErrorMessage("reading contributions", contributionRes));
         }
         contributions = contributionRes.data.contributions;
         contributionPage = {
@@ -117,7 +117,7 @@ export function registerAccountTools(server: McpServer, env: Env, getProps: () =
         { token: props.token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error listing my ideas (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("listing my ideas", res));
       }
       return text(JSON.stringify({
         ...res.data,
@@ -156,7 +156,7 @@ export function registerAccountTools(server: McpServer, env: Env, getProps: () =
         { token: props.token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error listing my activity (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("listing my activity", res));
       }
       return text(JSON.stringify({
         ...res.data,

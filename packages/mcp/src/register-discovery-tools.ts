@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fisApi } from "./fis-api.js";
+import { apiErrorMessage, fisApi } from "./fis-api.js";
 import { text, type Env, type McpProps } from "./mcp-types.js";
 
 /**
@@ -41,7 +41,7 @@ export function registerDiscoveryTools(server: McpServer, env: Env, getProps: ()
         token: getProps().token,
       });
       if (!res.ok || "error" in res.data) {
-        return text(`Error searching ideas (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("searching ideas", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -60,7 +60,7 @@ export function registerDiscoveryTools(server: McpServer, env: Env, getProps: ()
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error listing idea sources (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("listing idea sources", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },
@@ -79,7 +79,7 @@ export function registerDiscoveryTools(server: McpServer, env: Env, getProps: ()
         { token: getProps().token },
       );
       if (!res.ok || "error" in res.data) {
-        return text(`Error reading source (${res.status}): ${"error" in res.data ? res.data.error : "unknown error"}`);
+        return text(apiErrorMessage("reading source", res));
       }
       return text(JSON.stringify(res.data, null, 2));
     },

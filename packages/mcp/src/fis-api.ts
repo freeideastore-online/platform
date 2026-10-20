@@ -68,6 +68,15 @@ export function dynamicIdeaBookPreview(input: {
   };
 }
 
+/**
+ * The text every tool returns when an API call fails:
+ * `Error <doing> (<status>): <reason>`. It was spelled out at each of the
+ * tools' 33 failure branches.
+ */
+export function apiErrorMessage(doing: string, res: { status: number; data: object }) {
+  return `Error ${doing} (${res.status}): ${"error" in res.data ? String(res.data.error) : "unknown error"}`;
+}
+
 export async function fisApi<T>(
   env: Env,
   path: string,
