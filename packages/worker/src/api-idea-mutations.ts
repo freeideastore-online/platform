@@ -669,7 +669,7 @@ async function writeCanonicalBody(
   await syncChapterRedirects(env, idea.id, revision.previousBody, body, idea.title, title);
   // Re-index after the write so the registry and search reflect what is
   // published — but never at the cost of the write itself. See reindexAfterWrite.
-  const reindexed = await reindexAfterWrite(env, idea, body);
+  const reindexed = await reindexAfterWrite(env, { ...idea, title }, body);
   // Every canonical write reports the budget from the metrics it already
   // computed, so no two write paths can disagree about what is left.
   return {
@@ -896,7 +896,10 @@ export async function updateIdea(request: Request, env: Env, rawIdeaId: string) 
     await syncChapterRedirects(env, idea.id, previousBody, body, idea.title, title);
   }
 
-  const reindexed = await reindexAfterWrite(env, idea, body);
+  // `idea` is the row as read before the UPDATE: re-indexing with it stamped
+  // every search row with the old title, and parsed the body against the old
+  // title (the title-skip rule), until the next write happened to fix it.
+  const reindexed = await reindexAfterWrite(env, { ...idea, title, summary }, body);
   return json({
     ok: true,
     idea: idea.id,

@@ -368,7 +368,7 @@ class FakeD1 {
       return new FakeStatement({
         first: ([id]) => {
           const idea = this.ideas.get(String(id));
-          return idea && (!sql.includes("i.status != 'removed'") || idea.status !== 'removed') ? idea : null;
+          return idea && (!sql.includes("i.status != 'removed'") || idea.status !== 'removed') ? { ...idea } : null; // a fresh row, as D1 returns — never the stored object
         },
       });
     }
@@ -1688,6 +1688,24 @@ describe('FreeIdeaStore worker', () => {
     const data = (await list.json()) as { refinements: Array<{ id: string; section: string; proposal: string }> };
     return data.refinements[0];
   }
+
+  it('re-indexes search under the new title when a write renames the idea (#104)', async () => {
+    const testEnv = env();
+    const update = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab', {
+        method: 'PATCH',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'Renamed Lab', body: ['## Snapshot', 'Body.', '', '## Risk', 'Body.'].join('\n') }),
+      }),
+      testEnv,
+    );
+    const titles = testEnv.DB.searchIndex
+      .filter((row) => row.idea_id === 'serge-idea-lab' && row.kind === 'section')
+      .map((row) => row.title);
+
+    expect(update.status).toBe(200);
+    expect(titles).toEqual(['Renamed Lab — Snapshot', 'Renamed Lab — Risk']);
+  });
 
   it('queues a refinement whose kind was sent in another case (#104)', async () => {
     // The kind was validated case-insensitively but stored as sent, while the
