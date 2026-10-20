@@ -1,3 +1,4 @@
+import { chunk, MAX_BOUND_PARAMS } from './d1';
 import { pathId } from './http';
 import { ideaChapters, ideaParts, legacyFlatChapters, type IdeaChapter, type IdeaPart } from './markdown';
 import type { Env } from './types';
@@ -131,29 +132,26 @@ async function applyRedirectPlan(env: Env, ideaId: string, plan: RedirectPlan) {
       .run();
   }
 
-  if (plan.liveAliases.length) {
-    const placeholders = plan.liveAliases.map(() => '?').join(', ');
-    await env.DB.prepare(
-      `DELETE FROM chapter_redirects
-       WHERE idea_id = ? AND old_id IN (${placeholders})`,
-    )
-      .bind(ideaId, ...plan.liveAliases)
-      .run();
-  }
-
-  if (plan.liveTargets.length) {
-    const placeholders = plan.liveTargets.map(() => '?').join(', ');
-    await env.DB.prepare(
-      `DELETE FROM chapter_redirects
-       WHERE idea_id = ? AND chapter_id NOT IN (${placeholders})`,
-    )
-      .bind(ideaId, ...plan.liveTargets)
-      .run();
-  } else {
-    await env.DB.prepare('DELETE FROM chapter_redirects WHERE idea_id = ?')
-      .bind(ideaId)
-      .run();
-  }
+  // D1 binds at most 100 parameters per statement, and every chapter can carry
+  // two aliases — a document at the 100-chapter cap has up to 200. Binding the
+  // whole list threw AFTER the body had committed, turning a successful write
+  // into a 500 that invites a duplicating retry (#104). So deletes go by id in
+  // chunks, and the "points at no live chapter" sweep — a NOT IN, which cannot
+  // be split across statements — is decided here rather than in SQL.
+  await deleteRedirects(env, ideaId, plan.liveAliases);
+  const live = new Set(plan.liveTargets);
+  const existing = await env.DB.prepare(
+    `SELECT old_id, chapter_id
+     FROM chapter_redirects
+     WHERE idea_id = ?`,
+  )
+    .bind(ideaId)
+    .all<{ old_id: string; chapter_id: string }>();
+  await deleteRedirects(
+    env,
+    ideaId,
+    (existing.results || []).filter((row) => !live.has(row.chapter_id)).map((row) => row.old_id),
+  );
 
   await env.DB.prepare(
     `DELETE FROM chapter_redirects
@@ -167,6 +165,17 @@ async function applyRedirectPlan(env: Env, ideaId: string, plan: RedirectPlan) {
   )
     .bind(ideaId, ideaId, CHAPTER_REDIRECT_LIMIT_PER_IDEA)
     .run();
+}
+
+async function deleteRedirects(env: Env, ideaId: string, oldIds: readonly string[]) {
+  for (const batch of chunk(oldIds, MAX_BOUND_PARAMS)) {
+    await env.DB.prepare(
+      `DELETE FROM chapter_redirects
+       WHERE idea_id = ? AND old_id IN (${batch.map(() => '?').join(', ')})`,
+    )
+      .bind(ideaId, ...batch)
+      .run();
+  }
 }
 
 /**

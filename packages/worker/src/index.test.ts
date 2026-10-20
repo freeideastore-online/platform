@@ -441,6 +441,11 @@ class FakeD1 {
         },
       });
     }
+    if (sql.includes('SELECT old_id, chapter_id') && sql.includes('FROM chapter_redirects')) {
+      return new FakeStatement({
+        all: ([ideaId]) => ({ results: this.chapterRedirects.filter((row) => row.idea_id === ideaId) }),
+      });
+    }
     if (sql.includes('SELECT chapter_id') && sql.includes('FROM chapter_redirects')) {
       return new FakeStatement({
         first: ([ideaId, oldId]) =>
