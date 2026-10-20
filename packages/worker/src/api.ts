@@ -25,7 +25,7 @@ import { chapterHealth, documentMetrics, ideaPreamble, ideaSectionList, readIdea
 import { CONFIDENCE_VALUES, normaliseKind, PROVENANCE_VALUES } from './idea-research';
 import { REFINEMENT_KIND } from './refinements';
 import { indexContribution, search } from './search';
-import { listIdeaSources, sourceCitations, syncContributionSources } from './sources';
+import { listIdeaSources, sourceCitations, syncContributionSources, syncContributionsSources } from './sources';
 import { diffSummary, listRevisions, revisionBody, revisionById } from './revisions';
 import type { Env } from './types';
 
@@ -153,20 +153,54 @@ async function handleBackfillMetrics(request: Request, env: Env) {
   return json({ updated, skipped, redirects, errors });
 }
 
-async function handleBackfillContributionSources(request: Request, env: Env) {
-
+/**
+ * Indexes the sources every contribution cites, one page per call (#111).
+ *
+ * It used to load every contribution and spend about three subrequests on
+ * each, with no batching and no per-row error handling: past a few hundred
+ * rows it hit the Worker subrequest limit and answered 500 halfway, with no
+ * word of where it stopped. Now it pages through contributions by id —
+ * `?after=<id>&limit=<n>` — batching each page per idea, and reports
+ * `next_after` to continue from and `done` when the table is exhausted. An
+ * idea whose batch fails is listed in `errors` and the rest of the page goes
+ * on. Idempotent: links are INSERT OR IGNORE.
+ */
+async function handleBackfillContributionSources(env: Env, url: URL) {
+  const limit = clampInt(url.searchParams.get('limit'), 100, 1, 500);
+  const after = url.searchParams.get('after') || '';
   const rows = await env.DB.prepare(
-    'SELECT id, idea_id, source_url, body FROM contributions',
-  ).all<BackfillContributionSourceRow>();
+    'SELECT id, idea_id, source_url, body FROM contributions WHERE id > ? ORDER BY id LIMIT ?',
+  )
+    .bind(after, limit)
+    .all<BackfillContributionSourceRow>();
+  const page = rows.results || [];
 
-  for (const row of rows.results) {
-    await syncContributionSources(env, row.idea_id, row.id, {
-      sourceUrl: row.source_url ?? undefined,
-      body: row.body ?? undefined,
-    });
+  const byIdea = new Map<string, BackfillContributionSourceRow[]>();
+  for (const row of page) byIdea.set(row.idea_id, [...(byIdea.get(row.idea_id) ?? []), row]);
+
+  let processed = 0;
+  const errors: string[] = [];
+  for (const [ideaId, contributions] of byIdea) {
+    try {
+      await syncContributionsSources(
+        env,
+        ideaId,
+        contributions.map((row) => ({ id: row.id, sourceUrl: row.source_url ?? undefined, body: row.body ?? undefined })),
+      );
+      processed += contributions.length;
+    } catch (error) {
+      errors.push(`${ideaId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  return json({ ok: true, processed: rows.results.length });
+  const done = page.length < limit;
+  return json({
+    ok: errors.length === 0,
+    processed,
+    errors,
+    next_after: done ? null : page[page.length - 1]?.id ?? null,
+    done,
+  });
 }
 
 /**
@@ -557,7 +591,7 @@ const routes: Route[] = [
   {
     pattern: /^\/api\/admin\/backfill-contribution-sources$/,
     methods: {
-      POST: (request, env) => handleBackfillContributionSources(request, env),
+      POST: (_request, env, url) => handleBackfillContributionSources(env, url),
     },
   },
   {

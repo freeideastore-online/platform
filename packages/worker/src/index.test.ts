@@ -939,8 +939,13 @@ class FakeD1 {
     }
     if (sql.includes('SELECT id, idea_id, source_url, body FROM contributions')) {
       return new FakeStatement({
-        all: () => ({
-          results: this.contributions.map(({ id, idea_id, source_url, body }) => ({
+        // Mirrors WHERE id > ? ORDER BY id LIMIT ?, so the backfill's paging is exercised.
+        all: ([after, limit]) => ({
+          results: [...this.contributions]
+            .filter((row) => String(row.id) > String(after ?? ''))
+            .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+            .slice(0, limit === undefined ? undefined : Number(limit))
+            .map(({ id, idea_id, source_url, body }) => ({
             id,
             idea_id,
             source_url: source_url ?? null,
@@ -4705,5 +4710,65 @@ describe('paged lists past their end (#111)', () => {
     expect(c.contributions).toEqual([]);
     expect(d.offset).toBe(250000);
     expect(d.children).toEqual([]);
+  });
+});
+
+describe('the contribution-source backfill pages instead of dying halfway (#111)', () => {
+  const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+
+  async function seeded(count: number) {
+    const testEnv = { ...env(), ADMIN_IDENTITY_IDS: 'identity-serge' };
+    for (let i = 0; i < count; i += 1) {
+      const response = await worker.fetch(
+        new Request('https://fis.test/api/ideas/asx-filings-analyst/contributions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ kind: 'evidence', body: `Finding ${i} from https://example.com/source-${i}` }),
+        }),
+        testEnv,
+      );
+      expect(response.status).toBe(201);
+    }
+    return testEnv;
+  }
+
+  const backfill = async (testEnv: ReturnType<typeof env>, query: string) => {
+    const response = await worker.fetch(
+      new Request(`https://fis.test/api/admin/backfill-contribution-sources?${query}`, { method: 'POST', headers }),
+      testEnv,
+    );
+    return { status: response.status, data: (await response.json()) as Record<string, unknown> };
+  };
+
+  it('works through the table a page at a time, saying where to continue', async () => {
+    const testEnv = await seeded(3);
+    const total = (testEnv.DB as unknown as { contributions: unknown[] }).contributions.length;
+
+    const pages: Array<Record<string, unknown>> = [];
+    let after = '';
+    for (let guard = 0; guard < 20; guard += 1) {
+      const { status, data } = await backfill(testEnv, `limit=2${after ? `&after=${encodeURIComponent(after)}` : ''}`);
+      expect(status).toBe(200);
+      pages.push(data);
+      if (data.done) break;
+      after = String(data.next_after);
+    }
+
+    expect(pages.reduce((sum, page) => sum + Number(page.processed), 0)).toBe(total);
+    expect(pages.at(-1)?.done).toBe(true);
+    expect(pages.at(-1)?.next_after).toBeNull();
+    expect(pages.slice(0, -1).every((page) => page.done === false && typeof page.next_after === 'string')).toBe(true);
+  });
+
+  it('reports a failing batch in errors instead of answering 500', async () => {
+    const testEnv = await seeded(1);
+    testEnv.DB.failOn = 'INSERT OR IGNORE INTO sources';
+
+    const { status, data } = await backfill(testEnv, 'limit=50');
+    testEnv.DB.failOn = null;
+
+    expect(status).toBe(200);
+    expect(data.ok).toBe(false);
+    expect((data.errors as string[]).length).toBeGreaterThan(0);
   });
 });

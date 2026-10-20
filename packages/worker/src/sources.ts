@@ -204,15 +204,37 @@ export async function syncContributionSources(
   contributionId: string,
   fields: { sourceUrl?: string; body?: string },
 ) {
-  const urls = new Set<string>();
-  const explicit = normaliseSourceUrl(fields.sourceUrl || '');
-  if (explicit) urls.add(explicit);
-  for (const url of extractUrls(fields.body || '')) urls.add(url);
-  const ids = await upsertSources(env, [...urls]);
+  await syncContributionsSources(env, ideaId, [{ id: contributionId, ...fields }]);
+}
+
+/**
+ * Indexes the sources a set of one idea's contributions cite, in one pass:
+ * every URL registered once and every link written in one batched run, rather
+ * than three round trips per contribution. The contribution-source backfill
+ * runs on this, a page at a time (#111).
+ */
+export async function syncContributionsSources(
+  env: Env,
+  ideaId: string,
+  contributions: ReadonlyArray<{ id: string; sourceUrl?: string; body?: string }>,
+) {
+  const cited = contributions.map((contribution) => {
+    const urls = new Set<string>();
+    const explicit = normaliseSourceUrl(contribution.sourceUrl || '');
+    if (explicit) urls.add(explicit);
+    for (const url of extractUrls(contribution.body || '')) urls.add(url);
+    return { id: contribution.id, urls: [...urls] };
+  });
+  const ids = await upsertSources(env, [...new Set(cited.flatMap((item) => item.urls))]);
   await linkSources(
     env,
     ideaId,
-    [...ids.values()].map((sourceId) => ({ sourceId, contributionId })),
+    cited.flatMap((item) =>
+      item.urls.flatMap((url) => {
+        const sourceId = ids.get(url);
+        return sourceId ? [{ sourceId, contributionId: item.id }] : [];
+      }),
+    ),
   );
 }
 
