@@ -288,3 +288,28 @@ describe('anonymous attribution cannot borrow a registered handle', () => {
     await expect(profileFor(anonymous('Serge-Ivo'), env)).resolves.toBe('profile-guest');
   });
 });
+
+describe('sign-in callback failures', () => {
+  it('redirects with provider_error when storing the identity throws (#104)', async () => {
+    // upsertIdentity() can throw — a D1 error, or no free handle for a login.
+    // That escaped handleAuth, which runs outside the router's try/catch, and
+    // the user got Cloudflare's 1101 page instead of the sign-in error page.
+    stubGitHub();
+    const env = fakeEnv();
+    const started = await start('provider=github', env);
+    const { header, state } = nonceCookie(started);
+    const db = env.DB as unknown as { prepare: (sql: string) => unknown };
+    const prepare = db.prepare.bind(db);
+    db.prepare = (sql: string) => {
+      if (sql.includes('identities')) throw new Error('D1_ERROR: unavailable');
+      return prepare(sql);
+    };
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const done = await callback(state, env, header);
+
+    expect(done?.status).toBe(303);
+    expect(done?.headers.get('location')).toContain('provider_error');
+    quiet.mockRestore();
+  });
+});

@@ -341,10 +341,18 @@ export async function handleAuth(request: Request, url: URL, env?: Env) {
     // way this is an ordinary outcome, not an error worth a stack trace.
     if (!code) return fail('denied');
 
-    const profile = await profileFromCode(nativeCallback, credentials, code, callbackUri(url, nativeCallback));
-    if (!profile) return fail('provider_error');
-
-    const identity = await upsertIdentity(env, profile);
+    // handleAuth runs before the router's try/catch, so a throw here — a D1
+    // error, or no free handle for a login — would reach the user as
+    // Cloudflare's error page rather than the sign-in error page (#104).
+    let identity: Awaited<ReturnType<typeof upsertIdentity>>;
+    try {
+      const profile = await profileFromCode(nativeCallback, credentials, code, callbackUri(url, nativeCallback));
+      if (!profile) return fail('provider_error');
+      identity = await upsertIdentity(env, profile);
+    } catch (error) {
+      console.error('sign-in callback failed', nativeCallback, String(error));
+      return fail('provider_error');
+    }
     const cookies = [
       cookie(SESSION_COOKIE_NAME, await mintSession(identity.id, env.SESSION_SIGNING_KEY), SESSION_TTL_SECONDS),
       clearCookie(NONCE_COOKIE_NAME),
