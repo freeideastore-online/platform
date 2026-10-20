@@ -1,4 +1,4 @@
-import { authUserFor, profileFor } from './auth';
+import { authUserFor, registeredProfileFor } from './auth';
 import { BODY_WRITE_ATTEMPTS, commitBody, discardStoredBody, isImmutableBodyKey, storeBody, type StoredBody } from './body-store';
 import { syncChapterRedirects } from './chapter-redirects';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
@@ -352,7 +352,42 @@ async function insertNewIdea(
   }
 }
 
+/** New ideas — created or derived — one identity may start per hour (#109). */
+export const IDEA_CREATE_LIMIT_PER_HOUR = 20;
+
+/**
+ * The profile a new idea is created under, or the response refusing it (#109).
+ *
+ * Creating and deriving used to need no sign-in and had no throttle, so one
+ * client could create 1 MB ideas in a loop, and a derive copied any parent's
+ * body for free — while contributions and reactions, far cheaper, were both
+ * signed-in and throttled. Both now need a signed-in identity, and each
+ * identity may start IDEA_CREATE_LIMIT_PER_HOUR a rolling hour.
+ *
+ * This also retires anonymous attribution: the `x-idea-handle` header only
+ * ever named the creator of an anonymous idea, and #42 existed because anyone
+ * could type someone else's handle into it.
+ */
+async function ideaCreatorFor(request: Request, env: Env): Promise<Response | string> {
+  const registered = await registeredProfileFor(request, env);
+  if (!registered) return json({ error: 'sign in required to create an idea' }, { status: 401 });
+  const recent = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM ideas WHERE created_by = ? AND created_at > datetime('now', '-1 hour')",
+  )
+    .bind(registered.profileId)
+    .first<{ n: number }>();
+  if ((recent?.n ?? 0) >= IDEA_CREATE_LIMIT_PER_HOUR) {
+    return json(
+      { error: `too many new ideas — at most ${IDEA_CREATE_LIMIT_PER_HOUR} an hour` },
+      { status: 429 },
+    );
+  }
+  return registered.profileId;
+}
+
 export async function createIdea(request: Request, env: Env) {
+  const creator = await ideaCreatorFor(request, env);
+  if (creator instanceof Response) return creator;
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
   const input = parsedBody.data;
@@ -382,7 +417,7 @@ export async function createIdea(request: Request, env: Env) {
   if (budget) return bad(budget);
 
   const metrics = documentMetrics(body, title);
-  const profileId = await profileFor(request, env);
+  const profileId = creator;
   const ideaId = await insertNewIdea(env, title, body, (ideaId, stored) =>
     env.DB.prepare(
     `INSERT INTO ideas
@@ -415,6 +450,8 @@ export async function createIdea(request: Request, env: Env) {
 export async function deriveIdea(request: Request, env: Env, rawParentId: string) {
   const parentId = pathId(rawParentId);
   if (!parentId) return bad('invalid idea id', 400);
+  const creator = await ideaCreatorFor(request, env);
+  if (creator instanceof Response) return creator;
   const parent = await ideaById(env, parentId);
   if (!parent) return bad('idea not found', 404);
 
@@ -427,7 +464,7 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   const summary = String(input.summary || parent.summary).trim();
   if (summary.length < 10) return bad('summary is required');
 
-  const profileId = await profileFor(request, env);
+  const profileId = creator;
   // Seed the fork with the parent body unless a non-empty override is supplied.
   // (`??` alone would keep an explicit empty string and make a blank fork.)
   const bodyOverride = typeof input.body === 'string' && input.body.trim() ? input.body : null;

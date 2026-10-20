@@ -19,7 +19,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
       risk: z.string().optional(),
       body: z.string().max(DOCUMENT_CHARS).optional().describe(`Optional markdown body for the idea page. ${DOCUMENT_LIMIT_NOTE}`),
       source_url: z.string().optional(),
-      contributor_handle: z.string().optional().describe("Optional profile handle to attribute the created idea through the current API fallback."),
+      contributor_handle: z.string().optional().describe("Ignored since #109: ideas are created by, and attributed to, the signed-in account."),
     },
     async (input) => {
       const props = getProps();
@@ -81,7 +81,7 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
       body: z.string().max(DOCUMENT_CHARS).optional().describe(`Optional replacement body. Defaults to a copy of the parent body. ${DOCUMENT_LIMIT_NOTE}`),
       stage: z.enum(STAGES).optional(),
       category: z.string().max(60).optional(),
-      contributor_handle: z.string().optional().describe("Optional profile handle to attribute the derived idea. This handle owns the fork."),
+      contributor_handle: z.string().optional().describe("Ignored since #109: the fork is created by, and owned by, the signed-in account."),
     },
     async (input) => {
       const props = getProps();

@@ -3,6 +3,7 @@ import worker from './index';
 import { FIELD_LIMITS, MAX_REQUEST_CHARS } from './http';
 import { RESEARCH_PAGE_SIZE, researchSection } from './idea-research';
 import { mintSession } from './session';
+import { IDEA_CREATE_LIMIT_PER_HOUR } from './api-idea-mutations';
 
 /** The key `env()` signs and verifies sessions with; nothing real uses it. */
 const TEST_SIGNING_KEY = 'test-signing-key';
@@ -67,6 +68,8 @@ class FakeD1 {
   beforeBodyCommit: ((ideaId: string) => unknown) | null = null;
   /** The same, for the metadata UPDATE of a PATCH. */
   beforeMetadataUpdate: ((ideaId: string) => void) | null = null;
+  /** Ideas created during the test, for the create throttle (#109). */
+  readonly insertedIdeaIds = new Set<string>();
   /** Body commits that won their version check. */
   bodyCommits = 0;
   /** Lets a test stand in for another writer, bypassing the API. */
@@ -245,6 +248,17 @@ class FakeD1 {
       return new FakeStatement({
         first: ([handle]) =>
           [...this.identities.values()].some((row) => row.handle === handle) ? { 1: 1 } : null,
+      });
+    }
+    // The per-identity create throttle (#109): ideas inserted during this test
+    // are the recent ones; the seeded ones are not.
+    if (sql.includes('SELECT COUNT(*) AS n FROM ideas WHERE created_by = ?')) {
+      return new FakeStatement({
+        first: ([profileId]) => ({
+          n: [...this.ideas.values()].filter(
+            (idea) => idea.created_by === profileId && this.insertedIdeaIds.has(String(idea.id)),
+          ).length,
+        }),
       });
     }
     if (sql.includes('SELECT COUNT(*) AS count FROM ideas')) {
@@ -683,6 +697,7 @@ class FakeD1 {
             throw new Error('D1_ERROR: UNIQUE constraint failed: ideas.id: SQLITE_CONSTRAINT');
           }
           this.inserts.push(binds);
+          this.insertedIdeaIds.add(String(binds[0]));
           const row: Record<string, unknown> = {};
           columns.forEach((column, index) => {
             row[column] = binds[index];
@@ -1271,7 +1286,7 @@ describe('FreeIdeaStore worker', () => {
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           title: 'MCP Book Idea',
           summary: 'A test idea using the canonical MCP dynamic book markdown shape.',
@@ -1319,7 +1334,7 @@ describe('FreeIdeaStore worker', () => {
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           title: 'R2 Backed Idea',
           summary: 'Body should be written to the bucket, not the D1 column.',
@@ -1344,7 +1359,7 @@ describe('FreeIdeaStore worker', () => {
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           title: 'Fallback Idea',
           summary: 'A failed bucket write must not lose the document.',
@@ -1370,7 +1385,7 @@ describe('FreeIdeaStore worker', () => {
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'Deep Idea', summary: 'A genuinely deep research document.', body }),
       }),
       testEnv,
@@ -2826,7 +2841,7 @@ describe('FreeIdeaStore worker', () => {
     const notJson = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: 'this is not json',
       }),
       env(),
@@ -2834,7 +2849,7 @@ describe('FreeIdeaStore worker', () => {
     const notObject = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: '["an","array"]',
       }),
       env(),
@@ -2851,7 +2866,7 @@ describe('FreeIdeaStore worker', () => {
     const response = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           title: 'Huge',
           summary: 'x'.repeat(20),
@@ -4039,7 +4054,7 @@ describe('FreeIdeaStore worker', () => {
     const create = await worker.fetch(
       new Request('https://fis.test/api/ideas', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'tester' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({
           title: 'Cheap Storage Test',
           summary: 'A test idea that proves cheap storage without static book files.',
@@ -4092,7 +4107,7 @@ describe('FreeIdeaStore worker', () => {
     const derive = await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/derive', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'forker' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'ASX Filings Analyst for Small Caps', summary: 'A small-cap-focused fork of the ASX filings research assistant.' }),
       }),
       testEnv,
@@ -4107,7 +4122,7 @@ describe('FreeIdeaStore worker', () => {
     expect(derived.parent).toBe('asx-filings-analyst');
     expect(derived.parentUrl).toBe('/ideas/asx-filings-analyst/');
     expect(readBody.idea.parent_id).toBe('asx-filings-analyst');
-    expect(readBody.idea.created_by).toBe('profile-forker');
+    expect(readBody.idea.created_by).toBe('profile-serge-the-dev');
     expect(readBody.body).toContain('Public reports and filings.');
   });
 
@@ -4116,7 +4131,7 @@ describe('FreeIdeaStore worker', () => {
     await worker.fetch(
       new Request('https://fis.test/api/ideas/asx-filings-analyst/derive', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'forker' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'ASX Filings Analyst for Small Caps', summary: 'A small-cap-focused fork of the ASX filings research assistant.' }),
       }),
       testEnv,
@@ -4137,7 +4152,7 @@ describe('FreeIdeaStore worker', () => {
     const derive = await worker.fetch(
       new Request('https://fis.test/api/ideas/no-such-idea-xyz/derive', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-idea-handle': 'forker' },
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'Fork of nothing', summary: 'This should fail because the parent does not exist.' }),
       }),
       env(),
@@ -4561,5 +4576,70 @@ describe('the admin gate sits in the router (#105)', () => {
     );
 
     expect(response.status).toBe(401);
+  });
+});
+
+/**
+ * #109. Creating and deriving needed no sign-in and had no throttle: one
+ * client could create 1 MB ideas in a loop, and a derive copied any parent's
+ * body for free.
+ */
+describe('creating and deriving ideas need a signed-in identity (#109)', () => {
+  const idea = (title: string) => ({ title, summary: 'A summary long enough to pass.', body: '## Snapshot\nBody.' });
+  const create = (testEnv: ReturnType<typeof env>, headers: Record<string, string>, title = 'Gated Idea') =>
+    worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify(idea(title)),
+      }),
+      testEnv,
+    );
+  const derive = (testEnv: ReturnType<typeof env>, headers: Record<string, string>) =>
+    worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/derive', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify({ title: 'A Fork Of The Analyst' }),
+      }),
+      testEnv,
+    );
+
+  it('refuses an anonymous create and an anonymous derive', async () => {
+    const testEnv = env();
+    // Same-origin, so this is the auth check answering, not the CSRF guard.
+    const anonymous = { Origin: 'https://fis.test', 'x-idea-handle': 'someone' };
+
+    const created = await create(testEnv, anonymous);
+    const derived = await derive(testEnv, anonymous);
+
+    expect(created.status).toBe(401);
+    expect(derived.status).toBe(401);
+    expect(testEnv.DB.inserts).toHaveLength(0);
+  });
+
+  it('files a signed-in create under the caller, whatever x-idea-handle says', async () => {
+    const testEnv = env();
+    const response = await create(testEnv, { Authorization: SERGE_BEARER, 'x-idea-handle': 'somebody-else' });
+    const { idea: id } = (await response.json()) as { idea: string };
+    const read = await worker.fetch(new Request(`https://fis.test/api/ideas/${id}`), testEnv);
+
+    expect(response.status).toBe(201);
+    expect(((await read.json()) as { idea: { created_by: string } }).idea.created_by).toBe('profile-serge-the-dev');
+  });
+
+  it(`stops one identity at ${IDEA_CREATE_LIMIT_PER_HOUR} new ideas an hour, created or derived`, async () => {
+    const testEnv = env();
+    const headers = { Authorization: SERGE_BEARER };
+    for (let i = 0; i < IDEA_CREATE_LIMIT_PER_HOUR; i += 1) {
+      expect((await create(testEnv, headers, `Burst Idea ${i}`)).status).toBe(201);
+    }
+
+    const overCreate = await create(testEnv, headers, 'One Too Many');
+    const overDerive = await derive(testEnv, headers);
+
+    expect(overCreate.status).toBe(429);
+    expect(overDerive.status).toBe(429);
+    expect(((await overCreate.json()) as { error: string }).error).toContain(`at most ${IDEA_CREATE_LIMIT_PER_HOUR} an hour`);
   });
 });

@@ -120,6 +120,8 @@ class RecordingD1 {
       handler.first = () => ({ ...PROFILE });
     } else if (sql.includes('SELECT * FROM identities WHERE id = ?')) {
       handler.first = () => ({ ...IDENTITY });
+    } else if (sql.includes('SELECT COUNT(*) AS n FROM ideas WHERE created_by = ?')) {
+      handler.first = () => ({ n: 0 });
     } else if (sql.includes('body_version = ?')) {
       // The idea never moves under these tests, so every versioned commit wins.
       handler.run = () => ({ meta: { changes: 1 } });
@@ -197,7 +199,7 @@ describe('render_key is gone from the write paths (#70)', () => {
         title: 'Cheap Idea Pages',
         summary: 'A document that should cost exactly one object to store.',
         body: '## Snapshot\nOne object, not two.\n',
-      }, { 'x-idea-handle': 'serge-the-dev' }),
+      }, await signedIn()),
       env,
     );
 
@@ -222,7 +224,7 @@ describe('render_key is gone from the write paths (#70)', () => {
       post('https://fis.test/api/ideas/asx-filings-analyst/derive', {
         title: 'ASX Filings Analyst for Small Caps',
         summary: 'A small-cap-focused fork of the ASX filings research assistant.',
-      }, { 'x-idea-handle': 'forker' }),
+      }, await signedIn()),
       env,
       'asx-filings-analyst',
     );
