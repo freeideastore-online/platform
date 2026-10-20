@@ -130,6 +130,14 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
       next_step: z.string().max(500).optional(),
       risk: z.string().max(500).optional(),
       source_url: z.string().max(500).optional(),
+      base_version: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe(
+          "The idea's body_version from the get_idea you edited (idea.body_version). When given, the publish is refused with a conflict if anyone has written the document since — instead of replacing their write. Strongly recommended whenever body is sent: re-read and reapply your edit on a conflict.",
+        ),
     },
     async (input) => {
       const props = getProps();
@@ -148,6 +156,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         nextStep: input.next_step,
         risk: input.risk,
         source_url: input.source_url,
+        base_version: input.base_version,
       };
       for (const [key, value] of Object.entries(payload)) {
         if (value === undefined) delete payload[key];
@@ -159,7 +168,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
           "Error publishing idea update: nothing to update. Supply body to replace the document, or at least one metadata field (summary, title, stage, category, preview, signal, next_step, risk, source_url) to change it.",
         );
       }
-      const res = await fisApi<{ ok: boolean; idea: string; url: string }>(
+      const res = await fisApi<{ ok: boolean; idea: string; url: string; body_version?: number }>(
         env,
         `/api/ideas/${encodeURIComponent(input.idea_id)}`,
         {
@@ -175,6 +184,7 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         ok: true,
         idea: res.data.idea,
         url: `${publicBase}${res.data.url}`,
+        body_version: res.data.body_version,
         note: input.body
           ? "Canonical public document updated. Use add_idea_contribution for evidence/comments that should stay in history instead of replacing the document."
           : "Metadata updated. The canonical document was not touched.",

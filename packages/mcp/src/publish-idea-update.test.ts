@@ -61,3 +61,40 @@ describe("publish_idea_update", () => {
     });
   });
 });
+
+/**
+ * #106. get_idea -> edit -> publish_idea_update is a read-modify-write across
+ * an agent's whole think time. base_version is how the publish says which
+ * version it edited, so a write made meanwhile is refused rather than replaced.
+ */
+describe("publish_idea_update base_version (#106)", () => {
+  it("forwards base_version with the body", async () => {
+    await call("publish_idea_update", { idea_id: "cellar-door-cycling", body: "## Snapshot\nRewritten in full.", base_version: 7 });
+
+    expect(JSON.parse(String(requests[0]!.init?.body))).toMatchObject({ base_version: 7 });
+  });
+
+  it("accepts only a non-negative integer", () => {
+    const field = schemas.publish_idea_update!.base_version!;
+    expect(field.safeParse(7).success).toBe(true);
+    expect(field.safeParse(-1).success).toBe(false);
+    expect(field.safeParse(1.5).success).toBe(false);
+  });
+
+  it("surfaces a version conflict as an error naming the current version", async () => {
+    vi.stubGlobal("fetch", async () =>
+      new Response(
+        JSON.stringify({
+          error: "the document has changed since base_version 7 — it is now at 8; read it again and reapply your edit",
+          conflict: true,
+          body_version: 8,
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      ));
+
+    const result = await handlers.publish_idea_update!({ idea_id: "cellar-door-cycling", body: "## Snapshot\nStale rewrite.", base_version: 7 });
+
+    expect(result.content[0]!.text).toContain("Error publishing idea update (409)");
+    expect(result.content[0]!.text).toContain("it is now at 8");
+  });
+});

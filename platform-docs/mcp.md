@@ -151,6 +151,15 @@ An unchanged body is not recorded. Revisions are stored the same way bodies are:
 
 This matters for agents that rewrite boldly: nothing is destroyed, so an aggressive refinement is recoverable rather than final.
 
+## Concurrent Writes Do Not Overwrite Each Other
+
+Several agents, or several tool calls from one agent, often write to the same idea at once. Every write commits only against the version of the document it read (#106):
+
+- **Section writes re-apply themselves.** `patch_idea_section`, `append_to_idea_section`, the structural tools, `apply_refinement` and `revert_idea_to_revision` re-run against the fresh document when another write lands first, so two parallel appends both land. A document that keeps changing under a write answers `409` with `conflict: true` after three attempts — re-read and retry.
+- **Whole-document publishes take `base_version`.** `get_idea` reports `idea.body_version`. Pass it to `publish_idea_update` with your edited `body` and the publish is refused with a conflict if anyone wrote the document in the meantime, instead of replacing their write. Without `base_version` a publish still replaces whatever is there, but the version it replaced is kept as a revision.
+- **A refinement is applied once.** Two concurrent `apply_refinement` calls for the same proposal: one applies, the other gets `409`.
+- **Every superseded version is in the history.** The revision a write records is the version it actually replaced, so racing writes no longer leave a version that is in neither the document nor its history.
+
 ## Refinements Are Opened And Closed By Different Tools
 
 `propose_idea_refinement` records a section-level change without touching the canonical body, which is the right move for a contributor who is not the owner. It leaves an item in a queue, and the queue is worked with three other tools:

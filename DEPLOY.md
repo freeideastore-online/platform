@@ -127,6 +127,8 @@ curl -X POST https://freeideastore.online/api/admin/backfill-metrics \
 
 It is idempotent, so re-running it is safe.
 
+**Bodies are versioned objects since #106.** Each version of an idea's body is written to an object of its own, `ideas/<id>/body/<uuid>.md`, and the row is swung to it only if `ideas.body_version` (migration `0020`) is still the version the write read. Nothing writes the old shared `ideas/<id>/body.md` any more: an idea keeps reading it until its first write after the deploy, after which the object is unreferenced and safe to delete. A superseded versioned object is not orphaned — the revision recording that version points at it instead of storing a copy. Migration `0020` must be applied before the worker that reads `body_version` ships, which is the order CI already uses.
+
 The note that previously lived here — that the Cloudflare token lacked R2 permissions — is obsolete; the token can create and write buckets.
 
 ## Cost Model
