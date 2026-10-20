@@ -44,7 +44,10 @@ export function registerSkillTools(server: McpServer, env: Env) {
     },
     async (input) => {
       const skill = IDEA_SKILLS.find((item) => item.id === input.skill_id);
-      return text(JSON.stringify(applyIdeaSkill(skill!, input.context, input.mode || "questions"), null, 2));
+      // skill_id is validated against IDEA_SKILL_IDS, so this cannot miss — but
+      // say so in a result rather than assert it away with `!`.
+      if (!skill) return text(`Error: unknown skill "${input.skill_id}"`);
+      return text(JSON.stringify(applyIdeaSkill(skill, input.context, input.mode || "questions"), null, 2));
     },
   );
 
