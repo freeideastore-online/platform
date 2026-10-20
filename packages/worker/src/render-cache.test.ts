@@ -203,7 +203,9 @@ describe('render_key is gone from the write paths (#70)', () => {
 
     expect(response.status).toBe(201);
     const { idea } = (await response.json()) as { idea: string };
-    expect(IDEA_BUCKET.written).toEqual([`ideas/${idea}/body.md`]);
+    // One body object, under a key of its own (#106), and nothing else.
+    expect(IDEA_BUCKET.written).toHaveLength(1);
+    expect(IDEA_BUCKET.written[0]?.startsWith(`ideas/${idea}/body/`)).toBe(true);
     expect(IDEA_BUCKET.deleted).toEqual([]);
 
     const insert = DB.only('INSERT INTO ideas');
@@ -227,7 +229,9 @@ describe('render_key is gone from the write paths (#70)', () => {
 
     expect(response.status).toBe(201);
     const { idea } = (await response.json()) as { idea: string };
-    expect(IDEA_BUCKET.written).toEqual([`ideas/${idea}/body.md`]);
+    // One body object, under a key of its own (#106), and nothing else.
+    expect(IDEA_BUCKET.written).toHaveLength(1);
+    expect(IDEA_BUCKET.written[0]?.startsWith(`ideas/${idea}/body/`)).toBe(true);
     expect(IDEA_BUCKET.deleted).toEqual([]);
     expect(DB.only('INSERT INTO ideas').sql).not.toMatch(/render_key/);
   });

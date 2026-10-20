@@ -678,6 +678,10 @@ class FakeD1 {
         .filter(Boolean);
       return new FakeStatement({
         run: (binds) => {
+          // The primary key, enforced the way D1 enforces it.
+          if (this.ideas.has(String(binds[0]))) {
+            throw new Error('D1_ERROR: UNIQUE constraint failed: ideas.id: SQLITE_CONSTRAINT');
+          }
           this.inserts.push(binds);
           const row: Record<string, unknown> = {};
           columns.forEach((column, index) => {
@@ -1326,7 +1330,8 @@ describe('FreeIdeaStore worker', () => {
     );
 
     expect(create.status).toBe(201);
-    expect(bucket.objects.get('ideas/r2-backed-idea/body.md')).toContain('Stored in the bucket.');
+    // Each version of a body is an object of its own (#106).
+    expect([...bucket.objects.entries()].find(([key]) => key.startsWith('ideas/r2-backed-idea/body/'))?.[1]).toContain('Stored in the bucket.');
 
     // The page renders from R2, not from body_md.
     const page = await worker.fetch(new Request('https://fis.test/ideas/r2-backed-idea/'), testEnv);
@@ -1372,7 +1377,7 @@ describe('FreeIdeaStore worker', () => {
     );
 
     expect(create.status).toBe(201);
-    expect(bucket.objects.get('ideas/deep-idea/body.md')?.length).toBe(body.length);
+    expect([...bucket.objects.entries()].find(([key]) => key.startsWith('ideas/deep-idea/body/'))?.[1]?.length).toBe(body.length);
 
     // Deep enough to earn chapter pages, and the catalog agrees.
     const chapter = await worker.fetch(new Request('https://fis.test/ideas/deep-idea/research/'), testEnv);
@@ -4424,5 +4429,50 @@ describe('whole-document publishes and concurrent writes (#106)', () => {
     expect(response.status).toBe(200);
     expect((await read(testEnv)).body).toContain('My full rewrite.');
     expect(testEnv.DB.revisions[0]?.body_md).toBe(theirs); // newest first
+  });
+});
+
+describe('creating ideas with the same title at the same time (#106)', () => {
+  const create = (testEnv: ReturnType<typeof env>, body: string) =>
+    worker.fetch(
+      new Request('https://fis.test/api/ideas', {
+        method: 'POST',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'Twin Idea', summary: 'Two people had it at once.', body }),
+      }),
+      testEnv,
+    );
+
+  it('gives each its own id and its own body, instead of one overwriting the other', async () => {
+    // uniqueIdeaId() checks, then the caller uses: both creates were handed
+    // `twin-idea`, both put to `ideas/twin-idea/body.md` — the second over the
+    // first — and the second INSERT failed with a 500.
+    const bucket = new FakeR2();
+    const testEnv = env(new FakeD1(), undefined, bucket);
+    let second: Promise<Response> | undefined;
+    // Run the whole second create inside the first's body store — after the
+    // first was handed its id, before its row exists — and only then let the
+    // first store its body.
+    const put = bucket.put.bind(bucket);
+    bucket.put = (key: string, value: string) => {
+      if (second) return put(key, value);
+      second = create(testEnv, '## Snapshot\nThe second twin.');
+      return second.then(() => put(key, value));
+    };
+
+    const first = await create(testEnv, '## Snapshot\nThe first twin.');
+    if (!second) throw new Error('the second create never started');
+    const other = await second;
+    const ids = [((await first.json()) as { idea: string }).idea, ((await other.json()) as { idea: string }).idea];
+
+    expect([first.status, other.status]).toEqual([201, 201]);
+    expect(new Set(ids).size).toBe(2);
+    const bodies = await Promise.all(
+      ids.map(async (id) => {
+        const read = await worker.fetch(new Request(`https://fis.test/api/ideas/${id}`), testEnv);
+        return ((await read.json()) as { body: string }).body;
+      }),
+    );
+    expect(bodies.sort()).toEqual(['## Snapshot\nThe first twin.', '## Snapshot\nThe second twin.']);
   });
 });

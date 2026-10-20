@@ -1,5 +1,5 @@
 import { authUserFor, profileFor } from './auth';
-import { BODY_WRITE_ATTEMPTS, commitBody, discardStoredBody, isImmutableBodyKey, storeBody } from './body-store';
+import { BODY_WRITE_ATTEMPTS, commitBody, discardStoredBody, isImmutableBodyKey, storeBody, type StoredBody } from './body-store';
 import { syncChapterRedirects } from './chapter-redirects';
 import { contributorByHandle, ideaBody, ideaById, uniqueIdeaId } from './data';
 import { bad, enumValue, FIELD_LIMITS, json, pathId, readJsonBody, slug, tooLong } from './http';
@@ -323,6 +323,35 @@ function subFloorChapterWarnings(previousBody: string, nextBody: string, title: 
   return warnings;
 }
 
+/**
+ * Inserts a new idea under an id nobody else has, storing its body first (#106).
+ *
+ * `uniqueIdeaId()` checks and then the caller uses, so two creates with the
+ * same title could both be handed the same id. Both then put the body to the
+ * same R2 key — the second overwriting the first's — and the second INSERT
+ * failed on the primary key with a 500, leaving the first idea showing the
+ * second idea's body. Bodies now go to objects of their own, and an insert
+ * that loses the id is retried under a fresh one, its object discarded.
+ */
+async function insertNewIdea(
+  env: Env,
+  title: string,
+  body: string,
+  insert: (ideaId: string, stored: StoredBody) => Promise<unknown>,
+): Promise<string> {
+  for (let attempt = 1; ; attempt += 1) {
+    const ideaId = await uniqueIdeaId(env, title);
+    const stored = await storeBody(env, ideaId, body);
+    try {
+      await insert(ideaId, stored);
+      return ideaId;
+    } catch (error) {
+      await discardStoredBody(env, stored);
+      if (attempt >= BODY_WRITE_ATTEMPTS || !/UNIQUE constraint failed/i.test(String(error))) throw error;
+    }
+  }
+}
+
 export async function createIdea(request: Request, env: Env) {
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
@@ -353,21 +382,9 @@ export async function createIdea(request: Request, env: Env) {
   if (budget) return bad(budget);
 
   const metrics = documentMetrics(body, title);
-  const ideaId = await uniqueIdeaId(env, title);
   const profileId = await profileFor(request, env);
-  const bodyKey = `ideas/${ideaId}/body.md`;
-  let storedInR2 = false;
-  if (body && env.IDEA_BUCKET) {
-    try {
-      await env.IDEA_BUCKET.put(bodyKey, body, {
-        httpMetadata: { contentType: 'text/markdown;charset=UTF-8' },
-      });
-      storedInR2 = true;
-    } catch {
-      // Fall back to storing body inline in D1 if R2 write fails.
-    }
-  }
-  await env.DB.prepare(
+  const ideaId = await insertNewIdea(env, title, body, (ideaId, stored) =>
+    env.DB.prepare(
     `INSERT INTO ideas
      (id, title, summary, preview, signal, body_md, body_key, source_url, visibility, stage, category, next_step, risk, created_by, body_words, chapter_count)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -378,8 +395,8 @@ export async function createIdea(request: Request, env: Env) {
       summary,
       preview,
       signal,
-      storedInR2 ? '' : body,
-      storedInR2 ? bodyKey : '',
+      stored.bodyMd,
+      stored.bodyKey,
       sourceUrl,
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
@@ -390,7 +407,8 @@ export async function createIdea(request: Request, env: Env) {
       metrics.words,
       metrics.chapters,
     )
-    .run();
+    .run(),
+  );
   return json({ idea: ideaId, url: `/ideas/${ideaId}/` }, { status: 201 });
 }
 
@@ -410,7 +428,6 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   if (summary.length < 10) return bad('summary is required');
 
   const profileId = await profileFor(request, env);
-  const ideaId = await uniqueIdeaId(env, title);
   // Seed the fork with the parent body unless a non-empty override is supplied.
   // (`??` alone would keep an explicit empty string and make a blank fork.)
   const bodyOverride = typeof input.body === 'string' && input.body.trim() ? input.body : null;
@@ -439,17 +456,8 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
   const budget = documentOverflow(seedBody, title);
   if (budget) return bad(budget);
   const metrics = documentMetrics(seedBody, title);
-  const bodyKey = `ideas/${ideaId}/body.md`;
-  let storedInR2 = false;
-  if (seedBody && env.IDEA_BUCKET) {
-    try {
-      await env.IDEA_BUCKET.put(bodyKey, seedBody, { httpMetadata: { contentType: 'text/markdown;charset=UTF-8' } });
-      storedInR2 = true;
-    } catch {
-      // Fall back to storing body inline in D1 if R2 write fails.
-    }
-  }
-  await env.DB.prepare(
+  const ideaId = await insertNewIdea(env, title, seedBody, (ideaId, stored) =>
+    env.DB.prepare(
     `INSERT INTO ideas
      (id, title, summary, preview, signal, body_md, body_key, source_url, visibility, stage, category, next_step, risk, created_by, parent_id, body_words, chapter_count)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -460,8 +468,8 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
       summary,
       preview,
       signal,
-      storedInR2 ? '' : seedBody,
-      storedInR2 ? bodyKey : '',
+      stored.bodyMd,
+      stored.bodyKey,
       sourceUrl,
       enumValue(input.visibility, IDEA_VISIBILITY, 'public'),
       enumValue(input.stage, IDEA_STAGES, 'raw'),
@@ -473,7 +481,8 @@ export async function deriveIdea(request: Request, env: Env, rawParentId: string
       metrics.words,
       metrics.chapters,
     )
-    .run();
+    .run(),
+  );
   return json({ idea: ideaId, url: `/ideas/${ideaId}/`, parent: parent.id, parentUrl: parentPath }, { status: 201 });
 }
 
