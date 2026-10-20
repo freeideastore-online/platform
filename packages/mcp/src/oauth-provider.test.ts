@@ -505,6 +505,58 @@ describe("client registration", () => {
     await expect(res?.json()).resolves.toMatchObject({ error: "invalid_redirect_uri" });
   });
 
+  it.each([
+    ["not a URL at all", "nowhere"],
+    ["a script URL", "javascript:alert(1)"],
+    ["a data URL", "data:text/html,hi"],
+    ["plain http off loopback", "http://attacker.example/callback"],
+    ["a fragment", "https://client.example/cb#frag"],
+    ["a non-string", 42],
+  ])("refuses %s as a redirect_uri (#111)", async (_label, uri) => {
+    // These used to register, and fail only at the callback — after the
+    // authorization request had already been spent.
+    const res = await register(makeStore(), "203.0.113.1", JSON.stringify({ redirect_uris: [uri], client_name: "Codex" }));
+
+    expect(res?.status).toBe(400);
+    await expect(res?.json()).resolves.toMatchObject({ error: "invalid_redirect_uri" });
+  });
+
+  it.each([
+    ["https", "https://client.example/oauth/callback"],
+    ["loopback http", "http://localhost:33418/callback"],
+    ["IPv6 loopback http", "http://[::1]:9000/cb"],
+    ["a native app scheme", "cursor://anysphere.cursor-retrieval/oauth/callback"],
+  ])("accepts %s as a redirect_uri", async (_label, uri) => {
+    const res = await register(makeStore(), "203.0.113.1", JSON.stringify({ redirect_uris: [uri] }));
+
+    expect(res?.status).toBe(201);
+  });
+
+  it("refuses more than 10 redirect_uris (#111)", async () => {
+    const uris = Array.from({ length: 11 }, (_, i) => `https://client.example/cb/${i}`);
+
+    const res = await register(makeStore(), "203.0.113.1", JSON.stringify({ redirect_uris: uris }));
+
+    expect(res?.status).toBe(400);
+  });
+
+  it.each([
+    ["a number", 123],
+    ["an object", { name: "x" }],
+    ["an oversized string", "x".repeat(201)],
+  ])("refuses %s as a client_name (#111)", async (_label, name) => {
+    // A non-string name made the consent page's escapeHtml throw, so
+    // /authorize answered 500 for that client forever.
+    const res = await register(
+      makeStore(),
+      "203.0.113.1",
+      JSON.stringify({ redirect_uris: ["https://client.example/cb"], client_name: name }),
+    );
+
+    expect(res?.status).toBe(400);
+    await expect(res?.json()).resolves.toMatchObject({ error: "invalid_client_metadata" });
+  });
+
   it("stops one address from filling the store with clients", async () => {
     // /register is unauthenticated by necessity — a client has no credentials
     // before it registers. The only thing standing between that and an

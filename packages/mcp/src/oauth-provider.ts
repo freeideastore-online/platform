@@ -159,6 +159,42 @@ function cookieValue(request: Request, name: string): string | null {
   return null;
 }
 
+/**
+ * What a dynamically registered client may say about itself (#111).
+ *
+ * Registration used to store `redirect_uris` and `client_name` unchecked:
+ * a non-URL redirect URI registered fine and then threw at the callback,
+ * after the authorization request had been spent; a non-string client_name
+ * made the consent page's escapeHtml throw, so /authorize answered 500; and an
+ * oversized array could exceed the storage value limit. All three are now
+ * refused at the door, with the RFC 7591 error codes.
+ */
+const MAX_REDIRECT_URIS = 10;
+const MAX_REDIRECT_URI_CHARS = 2000;
+const MAX_CLIENT_NAME = 200;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+/** Schemes that are never a place to send an authorization code. */
+const FORBIDDEN_SCHEMES = new Set(["javascript:", "data:", "file:", "vbscript:", "blob:", "about:"]);
+
+/**
+ * An https URL; an http URL on a loopback host (RFC 8252 §7.3, how desktop
+ * clients receive the code); or a private-use scheme for a native app
+ * (RFC 8252 §7.1, e.g. `cursor://…`).
+ */
+function acceptableRedirectUri(value: unknown): boolean {
+  if (typeof value !== "string" || !value || value.length > MAX_REDIRECT_URI_CHARS) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.hash) return false;
+  if (url.protocol === "https:") return true;
+  if (url.protocol === "http:") return LOOPBACK_HOSTS.has(url.hostname);
+  return !FORBIDDEN_SCHEMES.has(url.protocol);
+}
+
 async function register(request: Request, config: OAuthConfig): Promise<Response> {
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
   const hour = Math.floor(Date.now() / 3_600_000);
@@ -178,12 +214,32 @@ async function register(request: Request, config: OAuthConfig): Promise<Response
   if (!Array.isArray(redirectUris) || redirectUris.length === 0) {
     return json({ error: "invalid_redirect_uri" }, 400);
   }
+  const badUri = redirectUris.find((uri) => !acceptableRedirectUri(uri));
+  if (badUri !== undefined || redirectUris.length > MAX_REDIRECT_URIS) {
+    return json(
+      {
+        error: "invalid_redirect_uri",
+        error_description:
+          redirectUris.length > MAX_REDIRECT_URIS
+            ? `at most ${MAX_REDIRECT_URIS} redirect_uris`
+            : "each redirect_uri must be an https URL, an http URL on a loopback host, or a private-use app scheme",
+      },
+      400,
+    );
+  }
+  const clientName = body.client_name;
+  if (clientName !== undefined && clientName !== null && (typeof clientName !== "string" || clientName.length > MAX_CLIENT_NAME)) {
+    return json(
+      { error: "invalid_client_metadata", error_description: `client_name must be a string of at most ${MAX_CLIENT_NAME} characters` },
+      400,
+    );
+  }
 
   const clientId = crypto.randomUUID();
   const client = {
     client_id: clientId,
-    redirect_uris: redirectUris,
-    client_name: body.client_name ?? null,
+    redirect_uris: redirectUris as string[],
+    client_name: clientName ?? null,
     grant_types: ["authorization_code"],
     response_types: ["code"],
     token_endpoint_auth_method: "none",
