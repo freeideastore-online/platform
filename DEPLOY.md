@@ -83,6 +83,7 @@ Those two are the deploy credentials. Sign-in needs a separate set, held as **Cl
 | `SESSION_SIGNING_KEY` | `freeideastore` **and** `freeideastore-mcp` | 64-hex HS256 key that signs and verifies FIS session tokens |
 | `GH_OAUTH_CLIENT_SECRET` | `freeideastore` | secret half of FIS's own GitHub OAuth App |
 | `GOOGLE_CLIENT_SECRET` | `freeideastore` | secret half of FIS's own Google OAuth client |
+| `ADMIN_IDENTITY_IDS` | `freeideastore` | identity ids allowed to call `/api/admin/*`, comma-separated — optional, see below |
 
 The matching client ids are **not** secrets — they travel in every authorize redirect — so they live in version control as `[vars]` in `packages/worker/wrangler.toml`, where a reader can see what the deployed Worker is actually using.
 
@@ -96,6 +97,12 @@ cd ~/dev/ops && ./bin/ops push fis SESSION_SIGNING_KEY wrangler freeideastore-mc
 ```
 
 `ops put` stores the value and pushes it to every consumer the inventory names, so the `consumers:` list has to be right *before* the put — it pushes to those and nothing else. `ops push` re-places one value on one target, which is the recovery path when a single Worker is out of step.
+
+`ADMIN_IDENTITY_IDS` is the one optional secret, and it fails closed ([#105](https://github.com/freeideastore-online/platform/issues/105)). The `/api/admin/*` routes — the backfills — admit only the identity ids it lists; without it every one of them answers 403 `admin routes are disabled`. It lists **identity ids** (`identities.id`, the `uid` a session is signed for), never handles: a handle is a display name, and near-identical handles across GitHub and Google have caused wrong-account confusion here before. Find yours with `SELECT id, provider, handle FROM identities WHERE handle = '<you>'`, then:
+
+```bash
+cd ~/dev/ops && ./bin/ops put fis ADMIN_IDENTITY_IDS
+```
 
 `SESSION_SIGNING_KEY` is the one to be careful with: the site Worker mints sessions with it and the MCP Worker verifies them, so the two must hold the *same* value. A rotation that reaches one and not the other breaks MCP sign-in with a bare `invalid session` — which is [#34](https://github.com/freeideastore-online/platform/issues/34), the bug that caused FIS to take ownership of its identity in the first place. It shares a name with a FreeAppStore secret and is deliberately unrelated to it; see [AUTH.md](./AUTH.md).
 
@@ -118,6 +125,8 @@ Canonical idea bodies are written there so a document is not limited to what fit
 Because bodies are no longer readable from SQL, `has_publication` is evaluated from the `body_words` and `chapter_count` columns added in migration `0010`, maintained on every canonical write. Deploying a worker that reads those columns requires the migration to be applied first.
 
 **Any deploy that changes what counts as a chapter must run the metrics backfill right after it.** The columns are only refreshed on a canonical write, but the page decides pagination live from the body, so until the backfill runs the catalog and the page disagree for every row the change touched. The #63 deploy (a non-title `#` became a part) is one: the backfill also 301s the chapter URLs that rule retired.
+
+The caller's session must belong to an identity listed in `ADMIN_IDENTITY_IDS` (see above); anyone else gets 403.
 
 ```bash
 curl -X POST https://freeideastore.online/api/admin/backfill-metrics \

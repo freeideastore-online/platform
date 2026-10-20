@@ -4549,3 +4549,17 @@ describe('admin routes require an admin (#105)', () => {
     expect(response.status).toBe(403);
   });
 });
+
+describe('the admin gate sits in the router (#105)', () => {
+  it('refuses a non-admin on any /api/admin path, before a route even matches', async () => {
+    // A check each handler has to remember is a check the next admin route
+    // forgets. An unknown admin path answering 401 rather than 404 shows the
+    // gate runs ahead of dispatch.
+    const response = await worker.fetch(
+      new Request('https://fis.test/api/admin/some-future-route', { method: 'POST' }),
+      { ...env(), ADMIN_IDENTITY_IDS: 'identity-serge' },
+    );
+
+    expect(response.status).toBe(401);
+  });
+});

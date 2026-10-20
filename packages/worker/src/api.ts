@@ -94,8 +94,6 @@ async function handleListIdeas(env: Env, url: URL) {
  * Idempotent: a second run rewrites the same numbers and the same redirects.
  */
 async function handleBackfillMetrics(request: Request, env: Env) {
-  const refused = await adminRefusal(request, env);
-  if (refused) return refused;
 
   const rows = await env.DB.prepare(
     `SELECT id, body_key, body_md, title
@@ -147,8 +145,6 @@ async function handleBackfillMetrics(request: Request, env: Env) {
 }
 
 async function handleBackfillContributionSources(request: Request, env: Env) {
-  const refused = await adminRefusal(request, env);
-  if (refused) return refused;
 
   const rows = await env.DB.prepare(
     'SELECT id, idea_id, source_url, body FROM contributions',
@@ -726,6 +722,14 @@ export async function handleApi(request: Request, env: Env, url: URL) {
   }
   if (isApiMutation(request) && !hasBearerAuth(request) && !isSameOriginMutation(request)) {
     return new Response('Forbidden', { status: 403, headers: SECURITY_HEADERS });
+  }
+
+  // Every /api/admin/* route is gated here, before dispatch, rather than in
+  // each handler: a check every handler has to remember is a check the next
+  // admin route forgets (#105).
+  if (url.pathname.startsWith('/api/admin/')) {
+    const refused = await adminRefusal(request, env);
+    if (refused) return refused;
   }
 
   for (const route of routes) {
