@@ -13,6 +13,7 @@ https://freeideastore.online
 - D1: `freeideastore`
 - D1 database ID: `6c8cefe4-f170-45fd-9979-ebef9068e1aa`
 - Optional R2 bucket: `freeideastore-ideas`
+- Rate limiter: `AI_RATE_LIMITER` (namespace `1109`, 10 requests per identity per minute) for `/api/ai/elaborate`, declared in `packages/worker/wrangler.toml` and created by `wrangler deploy` — nothing to provision by hand. The proxy answers 503 without it ([#109](https://github.com/freeideastore-online/platform/issues/109)).
 
 ## Commands
 

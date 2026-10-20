@@ -21,6 +21,8 @@ export interface Env {
    * (#105). A Worker secret. Unset means no admins: the routes answer 403.
    */
   ADMIN_IDENTITY_IDS?: string;
+  /** Per-identity limit on /api/ai/elaborate (#109); `[[ratelimits]]` in wrangler.toml. */
+  AI_RATE_LIMITER?: RateLimit;
 }
 
 export type IdeaRow = {

@@ -32,6 +32,13 @@ crons = ["17 18 * * *"]
 binding = "IDEA_BUCKET"
 bucket_name = "freeideastore-ideas"
 
+# Per-identity rate limit for /api/ai/elaborate (#109). The proxy fails closed
+# without it. namespace_id is any integer unique within the account.
+[[ratelimits]]
+name = "AI_RATE_LIMITER"
+namespace_id = "1109"
+simple = { limit = 10, period = 60 }
+
 [assets]
 directory = "../../store"
 binding = "ASSETS"

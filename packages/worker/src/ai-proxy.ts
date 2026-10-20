@@ -1,5 +1,23 @@
+import { authIdentityIdFor, hasBearerAuth, isSameOriginMutation } from './auth';
 import { bad, readJsonBody, json, SECURITY_HEADERS } from './http';
 import type { Env } from './types';
+
+/**
+ * Who may use the proxy, and how much (#109).
+ *
+ * `/api/ai/elaborate` had no auth, no origin check, no rate limit, and took the
+ * model from the caller: an open relay through this store's Cloudflare AI
+ * Gateway account and Worker for anyone holding any provider key. Callers bring
+ * their own key, so the store does not pay the provider — but it carried the
+ * traffic, the gateway logs and the Worker time, for anybody.
+ *
+ * Now: a signed-in identity; a same-origin request when it is cookie-authenticated
+ * (a cross-site page cannot spend a visitor's session); only the model each
+ * provider is configured for; bounded messages; and at most AI_REQUESTS_PER_MINUTE
+ * per identity, through the `AI_RATE_LIMITER` binding in wrangler.toml.
+ */
+export const AI_MAX_MESSAGES = 40;
+export const AI_MAX_MESSAGE_CHARS = 20_000;
 
 const CF_ACCOUNT_ID = 'c1089bfcc43c1c6c2aa89e584e86f0bc';
 const CF_GATEWAY_ID = 'freeideastore';
@@ -40,6 +58,16 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
 
   if (request.method !== 'POST') return bad('method not allowed', 405);
 
+  const identityId = await authIdentityIdFor(request, env);
+  if (!identityId) return json({ error: 'sign in required to use the AI assistant' }, { status: 401 });
+  if (!hasBearerAuth(request) && !isSameOriginMutation(request)) {
+    return json({ error: 'cross-origin requests are not allowed' }, { status: 403 });
+  }
+  // Fail closed: without the limiter there is no limit, and no limit is the bug.
+  if (!env.AI_RATE_LIMITER) return json({ error: 'the AI assistant is not configured' }, { status: 503 });
+  const { success } = await env.AI_RATE_LIMITER.limit({ key: identityId });
+  if (!success) return json({ error: 'too many AI requests — wait a minute' }, { status: 429 });
+
   const parsedBody = await readJsonBody(request);
   if (!parsedBody.ok) return parsedBody.response;
   const input = parsedBody.data;
@@ -53,6 +81,15 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
 
   const config = PROVIDERS[provider];
   if (!config) return bad('unsupported provider: use anthropic or openai');
+  // The model is the store's choice, not the caller's.
+  if (input.model !== undefined && input.model !== config.model) {
+    return bad(`unsupported model: ${provider} uses ${config.model}`);
+  }
+  if (messages.length > AI_MAX_MESSAGES) return bad(`at most ${AI_MAX_MESSAGES} messages`);
+  if (messages.some((message) => typeof message?.content !== 'string' || message.content.length > AI_MAX_MESSAGE_CHARS)) {
+    return bad(`each message must be text of at most ${AI_MAX_MESSAGE_CHARS} characters`);
+  }
+  if (skillPrompt.length > AI_MAX_MESSAGE_CHARS) return bad(`skillPrompt is at most ${AI_MAX_MESSAGE_CHARS} characters`);
 
   const systemPrompt = skillPrompt
     ? `${SYSTEM_BASE}\n\n## Active skill\n\n${skillPrompt}`
@@ -67,7 +104,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: String(input.model || config.model),
+        model: config.model,
         max_tokens: 4096,
         system: systemPrompt,
         messages: messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
@@ -98,7 +135,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: String(input.model || config.model),
+      model: config.model,
       max_tokens: 4096,
       messages: [
         { role: 'system', content: systemPrompt },
