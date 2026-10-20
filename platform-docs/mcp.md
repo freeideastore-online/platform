@@ -93,6 +93,8 @@ Three things now stand between an agent and that outcome.
 
 **Recover out-of-band when the tools are gone.** If the token expires outright, MCP clients withdraw the server's tools and no tool call is possible. The 401 body carries `reauthorize_url` for that case — `https://mcp.freeideastore.online/reauthorize` works with no prior tool call, and shows a pairing code after sign-in that can be read back to the agent as `complete_authentication`'s `pairing_code`. Pairing codes are single-use and expire in fifteen minutes.
 
+**Re-authorization renews; it never switches accounts.** The person must sign in with the account the session is already using: a sign-in by any other account is refused at the callback, and `complete_authentication` refuses a pairing whose identity is not the session's own (#107). To use a different account, reconnect the server from the MCP client.
+
 ## Prefer Section Writes Over Whole-Document Rewrites
 
 `publish_idea_update` replaces the entire canonical document, so revising one part costs the whole document in tokens both ways, and the whole document has to fit in one call. That pressure is why research accumulated as ten separate numbered contributions on one idea instead of landing in the document.

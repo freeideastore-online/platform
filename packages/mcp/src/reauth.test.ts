@@ -835,3 +835,13 @@ describe("a renewal survives the next request's bearer (#107)", () => {
     expect(h.auth.current().token).toBe("renewed-session");
   });
 });
+
+describe("the /reauthorize page says what it can and cannot do (#107)", () => {
+  it("warns that it only renews the agent's own account, and to close it if the link was sent by someone else", async () => {
+    const res = (await handleOAuthRoute(new Request(`${ISSUER}/reauthorize`), config(makeStore())))!;
+    const html = await res.text();
+
+    expect(html).toContain("never switch it");
+    expect(html).toContain("if someone sent you this link, close this page");
+  });
+});

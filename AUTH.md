@@ -366,6 +366,27 @@ minutes. Between sign-in and redemption the code *is* a write credential, so a c
 be redeemed by the MCP session that started it — except when that session started none, which
 is the human-initiated case.
 
+**A pairing renews an identity; it never changes one ([#107](https://github.com/freeideastore-online/platform/issues/107)).**
+A device-style code is phishable by construction: an agent could start `authenticate`, send the
+`/reauthorize?code=…` link to someone else, and redeem whatever account they signed in with —
+or talk them into reading back the code the bare page shows. So:
+
+- `authenticate` records the asking session's uid on the pairing (`expectedUid`), and the
+  callback refuses a sign-in by any other account, telling the person their sign-in was not
+  passed on.
+- `complete_authentication` refuses — and burns — a pairing whose uid is not the session's own.
+  This is the check that covers codes minted on the no-code page.
+- `/reauthorize?code=` refuses a pairing that is already complete, and the callback page says
+  when a sign-in was discarded instead of always reporting success.
+- Switching accounts is a reconnect through the MCP client's own OAuth flow, which PKCE binds to
+  the client.
+
+The worker hands every request's bearer identity to the session (`setAuth` →
+`SessionAuth.acceptBearer`). The bearer decides *who* the session is; it may not shorten a
+same-identity credential that outlives it, which is what keeps a renewal alive past the next
+request. That rule is only safe because of the binding above — keeping a pairing's identity over
+the bearer's, while a pairing could carry someone else's, would be a persistent takeover.
+
 ## The FreeAppStore fallback is gone (#38)
 
 Deleted on 2026-08-14, about a month before the last pre-cutover session would have expired

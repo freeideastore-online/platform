@@ -120,7 +120,7 @@ export function authConfirmPage(
   const title = variant === "reauthorize" ? "Sign back in to FreeIdeaStore MCP" : "Connect FreeIdeaStore MCP";
   const lead =
     variant === "reauthorize"
-      ? "Your agent's FreeIdeaStore authorization has run out, so it cannot write. Sign in again to give it back — use the same account that owns the documents it is working on."
+      ? "Your agent's FreeIdeaStore authorization has run out, so it cannot write. Sign in again to give it back — use the same account the agent was already using; this page can renew that account but never switch it. Only continue if you asked your own agent to sign in: if someone sent you this link, close this page."
       : `${name} wants to use FreeIdeaStore MCP tools as your account. Choose how to sign in.`;
   return new Response(
     page(
