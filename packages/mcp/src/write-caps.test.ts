@@ -116,3 +116,13 @@ describe("MCP write caps match the server's document budget (#46)", () => {
     expect(collaborationSource).not.toContain("200000");
   });
 });
+
+describe("create_free_idea.title matches the server's minimum (#104)", () => {
+  it("rejects a two-character title the Worker would refuse anyway", () => {
+    // The Worker requires at least 3 characters after trimming; the schema
+    // allowed 2, so the call passed validation and then failed upstream.
+    const title = field(collaboration, "create_free_idea", "title");
+    expect(title.safeParse("AI").success).toBe(false);
+    expect(title.safeParse("Ask").success).toBe(true);
+  });
+});

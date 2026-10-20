@@ -102,3 +102,17 @@ describe("validate_publication", () => {
     expect(result.errors[0]).toContain("free limit");
   });
 });
+
+describe("validate_publication summary (#104)", () => {
+  it("does not throw when a response carries no errors array", async () => {
+    vi.stubGlobal("fetch", async () => {
+      const { errors: _errors, ...withoutErrors } = VALIDATION_RESPONSE;
+      return new Response(JSON.stringify(withoutErrors), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const result = await handlers.validate_publication!({ idea_id: "cellar-door-cycling", sections: [{ title: "X", content: "Y" }] });
+    const summary = JSON.parse(result.content[0]!.text);
+
+    expect(summary.ok).toBe(true);
+    expect(summary.errors).toEqual([]);
+  });
+});

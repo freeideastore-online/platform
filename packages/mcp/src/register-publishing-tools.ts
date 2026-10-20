@@ -34,7 +34,8 @@ type ValidationResponse = {
   chapters: SectionRow[];
   chapters_created: number;
   parts_created?: number;
-  errors: string[];
+  /** Absent on a response that is not a validation result; read as none. */
+  errors?: string[];
 };
 
 /**
@@ -97,11 +98,11 @@ function resolvedSection(rows: SectionRow[], newTitle?: string) {
 function validationSummary(data: ValidationResponse): string {
   return JSON.stringify(
     {
-      ok: data.errors.length === 0,
+      ok: (data.errors ?? []).length === 0,
       usage: data.usage,
       chapters_created: data.chapters_created,
       parts_created: data.parts_created,
-      errors: data.errors,
+      errors: data.errors ?? [],
       chapters: data.chapters,
     },
     null,
