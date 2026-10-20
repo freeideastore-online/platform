@@ -16,10 +16,10 @@ import { slug } from './http';
 
 export type ProviderId = 'github' | 'google';
 
-export const PROVIDER_IDS: ProviderId[] = ['github', 'google'];
+const PROVIDER_IDS: readonly ProviderId[] = ['github', 'google'];
 
 export function isProviderId(value: string | null): value is ProviderId {
-  return value === 'github' || value === 'google';
+  return PROVIDER_IDS.includes(value as ProviderId);
 }
 
 /** The profile shape both providers are normalized into. */

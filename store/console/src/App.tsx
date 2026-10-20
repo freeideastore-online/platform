@@ -10,14 +10,11 @@ import {
   LogIn,
   RefreshCcw,
   Search,
-  Sparkles,
 } from "lucide-react";
 import {
   FisApiError,
   FisClient,
   type AuthUser,
-  type GetIdeaResponse,
-  type GetSectionResponse,
   type Idea,
   type IdeaSection,
 } from "@fis/sdk";

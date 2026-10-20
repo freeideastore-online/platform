@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
 import { FIELD_LIMITS, MAX_REQUEST_CHARS } from './http';
-import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection } from './idea-research';
+import { RESEARCH_PAGE_SIZE, researchSection } from './idea-research';
 import { mintSession } from './session';
 
 /** The key `env()` signs and verifies sessions with; nothing real uses it. */

@@ -135,6 +135,13 @@ export function documentOverflow(
   return null;
 }
 
+type SubFloorChapterWarning = {
+  chapter_id: string;
+  title: string;
+  words: number;
+  verdict: 'merge' | 'thin';
+};
+
 /**
  * What the author could not see until a write failed: both budgets, what is
  * spent, what is left, and how many chapters are the wrong size. Returned by
@@ -144,15 +151,6 @@ export function documentOverflow(
  * READ paths return it too — an author's first call of a session is a read, and
  * a second implementation of this block for them would be a second opinion.
  */
-export type DocumentUsage = ReturnType<typeof documentUsage>;
-
-type SubFloorChapterWarning = {
-  chapter_id: string;
-  title: string;
-  words: number;
-  verdict: 'merge' | 'thin';
-};
-
 export function documentUsage(
   body: string,
   metrics: { chapters: number; parts: number; belowFloor: number; aboveCeiling: number },

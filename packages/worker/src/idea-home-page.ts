@@ -1,12 +1,12 @@
 import { brandHead, brandLockup } from './brand';
 import { AUTH_PREFIX } from './auth';
-import { contributionCount, contributionsByIdea, derivedIdeas, DERIVED_CHILDREN_LIMIT, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
+import { contributionCount, contributionsByIdea, derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
 import { escapeHtml, FIELD_LIMITS, htmlResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { sourcesSection } from './idea-sources-section';
 import { ideaHomeScripts } from './idea-home-scripts';
 import { ideaHomeStyles } from './idea-home-styles';
-import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection, splitContributions } from './idea-research';
+import { RESEARCH_PAGE_SIZE, RESEARCH_RENDER_CAP, researchSection } from './idea-research';
 import { openRefinementCount } from './refinements';
 import { listIdeaSources } from './sources';
 import { chapterGroups, ideaParts, ideaPreamble, isPaginated, markdownHeadings, markdownToHtml, visibleIdeaChapters } from './markdown';
@@ -55,7 +55,6 @@ export async function renderIdeaPage(env: Env, request: Request, ideaId: string)
     showAllResearch ? 0 : (researchPage - 1) * RESEARCH_PAGE_SIZE,
     true,
   );
-  const { research } = splitContributions(contributions);
   // A queued proposal that nobody can see never gets merged.
   const pendingRefinements = await openRefinementCount(env, idea.id);
   // What the idea rests on, gathered from the document and its research.
