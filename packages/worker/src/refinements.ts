@@ -71,6 +71,36 @@ export async function refinementById(env: Env, ideaId: string, contributionId: s
     .first<RefinementRow>();
 }
 
+/**
+ * Claims an open refinement for applying — open to applied in one conditional
+ * statement — and says whether this caller won it (#106).
+ *
+ * Checking `status` and marking it later were two steps, so two concurrent
+ * applies both saw it open and both appended the proposal. Only the caller
+ * whose claim changed the row goes on to write.
+ */
+export async function claimRefinement(env: Env, contributionId: string): Promise<boolean> {
+  const result = await env.DB.prepare(
+    `UPDATE contributions
+     SET status = 'applied', resolved_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND status = ''`,
+  )
+    .bind(contributionId)
+    .run();
+  return (result?.meta?.changes ?? 0) > 0;
+}
+
+/** Re-opens a claimed refinement whose apply did not write anything. */
+export async function releaseRefinement(env: Env, contributionId: string) {
+  await env.DB.prepare(
+    `UPDATE contributions
+     SET status = '', resolved_at = ''
+     WHERE id = ? AND status = 'applied' AND resolved_revision = ''`,
+  )
+    .bind(contributionId)
+    .run();
+}
+
 export async function markRefinementResolved(
   env: Env,
   contributionId: string,

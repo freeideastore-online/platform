@@ -23,10 +23,12 @@ import {
   replaceIdeaSection,
 } from './markdown';
 import {
+  claimRefinement,
   listRefinements,
   markRefinementResolved,
   proposalText,
   refinementById,
+  releaseRefinement,
   RESOLUTION_VALUES,
 } from './refinements';
 import { recordRevision, revisionBody, revisionById, type RevisionSource } from './revisions';
@@ -1069,7 +1071,14 @@ export async function applyRefinement(
   const content = String(input.content || proposalText(String(refinement.body || ''))).trim();
   if (!content) return bad('nothing to apply: the proposal is empty');
 
-  return withFreshRetries(env, idea, async (latest) => {
+  // The status check above is advisory; this claim is the one that counts. Two
+  // concurrent applies both passed the check and both appended the proposal —
+  // and now that a lost body race is re-applied rather than lost, the second
+  // would land beside the first. Only the caller whose claim wins writes (#106).
+  if (!(await claimRefinement(env, refinement.id))) {
+    return bad('refinement is already being applied or resolved', 409);
+  }
+  const response = await withFreshRetries(env, idea, async (latest) => {
     const current = await ideaBody(env, latest);
     const next =
       mode === 'replace'
@@ -1115,6 +1124,10 @@ export async function applyRefinement(
       ...indexWarning(result.reindexed),
     });
   });
+  // Nothing was written — an unknown section, the budget, or a document that
+  // kept changing — so the proposal goes back in the queue.
+  if (!response.ok) await releaseRefinement(env, refinement.id);
+  return response;
 }
 
 /**

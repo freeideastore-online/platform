@@ -64,7 +64,7 @@ class FakeD1 {
    * Runs once, inside the next body commit, before its version check — so a
    * test can land a competing write between a write's read and its commit.
    */
-  beforeBodyCommit: ((ideaId: string) => void) | null = null;
+  beforeBodyCommit: ((ideaId: string) => unknown) | null = null;
   /** The same, for the metadata UPDATE of a PATCH. */
   beforeMetadataUpdate: ((ideaId: string) => void) | null = null;
   /** Body commits that won their version check. */
@@ -712,12 +712,13 @@ class FakeD1 {
     // Body writes commit only against the version they read (commitBody, #106).
     if (sql.includes('UPDATE ideas') && sql.includes('SET body_md = ?') && sql.includes('body_version = ?')) {
       return new FakeStatement({
-        run: ([body_md, body_key, body_words, chapter_count, id, expectedVersion]) => {
+        run: async ([body_md, body_key, body_words, chapter_count, id, expectedVersion]) => {
           // A test can land a competing write in the gap between this write's
-          // read and its commit — the race #106 is about.
+          // read and its commit — the race #106 is about. A hook that returns a
+          // promise holds this commit until the competing work has finished.
           const competing = this.beforeBodyCommit;
           this.beforeBodyCommit = null;
-          competing?.(String(id));
+          await competing?.(String(id));
           const idea = this.ideas.get(String(id));
           if (!idea || Number(idea.body_version ?? 0) !== Number(expectedVersion)) return { meta: { changes: 0 } };
           Object.assign(idea, {
@@ -864,6 +865,28 @@ class FakeD1 {
             (item) => item.id === contributionId && item.idea_id === ideaId && item.kind === kind,
           );
           return found ? { ...found, section: found.section || '', status: found.status || '' } : null;
+        },
+      });
+    }
+    // claimRefinement / releaseRefinement: conditional, and they say whether a
+    // row changed, which is the whole point of them (#106).
+    if (sql.includes('UPDATE contributions') && sql.includes("SET status = 'applied'")) {
+      return new FakeStatement({
+        run: ([id]) => {
+          const row = this.contributions.find((item) => item.id === id);
+          if (!row || String(row.status ?? '') !== '') return { meta: { changes: 0 } };
+          row.status = 'applied';
+          return { meta: { changes: 1 } };
+        },
+      });
+    }
+    if (sql.includes('UPDATE contributions') && sql.includes("SET status = ''")) {
+      return new FakeStatement({
+        run: ([id]) => {
+          const row = this.contributions.find((item) => item.id === id);
+          if (!row || row.status !== 'applied' || String(row.resolved_revision ?? '') !== '') return { meta: { changes: 0 } };
+          row.status = '';
+          return { meta: { changes: 1 } };
         },
       });
     }
@@ -1736,6 +1759,56 @@ describe('FreeIdeaStore worker', () => {
 
     expect(create.status).toBe(201);
     expect(data.refinements.map((refinement) => refinement.section)).toEqual(['snapshot']);
+  });
+
+  it('applies a refinement once when two applies race (#106)', async () => {
+    const testEnv = env();
+    const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
+    const apply = () =>
+      worker.fetch(
+        new Request(`https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`, {
+          method: 'POST',
+          headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+          body: '{}',
+        }),
+        testEnv,
+      );
+
+    // Start the second apply inside the first one's body commit: after the
+    // first passed the status check and before it marked the proposal applied.
+    let second: Promise<Response> | undefined;
+    testEnv.DB.beforeBodyCommit = () => {
+      second = apply();
+      return second; // the first commit waits until the second apply is done
+    };
+    const first = await apply();
+    if (!second) throw new Error('the second apply never started');
+    const statuses = [first.status, (await second).status].sort();
+    const read = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab'), testEnv);
+    const { body } = (await read.json()) as { body: string };
+
+    expect(statuses).toEqual([200, 409]);
+    expect(body.split('Sharpen the wording here.')).toHaveLength(2);
+  });
+
+  it('puts a refinement back in the queue when its apply writes nothing (#106)', async () => {
+    const testEnv = env();
+    const refinement = await proposeRefinement(testEnv, 'serge-idea-lab', 'snapshot');
+    const apply = (payload: Record<string, unknown>) =>
+      worker.fetch(
+        new Request(`https://fis.test/api/ideas/serge-idea-lab/refinements/${refinement?.id}/apply`, {
+          method: 'POST',
+          headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+        testEnv,
+      );
+
+    const failed = await apply({ section: 'not-a-section' });
+    const retried = await apply({});
+
+    expect(failed.status).toBe(404);
+    expect(retried.status).toBe(200);
   });
 
   it('adds a section the document does not have yet', async () => {
