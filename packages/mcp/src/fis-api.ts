@@ -91,7 +91,24 @@ export async function fisApi<T>(
   try {
     data = raw ? JSON.parse(raw) : ({} as T);
   } catch {
-    data = { error: raw || `HTTP ${res.status}` };
+    data = { error: errorText(raw) || `HTTP ${res.status}` };
+  }
+  // Every caller tests `"error" in res.data`, which throws a TypeError on a
+  // JSON `null`, number or string — so an upstream answering `null` crashed
+  // the tool instead of reporting the status (#104).
+  if (typeof data !== "object" || data === null) {
+    data = { error: `unexpected response body (HTTP ${res.status})` };
   }
   return { ok: res.ok, status: res.status, data };
+}
+
+/** Longest upstream error text quoted back to the agent. */
+const MAX_ERROR_TEXT = 500;
+
+/**
+ * A non-JSON body is usually an HTML error page from a proxy. Quoting it whole
+ * put kilobytes of markup into a tool result; the agent needs the gist (#104).
+ */
+function errorText(raw: string) {
+  return raw.length > MAX_ERROR_TEXT ? `${raw.slice(0, MAX_ERROR_TEXT)}…` : raw;
 }
