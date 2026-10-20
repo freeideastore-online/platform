@@ -221,7 +221,7 @@ export async function listIdeaSources(env: Env, ideaId: string) {
   const rows = await env.DB.prepare(
     `SELECT s.id, s.url, s.host, s.status, s.last_checked,
             GROUP_CONCAT(DISTINCT l.section) AS sections,
-            COUNT(DISTINCT l.contribution_id) AS contribution_citations
+            COUNT(DISTINCT NULLIF(l.contribution_id, '')) AS contribution_citations
      FROM source_links l JOIN sources s ON s.id = l.source_id
      WHERE l.idea_id = ?
      GROUP BY s.id
@@ -240,8 +240,6 @@ export async function listIdeaSources(env: Env, ideaId: string) {
   return (rows.results || []).map((row) => ({
     ...row,
     sections: (row.sections || '').split(',').filter(Boolean),
-    // COUNT counts the '' bucket too; only non-empty ids are real citations.
-    contribution_citations: Math.max(0, row.contribution_citations - 1),
   }));
 }
 

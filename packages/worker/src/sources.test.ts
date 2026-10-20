@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { checkSources, extractUrls, normaliseSourceUrl, syncDocumentSources } from './sources';
+import { checkSources, extractUrls, listIdeaSources, normaliseSourceUrl, syncDocumentSources } from './sources';
 import type { Env, IdeaRow } from './types';
 
 /**
@@ -292,5 +292,37 @@ describe('checkSources', () => {
       redirect: 'follow',
       headers: { 'User-Agent': USER_AGENT },
     });
+  });
+});
+
+/**
+ * #104. The count used to be `COUNT(DISTINCT l.contribution_id) - 1`, which
+ * assumed every source also carried the document's own '' link. A source cited
+ * only by research was reported with one citation too few — 0 for a source
+ * one research entry rests on. The count now excludes the '' bucket in SQL and
+ * is passed through as-is.
+ */
+describe('listIdeaSources', () => {
+  it('counts research citations without assuming a document link', async () => {
+    let query = '';
+    const env = {
+      DB: {
+        prepare(sql: string) {
+          query = sql;
+          return {
+            bind: () => ({
+              all: async () => ({
+                results: [{ id: 's1', url: 'https://a.test/', host: 'a.test', status: 200, last_checked: '', sections: null, contribution_citations: 1 }],
+              }),
+            }),
+          };
+        },
+      },
+    } as unknown as Env;
+
+    const [source] = await listIdeaSources(env, 'idea');
+
+    expect(query).toContain("COUNT(DISTINCT NULLIF(l.contribution_id, '')) AS contribution_citations");
+    expect(source?.contribution_citations).toBe(1);
   });
 });

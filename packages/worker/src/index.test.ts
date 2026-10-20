@@ -602,7 +602,9 @@ class FakeD1 {
             const existing = grouped.get(String(source.id)) || {
               ...source,
               sections: [] as string[],
-              contribution_citations: 1,
+              // Mirrors COUNT(DISTINCT NULLIF(contribution_id, '')): only
+              // research links count, never the document's own '' link.
+              contribution_citations: 0,
             };
             if (link.section) (existing.sections as string[]).push(String(link.section));
             if (link.contribution_id) {
