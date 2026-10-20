@@ -275,7 +275,7 @@ export async function contributionsByProfile(env: Env, profileId: string, limit 
     `SELECT c.kind, c.body, c.created_at, i.id AS idea_id, i.title AS idea_title
      FROM contributions c
      JOIN ideas i ON i.id = c.idea_id
-     WHERE c.profile_id = ?
+     WHERE c.profile_id = ? AND i.status != 'removed'
      ORDER BY c.created_at DESC
      LIMIT ?`,
   )
