@@ -20,6 +20,25 @@ export function json(data: unknown, init: ResponseInit = {}) {
   });
 }
 
+/**
+ * The 410 every page of a removed idea answers with — the idea home page and
+ * each of its chapter pages alike.
+ */
+export function ideaRemovedResponse() {
+  return new Response(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Idea removed</title>
+</head>
+<body>
+<h1>Idea removed</h1>
+<p>This idea has been removed. The link you followed is no longer active.</p>
+</body>
+</html>`, { status: 410, headers: SECURITY_HEADERS });
+}
+
 export function htmlResponse(page: string, init: ResponseInit = {}) {
   return new Response(page, {
     ...init,

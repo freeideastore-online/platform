@@ -1,7 +1,7 @@
 import { brandHead, brandLockup } from './brand';
 import { AUTH_PREFIX } from './auth';
 import { contributionCount, contributionsByIdea, derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
-import { escapeHtml, FIELD_LIMITS, htmlResponse, SECURITY_HEADERS } from './http';
+import { escapeHtml, FIELD_LIMITS, htmlResponse, ideaRemovedResponse, SECURITY_HEADERS } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { sourcesSection } from './idea-sources-section';
 import { ideaHomeScripts } from './idea-home-scripts';
@@ -18,18 +18,7 @@ import type { Env } from './types';
 export async function renderIdeaPage(env: Env, request: Request, ideaId: string) {
   const idea = await ideaByIdIncludeRemoved(env, ideaId);
   if (idea?.status === 'removed') {
-    return new Response(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Idea removed</title>
-</head>
-<body>
-<h1>Idea removed</h1>
-<p>This idea has been removed. The link you followed is no longer active.</p>
-</body>
-</html>`, { status: 410, headers: SECURITY_HEADERS });
+    return ideaRemovedResponse();
   }
   if (!idea) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
 

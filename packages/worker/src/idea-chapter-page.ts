@@ -2,8 +2,9 @@ import { brandHead, brandLockup, brandCss } from './brand';
 import { chapterRedirectTarget, partRuleRedirectTarget } from './chapter-redirects';
 import { CHAPTER_FILTER_SCRIPT, CHAPTER_RAIL_CSS, chapterRail } from './chapter-rail';
 import { derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
-import { escapeHtml, htmlResponse, SECURITY_HEADERS, slug } from './http';
+import { escapeHtml, htmlResponse, ideaRemovedResponse, SECURITY_HEADERS, slug } from './http';
 import {
+  ideaChapterBody,
   ideaChapterById,
   ideaParts,
   isPaginated,
@@ -60,18 +61,7 @@ export function relatedDocumentsNav(
 export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: string, requestedChapterId: string) {
   const idea = await ideaByIdIncludeRemoved(env, ideaId);
   if (idea?.status === 'removed') {
-    return new Response(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Idea removed</title>
-</head>
-<body>
-<h1>Idea removed</h1>
-<p>This idea has been removed. The link you followed is no longer active.</p>
-</body>
-</html>`, { status: 410, headers: SECURITY_HEADERS });
+    return ideaRemovedResponse();
   }
   if (!idea) return new Response('Idea not found', { status: 404, headers: SECURITY_HEADERS });
 
@@ -129,7 +119,7 @@ export async function renderIdeaChapterPage(env: Env, request: Request, ideaId: 
       : direction;
   };
   const canonical = `${new URL(request.url).origin}/ideas/${idea.id}/${chapter.id}/`;
-  const chapterBody = chapter.markdown.replace(/^##[^\n]*(?:\n\n?)?/, '');
+  const chapterBody = ideaChapterBody(chapter);
   const chapterToc = markdownHeadings(chapterBody);
   const chapterTocLinks = chapterToc.map((heading) => `<a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a>`).join('');
   const renderedChapterBody = markdownToHtml(chapterBody);

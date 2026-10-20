@@ -1,6 +1,6 @@
 import { chunk, MAX_BOUND_PARAMS } from './d1';
 import { pathId } from './http';
-import { ideaChapters, ideaParts, legacyFlatChapters, type IdeaChapter, type IdeaPart } from './markdown';
+import { ideaChapterBody, ideaChapters, ideaParts, legacyFlatChapters, type IdeaChapter, type IdeaPart } from './markdown';
 import type { Env } from './types';
 
 export const CHAPTER_REDIRECT_LIMIT_PER_IDEA = 256;
@@ -17,7 +17,7 @@ type RedirectPlan = {
 };
 
 function chapterBody(chapter: IdeaChapter) {
-  return chapter.markdown.replace(/^##[^\n]*(?:\n\n?)?/, '').trim().replace(/\s+/g, ' ');
+  return ideaChapterBody(chapter).trim().replace(/\s+/g, ' ');
 }
 
 function aliases(chapter: IdeaChapter) {

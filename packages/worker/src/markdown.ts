@@ -677,7 +677,8 @@ export function chapterGroups(chapters: IdeaChapter[], parts: IdeaPart[]): Chapt
   return groups;
 }
 
-function ideaChapterBody(chapter: IdeaChapter) {
+/** A chapter's markdown without the `## Title` line `ideaChapters()` puts on it. */
+export function ideaChapterBody(chapter: IdeaChapter) {
   return chapter.markdown.replace(/^##[^\n]*(?:\n\n?)?/, '');
 }
 
