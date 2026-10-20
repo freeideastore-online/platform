@@ -390,7 +390,9 @@ async function handleCreateContribution(request: Request, env: Env, ideaParam: s
   if (!parsedBody.ok) return parsedBody.response;
   const input = parsedBody.data;
   const body = String(input.body || '').trim();
-  const kind = String(input.kind || 'comment').trim();
+  // Stored normalised: every reader (the refinement queue, the comment list)
+  // filters on the lower-case kind, so a mixed-case kind was accepted and lost.
+  const kind = normaliseKind(input.kind);
   if (body.length < 3) return bad('contribution body is required');
 
   // Typed research fields. All optional — a plain comment supplies none of them.

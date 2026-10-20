@@ -1687,6 +1687,26 @@ describe('FreeIdeaStore worker', () => {
     return data.refinements[0];
   }
 
+  it('queues a refinement whose kind was sent in another case (#104)', async () => {
+    // The kind was validated case-insensitively but stored as sent, while the
+    // queue filters on `kind = 'refinement'` exactly — so "Refinement" was
+    // accepted and then never surfaced, and could not be applied or resolved.
+    const testEnv = env();
+    const create = await worker.fetch(
+      new Request('https://fis.test/api/ideas/serge-idea-lab/contributions', {
+        method: 'POST',
+        headers: { Authorization: SERGE_BEARER, 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: ' Refinement ', section: 'snapshot', body: 'Proposal:\nSharper.' }),
+      }),
+      testEnv,
+    );
+    const list = await worker.fetch(new Request('https://fis.test/api/ideas/serge-idea-lab/refinements'), testEnv);
+    const data = (await list.json()) as { refinements: Array<{ section: string }> };
+
+    expect(create.status).toBe(201);
+    expect(data.refinements.map((refinement) => refinement.section)).toEqual(['snapshot']);
+  });
+
   it('adds a section the document does not have yet', async () => {
     const testEnv = env();
     const add = await worker.fetch(
