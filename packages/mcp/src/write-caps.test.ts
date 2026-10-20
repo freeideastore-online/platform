@@ -126,3 +126,25 @@ describe("create_free_idea.title matches the server's minimum (#104)", () => {
     expect(title.safeParse("Ask").success).toBe(true);
   });
 });
+
+describe("the remaining unbounded MCP inputs (#111)", () => {
+  it.each([
+    ["summary", 1000],
+    ["category", 60],
+    ["signal", 1000],
+    ["preview", 1000],
+    ["next_step", 500],
+    ["risk", 500],
+    ["source_url", 500],
+  ])("caps create_free_idea.%s at the Worker's %i", (name, cap) => {
+    expect(declaredCap(field(collaboration, "create_free_idea", name))).toBe(cap);
+  });
+
+  it("caps validate_publication at the chapter limit of operations", () => {
+    const sections = field(publishing, "validate_publication", "sections");
+    const op = { title: "T", content: "C" };
+
+    expect(sections.safeParse(Array.from({ length: 100 }, () => op)).success).toBe(true);
+    expect(sections.safeParse(Array.from({ length: 101 }, () => op)).success).toBe(false);
+  });
+});

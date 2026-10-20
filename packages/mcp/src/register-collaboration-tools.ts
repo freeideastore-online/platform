@@ -10,15 +10,17 @@ export function registerCollaborationTools(server: McpServer, env: Env, getProps
     "Create a cheap FreeIdeaStore idea page through the Worker API. This writes one D1 row and, when configured, one R2 body object.",
     {
       title: z.string().min(3).max(80).describe("Short, specific idea title. Maximum 80 characters — long titles break the page layout. Use the subtitle or summary for detail."),
-      summary: z.string().min(10),
+      // Caps match the Worker's FIELD_LIMITS, as publish_idea_update's do (#111):
+      // an over-long field used to pass the schema and fail upstream.
+      summary: z.string().min(10).max(1000),
       stage: z.enum(STAGES).optional(),
-      category: z.string().optional(),
-      signal: z.string().optional(),
-      preview: z.string().optional(),
-      next_step: z.string().optional(),
-      risk: z.string().optional(),
+      category: z.string().max(60).optional(),
+      signal: z.string().max(1000).optional(),
+      preview: z.string().max(1000).optional(),
+      next_step: z.string().max(500).optional(),
+      risk: z.string().max(500).optional(),
       body: z.string().max(DOCUMENT_CHARS).optional().describe(`Optional markdown body for the idea page. ${DOCUMENT_LIMIT_NOTE}`),
-      source_url: z.string().optional(),
+      source_url: z.string().max(500).optional(),
       contributor_handle: z.string().optional().describe("Ignored since #109: ideas are created by, and attributed to, the signed-in account."),
     },
     async (input) => {

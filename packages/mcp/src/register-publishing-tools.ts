@@ -23,6 +23,9 @@ const SECTION_PART =
 const DEMOTE_HEADINGS =
   "Shift every heading in `content` below chapter level so the whole block lands as ONE chapter instead of splitting into siblings. The shift is uniform and taken from the shallowest heading present: a `#`-topped file moves two levels (`#`→`###`, `##`→`####`, `###`→`#####`), a `##`-topped file one (`##`→`###`). Content already topped at `###` is untouched. Nothing is pushed past `######`. Off by default.";
 
+/** The Worker's FIELD_LIMITS.chapters: the most operations one validate_publication may carry. */
+const MAX_PREFLIGHT_SECTIONS = 100;
+
 const VERBOSE_SECTIONS =
   "Return the document's full section list alongside the result, the way list_idea_sections would. Off by default: the tree is O(document) tokens on a response whose useful content is the write's outcome, so a ten-call consolidation pass would re-read the whole structure ten times.";
 
@@ -286,7 +289,9 @@ export function registerPublishingTools(server: McpServer, env: Env, getProps: (
         kind: z.enum(["chapter", "part"]).optional().describe(`For add mode. ${SECTION_KIND}`),
         part: z.string().optional().describe(`For add mode. ${SECTION_PART}`),
         demote_headings: z.boolean().optional().describe(DEMOTE_HEADINGS),
-      })).min(1),
+      // One preflight can never usefully hold more operations than a document
+      // can hold chapters; unbounded, 100 × 100,000 chars was a 10 MB request (#111).
+      })).min(1).max(MAX_PREFLIGHT_SECTIONS),
     },
     async (input) => {
       const props = getProps();
