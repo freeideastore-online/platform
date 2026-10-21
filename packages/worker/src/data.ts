@@ -5,6 +5,21 @@ import type { ContributorRow, Env, IdeaContributionRow, IdeaRow, ProfileContribu
 const HIDDEN_HANDLES = ['system', 'risk-finder', 'pivot-maker', 'evidence-hunter', 'cloudflare-smoke'] as const;
 const HIDDEN_HANDLES_PLACEHOLDERS = HIDDEN_HANDLES.map(() => '?').join(',');
 
+/**
+ * Unlisted ideas are reachable by link and listed nowhere (#108).
+ *
+ * `visibility` was validated and stored on create, derive and update, and no
+ * read path looked at it: an idea an owner marked unlisted still appeared in
+ * the catalog, in search, on their contributor page and in derived-idea lists.
+ * Every query that LISTS ideas — as opposed to fetching one by id — filters on
+ * this, so "unlisted" means one thing. Direct reads (`/ideas/<id>/`,
+ * `/api/ideas/<id>`) deliberately do not: access by link is what unlisted is.
+ *
+ * Written with a table alias argument because the listings join `ideas` under
+ * different names.
+ */
+export const publicIdea = (alias = '') => `${alias ? `${alias}.` : ''}visibility = 'public'`;
+
 export async function uniqueIdeaId(env: Env, title: string) {
   const base = slug(title) || id('idea');
   const existing = await env.DB.prepare('SELECT id FROM ideas WHERE id = ?').bind(base).first<{ id: string }>();
@@ -45,6 +60,7 @@ export async function listIdeas(env: Env, options: { stage?: string; limit?: num
          updated_at
        FROM ideas
        WHERE status != 'removed'
+         AND ${publicIdea()}
          AND (? = 'all' OR stage = ?)
        ORDER BY updated_at DESC
        LIMIT ?
@@ -135,14 +151,14 @@ export async function derivedIdeas(env: Env, parentId: string, limit = DERIVED_C
   const [rows, count] = await Promise.all([
     env.DB.prepare(
       `SELECT id, title FROM ideas
-       WHERE parent_id = ? AND status != 'removed'
+       WHERE parent_id = ? AND status != 'removed' AND ${publicIdea()}
        ORDER BY created_at ASC, id ASC
        LIMIT ? OFFSET ?`,
     )
       .bind(parentId, limit, offset)
       .all<{ id: string; title: string }>(),
     env.DB.prepare(
-      `SELECT COUNT(*) AS n FROM ideas WHERE parent_id = ? AND status != 'removed'`,
+      `SELECT COUNT(*) AS n FROM ideas WHERE parent_id = ? AND status != 'removed' AND ${publicIdea()}`,
     )
       .bind(parentId)
       .first<{ n: number }>(),
@@ -157,7 +173,9 @@ export async function derivedIdeas(env: Env, parentId: string, limit = DERIVED_C
  */
 export async function parentIdea(env: Env, parentId: string | null | undefined) {
   if (!parentId) return null;
-  return env.DB.prepare("SELECT id, title FROM ideas WHERE id = ? AND status != 'removed'")
+  // An unlisted parent is not named on its fork's page either: the crumb would
+  // publish exactly the title the owner chose not to list (#108).
+  return env.DB.prepare(`SELECT id, title FROM ideas WHERE id = ? AND status != 'removed' AND ${publicIdea()}`)
     .bind(parentId)
     .first<{ id: string; title: string }>();
 }
@@ -183,7 +201,7 @@ export async function listContributors(env: Env) {
        COUNT(DISTINCT c.id) AS contribution_count,
        COUNT(DISTINCT r.id) AS reaction_count
      FROM profiles p
-     LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed'
+     LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed' AND ${publicIdea('i')}
      LEFT JOIN contributions c ON c.profile_id = p.id
      LEFT JOIN reactions r ON r.profile_id = p.id
      WHERE p.handle NOT IN (${HIDDEN_HANDLES_PLACEHOLDERS})
@@ -207,7 +225,7 @@ export async function contributorByHandle(env: Env, handle: string) {
        COUNT(DISTINCT c.id) AS contribution_count,
        COUNT(DISTINCT r.id) AS reaction_count
      FROM profiles p
-     LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed'
+     LEFT JOIN ideas i ON i.created_by = p.id AND i.status != 'removed' AND ${publicIdea('i')}
      LEFT JOIN contributions c ON c.profile_id = p.id
      LEFT JOIN reactions r ON r.profile_id = p.id
      WHERE p.handle = ? AND p.handle NOT IN (${HIDDEN_HANDLES_PLACEHOLDERS})
@@ -226,11 +244,16 @@ export async function contributorByHandle(env: Env, handle: string) {
  * which, even though the column was on every row it read (#80). `''` means no
  * parent, matching IdeaRow.
  */
-export async function ideasByProfile(env: Env, profileId: string, limit = 500) {
+export async function ideasByProfile(
+  env: Env,
+  profileId: string,
+  limit = 500,
+  options: { includeUnlisted?: boolean } = {},
+) {
   const rows = await env.DB.prepare(
     `SELECT id, title, summary, stage, category, updated_at, pro_candidate, parent_id
      FROM ideas
-     WHERE created_by = ? AND status != 'removed'
+     WHERE created_by = ? AND status != 'removed'${options.includeUnlisted ? '' : ` AND ${publicIdea()}`}
      ORDER BY updated_at DESC
      LIMIT ?`,
   )
@@ -270,12 +293,17 @@ export async function contributionsByIdea(
   return rows.results || [];
 }
 
-export async function contributionsByProfile(env: Env, profileId: string, limit = 100) {
+export async function contributionsByProfile(
+  env: Env,
+  profileId: string,
+  limit = 100,
+  options: { includeUnlisted?: boolean } = {},
+) {
   const rows = await env.DB.prepare(
     `SELECT c.kind, c.body, c.created_at, i.id AS idea_id, i.title AS idea_title
      FROM contributions c
      JOIN ideas i ON i.id = c.idea_id
-     WHERE c.profile_id = ? AND i.status != 'removed'
+     WHERE c.profile_id = ?${options.includeUnlisted ? '' : ` AND ${publicIdea('i')}`} AND i.status != 'removed'
      ORDER BY c.created_at DESC
      LIMIT ?`,
   )

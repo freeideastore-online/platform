@@ -1,4 +1,5 @@
 import { chunk, MAX_BOUND_PARAMS, runInBatches } from './d1';
+import { publicIdea } from './data';
 import { id } from './http';
 import { visibleIdeaChapters } from './markdown';
 import type { Env, IdeaRow } from './types';
@@ -274,7 +275,7 @@ export async function sourceCitations(env: Env, sourceId: string) {
   const rows = await env.DB.prepare(
     `SELECT l.idea_id, i.title, l.section, l.contribution_id
      FROM source_links l JOIN ideas i ON i.id = l.idea_id
-     WHERE l.source_id = ? AND i.status != 'removed'
+     WHERE l.source_id = ? AND i.status != 'removed' AND ${publicIdea('i')}
      ORDER BY i.title ASC`,
   )
     .bind(sourceId)

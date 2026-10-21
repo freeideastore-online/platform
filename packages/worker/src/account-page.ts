@@ -31,8 +31,8 @@ function accountAvatar(user: AuthUser, size = 40) {
 export async function renderAccountPage(env: Env, request: Request) {
   const user = await authUserFor(request, env);
   const profile = user ? await contributorByHandle(env, user.handle) : null;
-  const myIdeas = profile ? await ideasByProfile(env, profile.id) : [];
-  const myContributions = profile ? await contributionsByProfile(env, profile.id, 12) : [];
+  const myIdeas = profile ? await ideasByProfile(env, profile.id, 500, { includeUnlisted: true }) : [];
+  const myContributions = profile ? await contributionsByProfile(env, profile.id, 12, { includeUnlisted: true }) : [];
   const publicUrl = user ? `/contributors/${escapeHtml(user.handle)}/` : '/contributors/';
   return new Response(`<!DOCTYPE html>
 <html lang="en">

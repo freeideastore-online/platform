@@ -59,7 +59,7 @@ async function handleMeIdeas(request: Request, env: Env, url: URL) {
   const profile = await contributorByHandle(env, user.handle);
   return json({
     user,
-    ideas: profile ? await ideasByProfile(env, profile.id, clampInt(url.searchParams.get('limit'), 500, 1, 1000)) : [],
+    ideas: profile ? await ideasByProfile(env, profile.id, clampInt(url.searchParams.get('limit'), 500, 1, 1000), { includeUnlisted: true }) : [],
   });
 }
 
@@ -69,8 +69,8 @@ async function handleMeActivity(request: Request, env: Env, url: URL) {
   const profile = await contributorByHandle(env, user.handle);
   return json({
     user,
-    ideas: profile ? await ideasByProfile(env, profile.id, clampInt(url.searchParams.get('idea_limit'), 100, 1, 1000)) : [],
-    contributions: profile ? await contributionsByProfile(env, profile.id, clampInt(url.searchParams.get('contribution_limit'), 100, 1, 500)) : [],
+    ideas: profile ? await ideasByProfile(env, profile.id, clampInt(url.searchParams.get('idea_limit'), 100, 1, 1000), { includeUnlisted: true }) : [],
+    contributions: profile ? await contributionsByProfile(env, profile.id, clampInt(url.searchParams.get('contribution_limit'), 100, 1, 500), { includeUnlisted: true }) : [],
   });
 }
 

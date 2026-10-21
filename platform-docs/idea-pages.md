@@ -111,3 +111,13 @@ Every http(s) link in a canonical document or a research entry is registered as 
 ## When To Update The Canonical Page
 
 Use comments and contributions for discussion. Use a canonical page update only when the owner wants to merge stronger wording, evidence, or decisions into the public document.
+
+## Visibility: Public And Unlisted
+
+An idea's `visibility` is `public` (the default) or `unlisted`, set through the API's `visibility` field on create, derive or update.
+
+**Unlisted means reachable by link and listed nowhere** (#108). It is left out of every listing: the catalog (`/ideas/`, `GET /api/ideas`), store-wide search, the derived-idea lists on its parent, its fork's parent crumb, other people's contributor pages (and their idea and contribution counts), and the reverse source index. Its own page and `GET /api/ideas/<id>` still work for anyone with the link, searching *within* it (`/api/search?idea=<id>`) still works, and it is served with `X-Robots-Tag: noindex, nofollow` so a link posted publicly does not get it into a crawler's index. Its owner still sees it in their own views (`/api/me/ideas`, `/api/me/activity`, the profile page).
+
+The rule lives in one place, `publicIdea()` in `packages/worker/src/data.ts`; any new query that **lists** ideas must use it. A query that fetches one idea by id must not.
+
+Unlisted is not private: anyone with the link can read it. The static `sitemap.xml` and `registry.json` do not list individual ideas, so there is nothing there to filter.

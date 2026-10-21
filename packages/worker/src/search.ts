@@ -1,4 +1,5 @@
 import { runInBatches, type SizedStatement } from './d1';
+import { publicIdea } from './data';
 import { visibleIdeaChapters } from './markdown';
 import type { Env, IdeaRow } from './types';
 
@@ -108,7 +109,11 @@ export async function search(
      JOIN ideas i ON i.id = s.idea_id AND i.status != 'removed'
      LEFT JOIN contributions c ON c.id = s.ref AND s.kind = 'research'
      WHERE search_index MATCH ?
-       ${options.ideaId ? 'AND s.idea_id = ?' : ''}
+       ${
+         // Searching WITHIN one idea is access by link, which unlisted allows;
+         // searching the store must not turn up what the owner did not list (#108).
+         options.ideaId ? 'AND s.idea_id = ?' : `AND ${publicIdea('i')}`
+       }
      ORDER BY rank
      LIMIT ?`,
   )

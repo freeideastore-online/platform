@@ -253,3 +253,12 @@ export async function readJsonBody(request: Request): Promise<JsonBodyResult> {
     return { ok: false, response: bad('request body is not valid JSON', 400) };
   }
 }
+
+/**
+ * Headers for the page of an idea that is reachable by link and listed nowhere
+ * (#108). Keeping an unlisted idea out of our own listings is half of it: a
+ * link posted anywhere would otherwise get it into a crawler's index anyway.
+ */
+export function visibilityHeaders(visibility: string | undefined): Record<string, string> {
+  return visibility === 'public' || visibility === undefined ? {} : { 'X-Robots-Tag': 'noindex, nofollow' };
+}

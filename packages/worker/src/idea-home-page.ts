@@ -1,7 +1,7 @@
 import { brandHead, brandLockup } from './brand';
 import { AUTH_PREFIX } from './auth';
 import { contributionCount, contributionsByIdea, derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
-import { escapeHtml, FIELD_LIMITS, htmlResponse, ideaRemovedResponse, SECURITY_HEADERS } from './http';
+import { escapeHtml, FIELD_LIMITS, htmlResponse, ideaRemovedResponse, SECURITY_HEADERS, visibilityHeaders } from './http';
 import { ideaDiagram } from './idea-diagrams';
 import { sourcesSection } from './idea-sources-section';
 import { ideaHomeScripts } from './idea-home-scripts';
@@ -193,5 +193,5 @@ ${NAV_SCRIPT}
 </body>
 </html>`;
 
-  return htmlResponse(page);
+  return htmlResponse(page, { headers: visibilityHeaders(idea.visibility) });
 }

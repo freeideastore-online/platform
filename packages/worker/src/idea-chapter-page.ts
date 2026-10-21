@@ -2,7 +2,7 @@ import { brandHead, brandLockup, brandCss } from './brand';
 import { chapterRedirectTarget, partRuleRedirectTarget } from './chapter-redirects';
 import { CHAPTER_FILTER_SCRIPT, CHAPTER_RAIL_CSS, chapterRail } from './chapter-rail';
 import { derivedIdeas, ideaBody, ideaByIdIncludeRemoved, parentIdea } from './data';
-import { escapeHtml, htmlResponse, ideaRemovedResponse, SECURITY_HEADERS, slug } from './http';
+import { escapeHtml, htmlResponse, ideaRemovedResponse, SECURITY_HEADERS, slug, visibilityHeaders } from './http';
 import {
   ideaChapterBody,
   ideaChapterById,
@@ -219,5 +219,5 @@ ${NAV_SCRIPT}
 </body>
 </html>`;
 
-  return htmlResponse(page);
+  return htmlResponse(page, { headers: visibilityHeaders(idea.visibility) });
 }

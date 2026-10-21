@@ -26,6 +26,10 @@ type QueryHandler = {
   run?: (binds: unknown[]) => unknown;
 };
 
+/** Mirrors `AND visibility = 'public'`: the fake only filters when the SQL asks it to (#108). */
+const listsOnlyPublic = (sql: string) => sql.includes("visibility = 'public'");
+const isPublic = (idea: Record<string, unknown>) => (idea.visibility ?? 'public') === 'public';
+
 class FakeStatement {
   private binds: unknown[] = [];
 
@@ -273,7 +277,7 @@ class FakeD1 {
       return new FakeStatement({
         first: ([parentId]) => ({
           n: Array.from(this.ideas.values()).filter(
-            (idea) => idea.parent_id === parentId && idea.status !== 'removed',
+            (idea) => idea.parent_id === parentId && idea.status !== 'removed' && (!listsOnlyPublic(sql) || isPublic(idea)),
           ).length,
         }),
       });
@@ -282,7 +286,7 @@ class FakeD1 {
       return new FakeStatement({
         all: ([parentId, limit]) => ({
           results: Array.from(this.ideas.values())
-            .filter((idea) => idea.parent_id === parentId && idea.status !== 'removed')
+            .filter((idea) => idea.parent_id === parentId && idea.status !== 'removed' && (!listsOnlyPublic(sql) || isPublic(idea)))
             .slice(0, Number(limit))
             .map((idea) => ({ id: idea.id, title: idea.title })),
         }),
@@ -292,7 +296,7 @@ class FakeD1 {
       return new FakeStatement({
         first: ([id]) => {
           const idea = this.ideas.get(String(id));
-          return idea && idea.status !== 'removed' ? { id: idea.id, title: idea.title } : null;
+          return idea && idea.status !== 'removed' && (!listsOnlyPublic(sql) || isPublic(idea)) ? { id: idea.id, title: idea.title } : null;
         },
       });
     }
@@ -303,7 +307,7 @@ class FakeD1 {
           this.listBinds = binds;
           return {
             results: Array.from(this.ideas.values())
-              .filter((idea) => idea.status !== 'removed')
+              .filter((idea) => idea.status !== 'removed' && (!listsOnlyPublic(sql) || isPublic(idea)))
               .map(({ body_md, body_key, ...idea }) => ({
                 ...idea,
                 // Mirrors the has_publication SQL in data.ts: PUBLICATION_POLICY
@@ -361,7 +365,7 @@ class FakeD1 {
       return new FakeStatement({
         all: ([profileId, limit]) => ({
           results: Array.from(this.ideas.values())
-            .filter((idea) => idea.created_by === profileId && idea.status !== 'removed')
+            .filter((idea) => idea.created_by === profileId && idea.status !== 'removed' && (!listsOnlyPublic(sql) || isPublic(idea)))
             .slice(0, Number(limit || 500))
             .map(({ id, title, summary, stage, category, updated_at, pro_candidate }) => ({
               id,
@@ -446,6 +450,10 @@ class FakeD1 {
           const ideaFilter = sql.includes('AND s.idea_id = ?') ? String(binds[1]) : '';
           const results = this.searchIndex
             .filter((row) => (ideaFilter ? row.idea_id === ideaFilter : true))
+            .filter((row) => {
+              const owner = this.ideas.get(String(row.idea_id));
+              return !listsOnlyPublic(sql) || !owner || isPublic(owner);
+            })
             .filter((row) => {
               const haystack = `${row.title} ${row.text}`.toLowerCase();
               return terms.length > 0 && terms.every((term) => haystack.includes(term));
@@ -4770,5 +4778,123 @@ describe('the contribution-source backfill pages instead of dying halfway (#111)
     expect(status).toBe(200);
     expect(data.ok).toBe(false);
     expect((data.errors as string[]).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * #108. `visibility` was validated and stored, and no read path looked at it:
+ * an idea marked unlisted still appeared in the catalog, in search, in derived
+ * lists and on its owner's public profile. Unlisted means reachable by link and
+ * listed nowhere.
+ */
+describe('unlisted ideas are reachable by link and listed nowhere (#108)', () => {
+  const headers = { Authorization: SERGE_BEARER, 'content-type': 'application/json' };
+  const ID = 'serge-idea-lab';
+  const PHRASE = 'distinctive marmalade phrase';
+
+  async function unlisted() {
+    const testEnv = env();
+    const patch = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/${ID}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ visibility: 'unlisted', body: `## Snapshot\nA ${PHRASE} lives here.` }),
+      }),
+      testEnv,
+    );
+    expect(patch.status).toBe(200);
+    return testEnv;
+  }
+
+  const getJson = async <T,>(testEnv: ReturnType<typeof env>, path: string, init: RequestInit = {}) =>
+    (await (await worker.fetch(new Request(`https://fis.test${path}`, init), testEnv)).json()) as T;
+
+  it('keeps it out of the catalog API and the catalog page', async () => {
+    const testEnv = await unlisted();
+
+    const list = await getJson<{ ideas: Array<{ id: string }> }>(testEnv, '/api/ideas');
+    const page = await (await worker.fetch(new Request('https://fis.test/ideas/'), testEnv)).text();
+
+    expect(list.ideas.map((idea) => idea.id)).not.toContain(ID);
+    expect(page).not.toContain(`/ideas/${ID}/`);
+    // Public ideas are still listed.
+    expect(list.ideas.map((idea) => idea.id)).toContain('asx-filings-analyst');
+  });
+
+  it('still opens by link, and asks crawlers not to index it', async () => {
+    const testEnv = await unlisted();
+
+    const direct = await worker.fetch(new Request(`https://fis.test/api/ideas/${ID}`), testEnv);
+    const page = await worker.fetch(new Request(`https://fis.test/ideas/${ID}/`), testEnv);
+
+    expect(direct.status).toBe(200);
+    expect(page.status).toBe(200);
+    expect(page.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+  });
+
+  it('does not ask crawlers to skip a public idea', async () => {
+    const page = await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), env());
+
+    expect(page.headers.get('X-Robots-Tag')).toBeNull();
+  });
+
+  it('keeps it out of store-wide search, but searchable within itself', async () => {
+    const testEnv = await unlisted();
+
+    const everywhere = await getJson<{ hits: unknown[] }>(testEnv, '/api/search?q=marmalade');
+    const within = await getJson<{ hits: Array<{ idea_id: string }> }>(testEnv, `/api/search?q=marmalade&idea=${ID}`);
+
+    expect(everywhere.hits).toHaveLength(0);
+    expect(within.hits.map((hit) => hit.idea_id)).toContain(ID);
+  });
+
+  it("still shows the owner their own unlisted idea, and no one else's profile does", async () => {
+    const testEnv = await unlisted();
+
+    const mine = await getJson<{ ideas: Array<{ id: string }> }>(testEnv, '/api/me/ideas', { headers: { Authorization: SERGE_BEARER } });
+    const profile = await (await worker.fetch(new Request('https://fis.test/contributors/serge-the-dev/'), testEnv)).text();
+
+    expect(mine.ideas.map((idea) => idea.id)).toContain(ID);
+    expect(profile).not.toContain(`/ideas/${ID}/`);
+  });
+
+  it('leaves an unlisted fork out of its parent’s derived list and page, and its parent out of the fork’s crumb', async () => {
+    const testEnv = env();
+    const fork = await worker.fetch(
+      new Request('https://fis.test/api/ideas/asx-filings-analyst/derive', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'A Quiet Fork', visibility: 'unlisted' }),
+      }),
+      testEnv,
+    );
+    const { idea: forkId } = (await fork.json()) as { idea: string };
+
+    const derived = await getJson<{ children: Array<{ id: string }>; total: number }>(testEnv, '/api/ideas/asx-filings-analyst/derived');
+    const parentPage = await (await worker.fetch(new Request('https://fis.test/ideas/asx-filings-analyst/'), testEnv)).text();
+
+    expect(fork.status).toBe(201);
+    expect(derived.children.map((child) => child.id)).not.toContain(forkId);
+    expect(derived.total).toBe(0);
+    expect(parentPage).not.toContain(`/ideas/${forkId}/`);
+  });
+
+  it('does not name an unlisted parent on its fork’s page', async () => {
+    const testEnv = env();
+    // asx-filings-analyst is owned by someone else; fork serge-idea-lab instead.
+    await worker.fetch(
+      new Request(`https://fis.test/api/ideas/${ID}`, { method: 'PATCH', headers, body: JSON.stringify({ visibility: 'unlisted' }) }),
+      testEnv,
+    );
+    const fork = await worker.fetch(
+      new Request(`https://fis.test/api/ideas/${ID}/derive`, { method: 'POST', headers, body: JSON.stringify({ title: 'Public Child Of Hidden' }) }),
+      testEnv,
+    );
+    const { idea: forkId } = (await fork.json()) as { idea: string };
+
+    const page = await (await worker.fetch(new Request(`https://fis.test/ideas/${forkId}/`), testEnv)).text();
+
+    expect(fork.status).toBe(201);
+    expect(page).not.toContain(`/ideas/${ID}/`);
   });
 });
