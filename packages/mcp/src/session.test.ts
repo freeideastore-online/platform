@@ -114,7 +114,7 @@ describe("mintSession", () => {
     const standard = await mintSession("identity-1", "test-signing-key", { now });
     const brief = await mintSession("identity-1", "test-signing-key", { now, ttlSeconds: 300 });
 
-    expect(decodePayload(standard).exp - now).toBe(86_400);
+    expect(decodePayload(standard).exp - now).toBe(30 * 86_400);
     expect(decodePayload(brief).exp - now).toBe(300);
   });
 

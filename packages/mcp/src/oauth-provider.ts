@@ -62,7 +62,7 @@ export function createAuthChallenge(
   if (error) params.push(`error="${error}"`);
   const description =
     detail === "expired"
-      ? "Authentication required: this authorization has expired. FreeIdeaStore MCP access tokens live for 24 hours."
+        ? "Authentication required: this authorization has expired. FreeIdeaStore MCP access tokens live for 30 days."
       : detail === "invalid"
         ? "Authentication required: this token could not be verified."
         : "Authentication required.";

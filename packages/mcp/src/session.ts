@@ -11,7 +11,7 @@
 //
 // The mint half exists because the OAuth handoff token the site puts on the
 // redirect URL lives for minutes, while the MCP access token issued in exchange
-// for it lives for a day. Storing the handoff token as the account credential
+// for it lives for 30 days. Storing the handoff token as the account credential
 // would strand every tool call five minutes after sign-in, so /token mints a
 // fresh session for the same uid instead — see oauth-provider.ts.
 
@@ -76,7 +76,7 @@ export interface MintOptions {
 }
 
 /** Matches the MCP access-token lifetime, so credential and token expire together. */
-export const MCP_SESSION_TTL_SECONDS = 86_400;
+export const MCP_SESSION_TTL_SECONDS = 30 * 86_400;
 
 export async function mintSession(
   uid: string,

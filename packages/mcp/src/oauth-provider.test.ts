@@ -392,7 +392,7 @@ describe("token exchange", () => {
 
     const body = (await res?.json()) as { access_token: string; expires_in: number };
     expect(res?.status).toBe(200);
-    expect(body.expires_in).toBe(86_400);
+    expect(body.expires_in).toBe(30 * 86_400);
 
     // The credential behind the access token must outlive the minutes-long token
     // the site handed over, or every tool call would fail shortly after sign-in.
